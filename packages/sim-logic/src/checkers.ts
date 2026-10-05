@@ -47,6 +47,39 @@ export function* runTest(nl: Netlist, test: TestSpec, opts: CheckOptions = {}): 
   }
 }
 
+/** Where a streamed case sits in its test: the step for 'sequence', else the case index. */
+export const caseIndexOf = (r: CaseResult): number => (r.kind === 'sequence' && typeof r.step === 'number' ? r.step : r.index);
+
+/**
+ * Run exactly one case of `test` ("Run this case") and return what a full
+ * `runTest` reports for that case. The checker is replayed from power on in
+ * the same order as a full run (so a stateful circuit sees the same history),
+ * and the cases before `caseIndex` are not returned:
+ * - truth-table: the rows before it, then row `caseIndex`;
+ * - exhaustive / random: the same vectors in the same order (random draws
+ *   from the test's seed), so case `caseIndex` gets the vector it gets in a
+ *   full run;
+ * - sequence: every step up to step `caseIndex` from power on;
+ * - program: the whole program run is case 0.
+ * When the test stops before reaching the case (a missing input, out of time,
+ * a broken reference model), that failure is returned for this case.
+ */
+export function runTestCase(nl: Netlist, test: TestSpec, caseIndex: number, opts: CheckOptions = {}): CaseResult {
+  const kind = test.kind;
+  const at = (extra: Partial<CaseResult> = {}): Partial<CaseResult> => (kind === 'sequence' ? { step: caseIndex, ...extra } : extra);
+  if (!Number.isInteger(caseIndex) || caseIndex < 0) return failCase(kind, Math.max(0, caseIndex | 0), `There is no case ${caseIndex + 1} in this test.`, at());
+  let last: CaseResult | undefined;
+  for (const r of runTest(nl, test, opts)) {
+    const i = caseIndexOf(r);
+    if (i === caseIndex) return r;
+    last = r;
+    if (i > caseIndex) break;
+  }
+  // The test stopped early: its last failure is why this case did not run.
+  if (last && !last.pass) return { ...last, index: caseIndex, ...at() };
+  return failCase(kind, caseIndex, `There is no case ${caseIndex + 1} in this test.`, at());
+}
+
 /** A player-facing reason the netlist cannot be simulated, or undefined. */
 function cannotRun(nl: Netlist): string | undefined {
   const n = nl as Netlist & { canRun?: boolean; diagnostics?: { code: string }[] };

@@ -43,7 +43,7 @@ export const level: Record<string, string> = {
   // Test strip (Turing Complete style case columns)
   'level.strip.title': 'Test cases',
   'level.strip.label': 'Test cases, one column per case',
-  'level.strip.help': 'Arrow keys move between cases. Each case you select is loaded onto the board so you can watch the circuit with exactly those inputs.',
+  'level.strip.help': 'Arrow keys move between cases. Each case you select is loaded onto the board so you can watch the circuit with exactly those inputs. R runs the selected case alone.',
   'level.strip.input': 'Input {label}',
   'level.strip.desired': 'Desired {label}',
   'level.strip.current': 'Current {label}',
@@ -67,6 +67,9 @@ export const level: Record<string, string> = {
   'level.strip.resize': 'Resize the test strip',
   'level.strip.loaded': 'Case {n} is on the board.',
   'level.strip.notLoaded': 'No switch on the board for {list}.',
+  'level.strip.runCase': 'Run',
+  'level.strip.runCaseTitle': 'Run only this case and update its result (R on the strip)',
+  'level.strip.runningCase': 'Running case {n}…',
   'level.strip.pending': 'This case’s inputs are known once the run reaches it.',
   'level.success.title': 'Level complete',
   'level.success.unlocked': 'Unlocked:',

@@ -77,6 +77,14 @@ export interface SimApi {
     /** Player's assembly for code levels ('riscv' tests). */
     source?: string,
   ): Promise<{ passed: number; total: number }>;
+  /**
+   * "Run this case": only case `caseIndex` of `level.tests[testIndex]`, with the
+   * same result (tagged with `test`) a full runTests reports for it. Sequence
+   * steps replay from power on; exhaustive/random reuse the run's vectors;
+   * 'program', 'riscv' and 'js' tests are one case (index 0). Same `board`,
+   * `budgetMs` and `source` rules as runTests.
+   */
+  runCase(level: Level, testIndex: number, caseIndex: number, board?: Board, budgetMs?: number, source?: string): Promise<CaseResult>;
   subscribe(onSnapshot: (s: Snapshot) => void): void;
 }
 

@@ -16,8 +16,9 @@ import { pwa } from './en/pwa';
 import { ml } from './en/ml';
 import { debug } from './en/debug';
 import { achievements } from './en/achievements';
+import { cases } from './en/cases';
 
-const en: Record<string, string> = { ...app, ...editor, ...ui, ...level, ...chips, ...panels, ...storage, ...code, ...ml, ...pwa, ...community, ...achievements, ...debug };
+const en: Record<string, string> = { ...app, ...editor, ...ui, ...level, ...chips, ...panels, ...storage, ...code, ...ml, ...pwa, ...community, ...achievements, ...debug, ...cases };
 
 /** Locales load from here once translations exist. */
 const locales: Record<string, Record<string, string>> = { en };

@@ -6,7 +6,7 @@ import { t } from '../i18n';
 import { BulbIcon, CheckIcon, ChevronIcon, MapIcon } from './icons';
 import { openLevel } from './persist';
 import { newlyUnlockedParts, nextLevel } from './progress';
-import { canRunTests, runLevelTests } from './runTests';
+import { canRunTests, runLevelTests, useCaseRunner } from './runTests';
 import { TestStripSection } from './TestStrip';
 import { useLevelUi } from './ui';
 import './level.css';
@@ -18,6 +18,7 @@ import { BestLine } from '../community/BestBadge';
 import { nextPackLevel, packOfLevel } from '../community/registry';
 import { emitAchievement } from '../achievements/events';
 import { SuccessUnlocks } from '../achievements/Achievements';
+import { TestCasesButton, TestCasesHost } from './cases/TestCasesDialog';
 
 const COLLAPSE_KEY = 'build-a-computer:level-panel-collapsed';
 
@@ -33,6 +34,8 @@ function readCollapsed(): boolean {
 export function LevelPanel() {
   const level = useEditor((s) => s.level);
   const [collapsed, setCollapsed] = useState(readCollapsed);
+  // The per-case Run action of the test strip and the test cases view.
+  useCaseRunner(level);
   if (!level) return null;
 
   const toggle = () => {
@@ -69,6 +72,7 @@ export function LevelPanel() {
           <MapIcon />
         </button>
       </header>
+      <TestCasesHost />
       {!collapsed && (
         <div className="lp-body" id="level-panel-body">
           {level.track === 'sandbox' ? <SandboxBody /> : <LevelBody key={level.id} level={level} />}
@@ -166,6 +170,7 @@ function LevelBody({ level }: { level: Level }) {
           </button>
           {runnable && <DebugButton level={level} disabled={running} />}
         </div>
+        {level.tests.length > 0 && !inChip && <TestCasesButton className="lv-btn ghost block lp-cases-btn" />}
         {inChip && <p className="lp-chip-note">{t('level.tests.inChip')}</p>}
         {runnable && <TestStripSection level={level} run={testRun} />}
       </div>

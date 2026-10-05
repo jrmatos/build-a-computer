@@ -108,6 +108,13 @@ export const sim = {
     const src = level.mode === 'code' || level.mode === 'js' ? source : undefined;
     return call((r) => (r.runTests as unknown as RunTests)(level, Comlink.proxy(onCase), board, undefined, src));
   },
+  /** "Run this case": only that case of `level.tests[test]`, on the level's board (code levels: the source). */
+  runCase: async (test: number, index: number) => {
+    const { level, editStack, board, source } = useEditor.getState();
+    if (!level || editStack.length) return undefined;
+    const src = level.mode === 'code' || level.mode === 'js' ? source : undefined;
+    return call((r) => r.runCase(level, test, index, board, undefined, src));
+  },
   /** Case debugger (level/debug): replay one test case on the live board, then show any frame of it. */
   debugStart: (level: Level, test: number, index: number, inputs: Record<string, number> | undefined, board: Board) =>
     call((r) => (r as unknown as Comlink.Remote<CaseDebugApi>).debugStart(level, test, index, inputs, board) as Promise<CaseDebugStart>),

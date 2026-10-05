@@ -11,6 +11,7 @@ import type { TestRun } from '../editor/store';
 import { t } from '../i18n';
 import { loadCaseInputs } from './runTests';
 import { useCaseDebug, type DebugCaseHandler } from './panels/caseDebug';
+import { useCaseRun } from './panels/caseRun';
 import { CaseDiffSummary, caseDiffTitle } from './panels/CaseDiff';
 import {
   actualValue,
@@ -26,6 +27,7 @@ import {
   type StreamedCase,
   type TestKind,
 } from './testStripModel';
+import { TestCasesButton } from './cases/TestCasesDialog';
 import './TestStrip.css';
 
 const ROW_H = 24;
@@ -261,6 +263,24 @@ export function TestStrip({ level, run, floating = false, onDebugCase }: { level
     [column, handlers, onDebugCase],
   );
 
+  // Per-case Run action ("Run this case"): the handler registered for the column's test kind.
+  const runHandlers = useCaseRun((s) => s.handlers);
+  const runFor = useCallback(
+    (i: number): (() => void) | undefined => {
+      const c = column(i);
+      const kind = c.plan?.kind ?? c.result?.kind;
+      const test = c.plan?.test ?? c.result?.test;
+      const fn = kind ? runHandlers[kind] : undefined;
+      if (!fn || !kind || test === undefined || running) return undefined;
+      return () => {
+        setSelected(i);
+        setNote(t('level.strip.runningCase', { n: i + 1 }));
+        void Promise.resolve(fn({ column: i, test, index: c.plan?.index ?? c.result?.index ?? 0, kind })).finally(() => setNote(''));
+      };
+    },
+    [column, runHandlers, running],
+  );
+
   const select = useCallback(
     (i: number) => {
       if (count === 0) return;
@@ -306,6 +326,11 @@ export function TestStrip({ level, run, floating = false, onDebugCase }: { level
     } else if ((e.key === 'Enter' || e.key === ' ') && cur >= 0) {
       e.preventDefault();
       select(cur);
+    } else if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && !e.altKey && cur >= 0) {
+      // R runs the focused case (only here: on the board, R rotates parts).
+      e.preventDefault();
+      e.stopPropagation();
+      runFor(cur)?.();
     } else if (e.key === 'Escape' && selected !== null) {
       setSelected(null);
       setNote('');
@@ -441,7 +466,7 @@ export function TestStrip({ level, run, floating = false, onDebugCase }: { level
         {t('level.strip.help')}
       </p>
       {detail && detailIdx !== null && (
-        <Detail i={detailIdx} c={detail} inputs={inputs} outputs={outputs} radix={radix} isSelected={selected !== null} onDebug={debugFor(detailIdx)} />
+        <Detail i={detailIdx} c={detail} inputs={inputs} outputs={outputs} radix={radix} isSelected={selected !== null} onDebug={debugFor(detailIdx)} onRun={runFor(detailIdx)} />
       )}
       {note && (
         <p className="ts-note" aria-live="polite">
@@ -558,7 +583,7 @@ function describe(c: ShownColumn, inputs: Port[], outputs: Port[], radix: 'hex' 
   return parts.join(', ');
 }
 
-function Detail(props: { i: number; c: ShownColumn; inputs: Port[]; outputs: Port[]; radix: 'hex' | 'dec'; isSelected: boolean; onDebug?: (() => void) | undefined }) {
+function Detail(props: { i: number; c: ShownColumn; inputs: Port[]; outputs: Port[]; radix: 'hex' | 'dec'; isSelected: boolean; onDebug?: (() => void) | undefined; onRun?: (() => void) | undefined }) {
   const { c, i } = props;
   const fail = c.result && !c.result.pass;
   const ins = props.inputs.map((p) => `${p.label}=${show(c.inputs?.[p.label], p.width, props.radix)}`).join(' ');
@@ -571,10 +596,19 @@ function Detail(props: { i: number; c: ShownColumn; inputs: Port[]; outputs: Por
         {fail ? <FailMark /> : c.result ? <PassMark /> : null}
         <strong>{fail && !props.isSelected ? t('level.strip.firstFail', { n: i + 1 }) : t('level.strip.case', { n: i + 1 })}</strong>
         <code>{ins}</code>
-        {props.onDebug && (
-          <button type="button" className="ts-debug-btn" onClick={props.onDebug} title={t('panels.case.debugTitle')}>
-            {t('panels.case.debug')}
-          </button>
+        {(props.onDebug || props.onRun) && (
+          <span className="ts-detail-actions">
+            {props.onDebug && (
+              <button type="button" className="ts-debug-btn" onClick={props.onDebug} title={t('panels.case.debugTitle')}>
+                {t('panels.case.debug')}
+              </button>
+            )}
+            {props.onRun && (
+              <button type="button" className="ts-debug-btn ts-run-btn" onClick={props.onRun} title={t('level.strip.runCaseTitle')}>
+                {t('level.strip.runCase')}
+              </button>
+            )}
+          </span>
         )}
       </div>
       {wrongs.length > 0 && !(fail && c.result?.message) && (
@@ -640,6 +674,7 @@ export function TestStripSection({ level, run, onDebugCase }: { level: Level; ru
         <Chevron open={open} />
         <span>{t('level.strip.title')}</span>
       </button>
+      <TestCasesButton className="ts-icon-btn ts-cases-btn" compact />
       <button
         type="button"
         className="ts-icon-btn"

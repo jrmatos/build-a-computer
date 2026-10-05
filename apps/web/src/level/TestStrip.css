@@ -387,6 +387,15 @@
   align-items: center;
   gap: 6px;
 }
+/* Debug and Run sit together at the right end (and wrap together). */
+.ts-detail-actions {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: auto;
+}
+.ts-detail-actions .ts-debug-btn {
+  margin-left: 0;
+}
 .ts-detail-head strong {
   color: var(--ts-text);
 }
