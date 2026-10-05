@@ -33,6 +33,10 @@ export function* runTest(nl: Netlist, test: TestSpec, opts: CheckOptions = {}): 
       return yield* runSequence(nl, test, opts);
     case 'program':
       return yield* runProgram(nl, test, opts);
+    case 'riscv':
+      // Code levels run on the RV32 emulator, outside sim-logic (packages/rv-check, via the worker).
+      yield failCase(test.kind, 0, 'This test runs your program on the RISC-V machine, not on a board.');
+      return;
   }
 }
 
@@ -63,6 +67,7 @@ export function caseCount(test: TestSpec, inputBits?: number): number {
     case 'sequence':
       return test.steps.length;
     case 'program':
+    case 'riscv':
       return 1;
   }
 }

@@ -50,14 +50,68 @@ export const TestSpec = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('program'),
     program: z.string().max(100_000),
+    /**
+     * Bytes per ROM word: 1 (default) for Toy-8, 4 for RV32 boards (Phase 5). Program
+     * bytes are packed little-endian into words of the ROM labelled `rom`.
+     */
+    wordBytes: z.union([z.literal(1), z.literal(4)]).optional(),
     rom: z.string().default('ROM'),
     halt: z.string().default('HALT'),
     maxCycles: z.number().int().min(1).max(10_000_000),
     set: Values.optional(),
     expect: Values,
   }),
+  /**
+   * Code levels (Phase 6+): assemble the player's RV32 source, load it at the
+   * RAM base, run it on the emulator, compare. The program ends at `ebreak`, or
+   * `ecall` with a7 = 93 (exit, code in a0); running past `maxSteps` fails
+   * with a message suggesting an exit (E-SIM-10). One case per test.
+   */
+  z.object({
+    kind: z.literal('riscv'),
+    /** Short name shown in the test strip, e.g. "sum of 1..10". */
+    name: z.string().max(80).optional(),
+    setup: z
+      .object({
+        /** Registers by ABI name (a0, sp, …) or xN, set before running. */
+        regs: z.record(z.string(), Num).optional(),
+        /** Bytes poked into memory before running: hex string at an address. */
+        memory: z.array(z.object({ addr: Num, hex: z.string().max(100_000) })).max(64).optional(),
+      })
+      .optional(),
+    /** Text the program reads from the UART (and keyboard device). */
+    input: z.string().max(100_000).optional(),
+    expect: z.object({
+      regs: z.record(z.string(), Num).optional(),
+      memory: z.array(z.object({ addr: Num, hex: z.string().max(100_000) })).max(64).optional(),
+      /** Exact UART output. */
+      uart: z.string().max(100_000).optional(),
+      exitCode: Num.optional(),
+      /** SHA-256 (hex) of the 64,000 framebuffer bytes at exit. */
+      framebufferSha256: z.string().regex(/^[0-9a-f]{64}$/).optional(),
+    }),
+    maxSteps: z.number().int().min(1).max(200_000_000).default(5_000_000),
+  }),
 ]);
 export type TestSpec = z.infer<typeof TestSpec>;
+
+export const DEVICES = ['uart', 'keyboard', 'timer', 'framebuffer', 'disk'] as const;
+export const Device = z.enum(DEVICES);
+export type Device = z.infer<typeof Device>;
+
+/** What a code level gives the player (Phase 6+). */
+export const CodeSetup = z.object({
+  language: z.literal('rv32-asm'),
+  /** Text the editor starts with. */
+  starter: z.string().max(100_000).default(''),
+  /** Devices shown as panels; the machine always has the full memory map. */
+  devices: z.array(Device).default(['uart']),
+  /** RAM size in bytes (multiple of 4 KiB). */
+  ramSize: z.number().int().min(4096).max(64 * 1024 * 1024).default(1024 * 1024),
+  /** Optional files the level provides, read-only, assembled with the player's source. */
+  library: z.array(z.object({ name: z.string().max(64), text: z.string().max(100_000) })).max(8).default([]),
+});
+export type CodeSetup = z.infer<typeof CodeSetup>;
 
 export const ResourceTag = z.enum(['start-here', 'video', 'article', 'book', 'spec', 'course']);
 
@@ -94,6 +148,10 @@ export const Level = z.object({
   resources: z.array(Resource).max(4).default([]),
   /** Volatile state at power on (E-SIM-07). */
   power: z.enum(['zero', 'random']).default('zero'),
+  /** 'board' levels wire parts; 'code' levels write assembly (Phase 6+). */
+  mode: z.enum(['board', 'code']).default('board'),
+  /** Required when mode is 'code'. */
+  code: CodeSetup.optional(),
   /** Optional level: may be skipped without blocking later levels. */
   optional: z.boolean().default(false),
   draft: z.boolean().default(false),

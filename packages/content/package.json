@@ -16,6 +16,9 @@
     "@build-a-computer/schema": "workspace:*"
   },
   "devDependencies": {
+    "@build-a-computer/asm": "workspace:*",
+    "@build-a-computer/rv-check": "workspace:*",
+    "@build-a-computer/rv32": "workspace:*",
     "@build-a-computer/sim-logic": "workspace:*"
   }
 }

@@ -34,6 +34,12 @@ export const PART_TYPES = [
   'decoder',
   'adder',
   'alu',
+  // Phase 5 RISC-V datapath blocks (canonical models; pins in sim-logic parts-spec).
+  'regfile',
+  'immgen',
+  'rvalu',
+  'branchcmp',
+  'lsu',
   'chip',
 ] as const;
 export const PartType = z.enum(PART_TYPES);

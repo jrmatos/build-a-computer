@@ -413,6 +413,37 @@ const SYMBOLS: Record<PartType, ReactNode> = {
       <path d="M2 6h6M2 18h6M23 12h7" />
     </>
   ),
+  // Phase 5 RISC-V blocks: placeholders until the RV blocks agent draws them.
+  regfile: (
+    <>
+      <rect x="7" y="3" width="18" height="18" rx="1.5" />
+      <path d="M2 7h5M2 12h5M25 9h5M25 15h5M10 8h12M10 12h12M10 16h12" />
+    </>
+  ),
+  immgen: (
+    <>
+      <rect x="7" y="5" width="18" height="14" rx="1.5" />
+      <path d="M2 12h5M25 12h5" />
+    </>
+  ),
+  rvalu: (
+    <>
+      <path d="M8 2l15 5v10L8 22v-7.5l3.5-2.5L8 9.5z" />
+      <path d="M2 6h6M2 18h6M23 12h7" />
+    </>
+  ),
+  branchcmp: (
+    <>
+      <rect x="7" y="5" width="18" height="14" rx="1.5" />
+      <path d="M2 9h5M2 15h5M25 12h5" />
+    </>
+  ),
+  lsu: (
+    <>
+      <rect x="7" y="3" width="18" height="18" rx="1.5" />
+      <path d="M2 8h5M2 16h5M25 8h5M25 16h5" />
+    </>
+  ),
   chip: (
     <>
       <rect x="7" y="3" width="18" height="18" rx="3" fill="currentColor" fillOpacity={0.18} />

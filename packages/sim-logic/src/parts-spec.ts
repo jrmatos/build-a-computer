@@ -54,6 +54,12 @@ export const PART_INFO: Record<PartType, PartInfo> = {
   decoder: { category: 'arith', clocked: false, nonVolatile: false, defaults: { width: 1, selectBits: 2 }, editable: ['selectBits'] },
   adder: { category: 'arith', clocked: false, nonVolatile: false, defaults: { width: 8 }, editable: ['width'] },
   alu: { category: 'arith', clocked: false, nonVolatile: false, defaults: { width: 8 }, editable: ['width'] },
+  // Phase 5 RISC-V datapath blocks: fixed 32-bit widths.
+  regfile: { category: 'memory', clocked: true, nonVolatile: false, defaults: { width: 32 }, editable: [] },
+  immgen: { category: 'arith', clocked: false, nonVolatile: false, defaults: { width: 32 }, editable: [] },
+  rvalu: { category: 'arith', clocked: false, nonVolatile: false, defaults: { width: 32 }, editable: [] },
+  branchcmp: { category: 'arith', clocked: false, nonVolatile: false, defaults: { width: 32 }, editable: [] },
+  lsu: { category: 'memory', clocked: false, nonVolatile: false, defaults: { width: 32, addrWidth: 10 }, editable: ['addrWidth'] },
   chip: { category: 'chip', clocked: false, nonVolatile: false, defaults: w1, editable: [] },
 };
 
@@ -139,6 +145,45 @@ export function pinsOf(part: Part, chips?: ChipMap): PinSpec[] {
         io('neg', 'out'),
         io('carry', 'out'),
       ];
+    case 'regfile':
+      // 32 x 32-bit registers, x0 always reads 0. Two async reads; write rd on the rising edge when we = 1.
+      return [
+        io('rs1', 'in', 5),
+        io('rs2', 'in', 5),
+        io('rd', 'in', 5),
+        io('wd', 'in', 32),
+        io('we', 'in'),
+        io('clk', 'in'),
+        io('r1', 'out', 32),
+        io('r2', 'out', 32),
+      ];
+    case 'immgen':
+      // Sign-extended immediate for the instruction's format (I, S, B, U, J), chosen by its opcode.
+      return [io('inst', 'in', 32), io('imm', 'out', 32)];
+    case 'rvalu':
+      // op = {funct7 bit 5, funct3}: 0 add, 8 sub, 1 sll, 2 slt, 3 sltu, 4 xor, 5 srl, 13 sra, 6 or, 7 and.
+      return [io('a', 'in', 32), io('b', 'in', 32), io('op', 'in', 4), io('out', 'out', 32), io('zero', 'out')];
+    case 'branchcmp':
+      // take = the branch condition for funct3: 0 beq, 1 bne, 4 blt, 5 bge, 6 bltu, 7 bgeu.
+      return [io('a', 'in', 32), io('b', 'in', 32), io('funct3', 'in', 3), io('take', 'out')];
+    case 'lsu': {
+      // Between the CPU and a 32-bit word RAM (async read): byte/half/word loads with sign or
+      // zero extension, and stores merged into the word read back (read-modify-write).
+      const aw = prop(part, 'addrWidth');
+      return [
+        io('addr', 'in', 32),
+        io('wdata', 'in', 32),
+        io('funct3', 'in', 3),
+        io('load', 'in'),
+        io('store', 'in'),
+        io('rdata', 'in', 32),
+        io('maddr', 'out', aw),
+        io('mwdata', 'out', 32),
+        io('mwe', 'out'),
+        io('result', 'out', 32),
+        io('misaligned', 'out'),
+      ];
+    }
     case 'chip': {
       const def = part.chip ? chips?.[part.chip] : undefined;
       if (!def) return [];

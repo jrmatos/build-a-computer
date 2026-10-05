@@ -94,11 +94,38 @@ importers:
         specifier: workspace:*
         version: link:../schema
     devDependencies:
+      '@build-a-computer/asm':
+        specifier: workspace:*
+        version: link:../asm
+      '@build-a-computer/rv-check':
+        specifier: workspace:*
+        version: link:../rv-check
+      '@build-a-computer/rv32':
+        specifier: workspace:*
+        version: link:../rv32
       '@build-a-computer/sim-logic':
         specifier: workspace:*
         version: link:../sim-logic
 
   packages/det: {}
+
+  packages/rv-check:
+    dependencies:
+      '@build-a-computer/asm':
+        specifier: workspace:*
+        version: link:../asm
+      '@build-a-computer/det':
+        specifier: workspace:*
+        version: link:../det
+      '@build-a-computer/rv32':
+        specifier: workspace:*
+        version: link:../rv32
+      '@build-a-computer/schema':
+        specifier: workspace:*
+        version: link:../schema
+      '@build-a-computer/sim-logic':
+        specifier: workspace:*
+        version: link:../sim-logic
 
   packages/rv32:
     dependencies:
@@ -131,6 +158,15 @@ importers:
 
   packages/worker:
     dependencies:
+      '@build-a-computer/asm':
+        specifier: workspace:*
+        version: link:../asm
+      '@build-a-computer/rv-check':
+        specifier: workspace:*
+        version: link:../rv-check
+      '@build-a-computer/rv32':
+        specifier: workspace:*
+        version: link:../rv32
       '@build-a-computer/schema':
         specifier: workspace:*
         version: link:../schema

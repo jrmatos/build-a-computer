@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { PART_TYPES, type Board, type ChipMap, type Level, type PartType } from '@build-a-computer/schema';
 import type { CaseResult, Diagnostic } from '@build-a-computer/sim-logic';
-import type { Snapshot } from '@build-a-computer/worker';
+import type { RvSnapshot, Snapshot, SourceDiagnostic } from '@build-a-computer/worker';
 
 /** Grid cell size in CSS pixels at 100% zoom. */
 export const GRID = 20;
@@ -71,6 +71,14 @@ export interface EditorState {
    * board; each frame keeps what to restore on exit.
    */
   editStack: { chipId: string; parentBoard: Board; parentPast: Board[]; parentFuture: Board[]; parentSelection: string[] }[];
+  /** Code levels (Phase 6+): the player's assembly, saved with the level like a board. */
+  source: string;
+  /** Breakpoints by 1-based line in the player's file. */
+  breakpoints: number[];
+  /** Assembler diagnostics for the current source. */
+  codeDiagnostics: SourceDiagnostic[];
+  /** Latest RISC-V machine snapshot from the worker. */
+  rv: RvSnapshot | null;
 
   /** Apply an edit as one undoable step. */
   commit: (fn: (b: Board) => Board, selection?: string[]) => void;
@@ -114,6 +122,10 @@ export const useEditor = create<EditorState>()((set, get) => ({
   editingLabel: null,
   chips: {},
   editStack: [],
+  source: '',
+  breakpoints: [],
+  codeDiagnostics: [],
+  rv: null,
 
   commit: (fn, selection) => {
     const { board, past, readOnly } = get();

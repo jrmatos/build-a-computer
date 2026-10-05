@@ -1,4 +1,6 @@
 import { Canvas } from './editor/Canvas';
+import { CodeWorkspace } from './code/CodeWorkspace';
+import { useEditor } from './editor/store';
 import { ContextMenu } from './ui/ContextMenu';
 import { Footer } from './ui/Footer';
 import { HelpDialog } from './ui/HelpDialog';
@@ -23,9 +25,11 @@ import './App.css';
  * Bottom left: zoom and undo.
  */
 export function App() {
+  // Code levels (Phase 6+) replace the board with the code workspace.
+  const codeMode = useEditor((s) => s.level?.mode === 'code');
   return (
     <div className="app">
-      <Canvas />
+      {codeMode ? <CodeWorkspace /> : <Canvas />}
       <div className="layer">
         <div className="top-left">
           <MainMenu />

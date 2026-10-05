@@ -70,6 +70,82 @@ export interface SimApi {
     onCase: (r: CaseResult) => void | Promise<void>,
     board?: Board,
     budgetMs?: number,
+    /** Player's assembly for code levels ('riscv' tests). */
+    source?: string,
   ): Promise<{ passed: number; total: number }>;
   subscribe(onSnapshot: (s: Snapshot) => void): void;
+}
+
+/** A diagnostic in the player's source: 1-based line and column. */
+export interface SourceDiagnostic {
+  line: number;
+  column: number;
+  endLine: number;
+  endColumn: number;
+  message: string;
+  severity: 'error' | 'warning';
+  /** File name: the player's file is 'main.s'; level libraries use their own names. */
+  file: string;
+}
+
+export interface RvLoadResult {
+  ok: boolean;
+  diagnostics: SourceDiagnostic[];
+  /** Labels with their addresses, for the debugger. */
+  symbols: { name: string; addr: number }[];
+  entry: number;
+}
+
+export type RvStopReason = 'breakpoint' | 'step' | 'paused' | 'ebreak' | 'exit' | 'trap' | 'wfi' | 'budget' | 'error';
+
+/** The RISC-V machine as the debugger sees it (code levels, Phase 6+). */
+export interface RvState {
+  pc: number;
+  /** x0..x31, unsigned. */
+  regs: number[];
+  /** Source position of pc in the player's file, when it maps to one. */
+  line?: number;
+  file?: string;
+  mode: 'M' | 'S' | 'U';
+  instret: number;
+  running: boolean;
+  /** Why it last stopped; absent while running or before the first run. */
+  reason?: RvStopReason;
+  exitCode?: number;
+  /** Last trap taken without a handler (cause, mtval, plain-English message). */
+  trap?: { cause: number; tval: number; message: string };
+  /** Selected CSRs for the debugger (mstatus, mepc, mcause, mtval, mtvec, mie, mip, satp…). */
+  csrs: Record<string, number>;
+}
+
+export interface RvSnapshot {
+  state: RvState;
+  /** Everything the program printed to the UART (last 64 KiB). */
+  uart: string;
+  /** Bumps whenever framebuffer pixels or palette changed. */
+  fbVersion: number;
+}
+
+/**
+ * Debugger commands for code levels. The same worker serves boards (SimApi)
+ * and the RV32 machine (RvApi); they never run at the same time.
+ */
+export interface RvApi {
+  /** Assemble + link `source` with the level's library files, reset the machine with the level's setup. */
+  rvLoad(source: string, level: Level): RvLoadResult;
+  rvRun(): void;
+  rvPause(): void;
+  /** Execute n instructions (stops early at breakpoints/exit). */
+  rvStep(n: number): void;
+  /** Run until the next source line in the player's file (over calls: no). */
+  rvStepLine(): void;
+  rvReset(): void;
+  /** Breakpoints by 1-based line in the player's file. */
+  rvSetBreakpoints(lines: number[]): void;
+  /** Send text to the UART receiver (console input) and keyboard device. */
+  rvInput(text: string): void;
+  rvMemory(addr: number, length: number): Uint8Array;
+  /** 320x200 8-bit pixels + 256-entry RGBA palette, or null without a framebuffer. */
+  rvFramebuffer(): { pixels: Uint8Array; palette: Uint32Array } | null;
+  rvSubscribe(onSnapshot: (s: RvSnapshot) => void): void;
 }

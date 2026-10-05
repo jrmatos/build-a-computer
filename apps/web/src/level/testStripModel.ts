@@ -210,6 +210,13 @@ export function planStrip(level: Pick<Level, 'starter' | 'tests'>): StripPlan {
         });
         break;
       }
+      case 'riscv': {
+        // One column per program run; the code-level UI owns the detailed view.
+        Object.keys(test.expect.regs ?? {}).forEach(addOut);
+        count = 1;
+        make = (i) => ({ test: ti, kind: test.kind, index: i, inputs: test.setup?.regs ?? {}, expect: test.expect.regs ?? {} });
+        break;
+      }
     }
     segments.push({ kind: test.kind, start, count });
     makers.push(make);
