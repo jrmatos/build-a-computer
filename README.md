@@ -1,5 +1,7 @@
 # Build a Computer
 
+**Play it: https://jrmatos.github.io/build-a-computer/**
+
 Build a computer from scratch, in your browser. Build a Computer is a free,
 open-source game that teaches computer science by construction: start with a
 NAND gate, wire up logic, arithmetic and memory, build a CPU, then write the
@@ -65,8 +67,13 @@ misses file changes on your Docker setup.
 
 ## Deploy
 
+Every push to `main` deploys to GitHub Pages
+([`.github/workflows/pages.yml`](.github/workflows/pages.yml)), built with
+`VITE_BASE=/build-a-computer/` because Pages serves the site from that subpath.
+Pages cannot set response headers, so the CSP there is the browser default.
+
 The site is static: `pnpm build` writes it to `apps/web/dist`. Publish that
-folder to Cloudflare Pages (the reference deploy) or any static host, with a SPA
+folder to Cloudflare Pages or any static host, with a SPA
 fallback to `index.html` and the headers from
 [`docker/nginx/security-headers.conf`](docker/nginx/security-headers.conf)
 (CSP, `nosniff`, frame denial). Or run the `web-prod` image, which is that
