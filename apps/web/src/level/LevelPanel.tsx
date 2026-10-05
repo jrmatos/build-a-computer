@@ -11,6 +11,8 @@ import { TestStripSection } from './TestStrip';
 import { useLevelUi } from './ui';
 import './level.css';
 import { Markdown, inline } from './Markdown';
+import { loadSolution } from './solution';
+import { zoomToFit } from '../editor/camera';
 
 const COLLAPSE_KEY = 'ground-up:level-panel-collapsed';
 
@@ -134,6 +136,7 @@ function LevelBody({ level }: { level: Level }) {
           )}
         </div>
       )}
+      {level.tests.length > 0 && !inChip && <ShowSolution level={level} />}
 
       <div className="lp-tests">
         <button
@@ -187,6 +190,49 @@ function SuccessCard({ level }: { level: Level }) {
         )}
         <button type="button" className="lv-btn ghost" onClick={() => useLevelUi.getState().set({ justCompleted: null })}>
           {t('level.success.stay')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * "Show solution" (ADR-007): two clicks, so it is never pressed by accident.
+ * Replaces the board as one undo step, so Ctrl+Z brings the player's attempt back.
+ */
+function ShowSolution({ level }: { level: Level }) {
+  const [state, setState] = useState<'idle' | 'confirm' | 'loading'>('idle');
+  if (state === 'idle')
+    return (
+      <button type="button" className="lv-btn ghost lp-solution" onClick={() => setState('confirm')}>
+        {t('level.solution.show')}
+      </button>
+    );
+  const reveal = async () => {
+    setState('loading');
+    const { commit, toast } = useEditor.getState();
+    try {
+      const board = await loadSolution(level);
+      if (!board) {
+        toast(t('level.solution.none'), 'info');
+        return;
+      }
+      commit(() => board, []);
+      requestAnimationFrame(() => requestAnimationFrame(() => zoomToFit()));
+      toast(t('level.solution.loaded'), 'success');
+    } finally {
+      setState('idle');
+    }
+  };
+  return (
+    <div className="lp-solution-confirm" role="group" aria-label={t('level.solution.show')}>
+      <p>{t('level.solution.confirm')}</p>
+      <div>
+        <button type="button" className="lv-btn primary" disabled={state === 'loading'} onClick={() => void reveal()}>
+          {t('level.solution.yes')}
+        </button>
+        <button type="button" className="lv-btn ghost" onClick={() => setState('idle')}>
+          {t('level.solution.cancel')}
         </button>
       </div>
     </div>

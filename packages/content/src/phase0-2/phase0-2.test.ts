@@ -41,8 +41,8 @@ describe('Phase 0-2 levels', () => {
       expect(l.draft, l.id).toBe(true);
       expect(l.resources, l.id).toEqual([]);
       expect(l.tests.length, l.id).toBeGreaterThan(0);
-      expect(l.hints.length, l.id).toBeGreaterThanOrEqual(1);
-      expect(l.hints.length, l.id).toBeLessThanOrEqual(3);
+      expect(l.hints.length, l.id).toBeGreaterThanOrEqual(3);
+      expect(l.hints.length, l.id).toBeLessThanOrEqual(5);
       expect(l.tutorial.length, l.id).toBeGreaterThan(0);
       expect(l.afterword.length, l.id).toBeGreaterThan(0);
     }

@@ -2,8 +2,8 @@ import type { Board, Part, PartProps, PartType, Wire } from '@ground-up/schema';
 
 /**
  * A tiny board builder for reference solutions written as code. Positions are
- * a plain grid (solutions are checked, not looked at). Test-only: never
- * imported by the game.
+ * a plain grid; the game re-lays a solution out before showing it on
+ * "Show solution" (ADR-007).
  */
 
 /** A pin: [part id, pin name]. */

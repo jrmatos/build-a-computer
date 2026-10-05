@@ -36,7 +36,12 @@ export const PHASE3: Level[] = [
       'Until now every circuit answered at once: change an input, the output follows. Memory needs something new: a sense of "before" and "after". ' +
       'A clock is a signal that flips between 0 and 1 forever. Each flip is a tick; two ticks (low to high, then back) are one cycle.\n\n' +
       'Every part that remembers will act on one moment only: the rising edge, when the clock goes from 0 to 1.',
-    hints: ['The clock is in the I/O section of the parts list.', 'TOCK is the clock through a NOT gate.'],
+    hints: [
+      'TICK must copy the clock. TOCK must always show the opposite of TICK.',
+      'The clock is in the I/O section of the parts list. Its one output pin flips on every tick.',
+      'You need 2 parts: one clock and one NOT.',
+      'Wire clock out → TICK. Start a second wire from clock out → NOT input, and wire the NOT output → TOCK.',
+    ],
     afterword: 'The clock is unlocked. Every memory level from now on has one, locked in place, labelled CLK.',
     palette: P_CLOCK,
     starter: { parts: [lamp('TICK', 14, -2), lamp('TOCK', 14, 2)], wires: [] },
@@ -66,9 +71,11 @@ export const PHASE3: Level[] = [
       'The NAND latch reacts to 0s, not 1s. Its inputs rest at 1 and a 0 sets or resets it. Your S and R rest at 0, so flip them first.\n\n' +
       'The simulator lets loops settle. When the power comes on, a latch picks a side on its own, so the tests never read Q before setting or resetting it.',
     hints: [
-      'Cross-couple two NANDs: each one\'s output goes to one input of the other.',
-      'Q = NAND(NOT S, Q̄) and Q̄ = NAND(NOT R, Q).',
-      'Loops are allowed here. That is the whole point.',
+      'Q must remember. S = 1 sets Q to 1. R = 1 sets Q to 0. With both at 0, Q keeps what it had.',
+      'Memory comes from a loop. Two NANDs that feed each other settle into one of two stable states and stay there.',
+      'This latch reacts to a 0, but your S and R are 1 when active. So flip each one with a NOT first.',
+      'You need 4 parts: two NOTs and two NANDs. Call the NANDs top and bottom.',
+      'S → NOT → top input a. R → NOT → bottom input a. Top output → bottom input b. Bottom output → top input b. Top output → Q.',
     ],
     afterword: 'You built memory out of two gates and a loop. Every register, RAM chip and CPU state you build from now on is this idea, refined.',
     palette: P_CLOCK,
@@ -102,7 +109,13 @@ export const PHASE3: Level[] = [
     tutorial:
       'The SR latch has an awkward rule: S and R must never be on together. A D latch removes it: one data input D, and an enable E that says when to listen.\n\n' +
       'Build set and reset from D and E so that they can never both be active.',
-    hints: ['Set = D AND E. Reset = NOT D AND E.', 'Feed those into your SR latch.', 'With NANDs only: NAND(D, E) is already the active-low set.'],
+    hints: [
+      'While E is 1, Q copies D. When E goes to 0, Q freezes at its last value.',
+      'Reuse your SR latch. "Set" should happen when E is 1 and D is 1. "Reset" when E is 1 and D is 0.',
+      'The latch NANDs want inputs that are 0 when active, and NAND gives you that: NAND(D, E) is 0 only when setting.',
+      'You need 5 parts: one NOT and four NANDs (two make set and reset, two are the latch).',
+      "Set NAND: D and E. Reset NAND: NOT D and E. Feed them to the latch's top a and bottom a, cross-coupled as before. Top output → Q.",
+    ],
     afterword: 'A latch is "transparent" while enabled: changes on D flow straight through. The next level fixes that.',
     palette: P_CLOCK,
     starter: { parts: [sw('D', -14, -2), sw('E', -14, 2), lamp('Q', 14, 0)], wires: [] },
@@ -136,9 +149,11 @@ export const PHASE3: Level[] = [
       'and between edges the gates have time to settle.\n\n' +
       'The classic design is two D latches in a row, master and slave, enabled by opposite clock levels.',
     hints: [
-      'The master latch is enabled while CLK is 0; the slave while CLK is 1.',
-      'Master D = D. Slave D = master Q. Q = slave Q.',
-      'When the clock rises, the master closes and the slave shows what the master caught.',
+      'Q changes only at the instant the clock goes from 0 to 1. Between those instants Q ignores D.',
+      'Use two D latches in a row. The first (master) listens while CLK is 0. The second (slave) listens while CLK is 1.',
+      'When CLK rises, the master freezes the D it saw and the slave starts showing it. When CLK falls, the slave freezes.',
+      'You need 11 parts: one NOT for the clock, plus two D latches of five parts each. Copy yours from the last level.',
+      "Master: D input = D, E input = NOT CLK. Slave: D input = master's Q, E input = CLK. Slave's Q → Q.",
     ],
     afterword: 'The D flip-flop is now a block (dff). It is the atom of every register and counter ahead.',
     palette: P_CLOCK,
@@ -171,7 +186,13 @@ export const PHASE3: Level[] = [
     tutorial:
       'A flip-flop takes a new value every cycle. A register should only change when told to. ' +
       'The trick is not to stop the clock (never gate the clock) but to feed the flip-flop its own output when LOAD is off.',
-    hints: ['A multiplexer chooses between the old value Q and the new value D.', 'mux: a = Q, b = D, sel = LOAD, into the dff.'],
+    hints: [
+      'Every rising edge the flip-flop stores something. When LOAD is 0, make it store Q again, so nothing changes.',
+      "So the dff's d is a choice: old Q when LOAD is 0, new D when LOAD is 1. A multiplexer makes that choice.",
+      'You need 2 parts: one dff and one multiplexer.',
+      'Wire CLK → dff clk. Mux: a = dff q, b = D, sel = LOAD. Mux out → dff d, and dff q → Q.',
+      'The loop from q back into the mux is fine: the flip-flop only updates on the rising edge.',
+    ],
     afterword: 'This one-bit register is the pattern for everything with a "load" or "write enable" pin.',
     palette: P_DFF,
     starter: { parts: [clockPart(), sw('D', -14, -2), sw('LOAD', -14, 2), lamp('Q', 14, 0)], wires: [] },
@@ -201,8 +222,11 @@ export const PHASE3: Level[] = [
     goal: 'At each rising edge, the 8-bit Q takes the 8-bit D if LOAD is on; otherwise it keeps its value.',
     tutorial: 'Eight one-bit registers side by side, sharing LOAD and the clock. Split the byte into bits, store each, join them back.',
     hints: [
-      'A multiplexer can be 8 bits wide: choose the whole byte at once, then split it into flip-flops.',
-      'Splitter → 8 flip-flops → joiner.',
+      'Same idea as the last level, eight bits at once. All eight bits share CLK and LOAD.',
+      'Choose the whole next byte with one 8-bit multiplexer, then store each bit in its own dff.',
+      'You need 11 parts: one multiplexer (width 8), one splitter, eight dffs and one joiner.',
+      "Mux: a = joiner output (the current Q), b = D, sel = LOAD. Mux out → splitter. Splitter o*k* → dff *k*'s d.",
+      "Every dff's clk ← CLK. Dff *k*'s q → joiner i*k*. Joiner output → Q, and back to mux a.",
     ],
     afterword: 'The register is now a block with any width up to 32. Your CPU will have six of them.',
     palette: P_DFF,
@@ -234,7 +258,13 @@ export const PHASE3: Level[] = [
     tutorial:
       'A counter is a register that feeds itself plus one. Your CPU will use one to remember which instruction comes next: the program counter. ' +
       'LOAD lets a jump set it to any value.',
-    hints: ['Adder: Q + 0 with carry in 1 is Q + 1.', 'Two multiplexers decide the next value: Q or Q + 1 by EN, then that or D by LOAD.', 'Keep the register\'s own LOAD on.'],
+    hints: [
+      'At each rising edge the register stores D if LOAD is on, else Q + 1 if EN is on, else Q. LOAD wins over EN.',
+      'Make Q + 1 with an adder: a = Q, b = an 8-bit constant 0, cin = a constant 1.',
+      'Two multiplexers pick the next value. The first picks Q or Q + 1 by EN. The second picks that or D by LOAD.',
+      'You need 6 parts: a register, an adder, two 8-bit multiplexers, an 8-bit constant 0 and a constant 1.',
+      'Register: clk ← CLK, load ← constant 1, d ← mux 2. Mux 1: a = q, b = adder sum, sel = EN. Mux 2: a = mux 1, b = D, sel = LOAD.',
+    ],
     afterword: 'The counter is now a block: d, load, en, clk → q. Next: many registers you can pick by number.',
     palette: P_REG,
     starter: {
@@ -273,9 +303,11 @@ export const PHASE3: Level[] = [
       'A CPU keeps the numbers it is working on in a few fast registers. Instructions name them by number: "add R1 to R2". ' +
       'A register file has one write port (which register to write, chosen by a decoder) and two read ports (which registers to show, chosen by multiplexers).',
     hints: [
-      'A 2-to-4 decoder turns W into four lines; AND each with WE to get each register\'s LOAD.',
-      'A 4-to-1 multiplexer is three 2-to-1 multiplexers. Split RA into its two bits.',
-      'Every register gets the same D.',
+      'Writing: at a rising edge with WE on, only register number W stores D. Reading: A shows register RA and B shows register RB, at once.',
+      "To write one register, a decoder turns W into four lines o0 to o3. AND each line with WE to drive that register's load.",
+      'To read, pick 1 of 4 registers, twice. Each pick is three 8-bit muxes in a tree, like the logic unit.',
+      'You need 17 parts: one decoder, four ANDs, four registers, two splitters (width 2) and six multiplexers (width 8).',
+      'Register *k*: d ← D, clk ← CLK, load ← decoder o*k* AND WE. Split RA: o0 picks R0/R1 and R2/R3, o1 picks between them → A. Same for B with RB.',
     ],
     afterword: 'This is exactly the register file of the Toy-8 CPU you will build in Phase 4.',
     palette: P_COUNTER,
@@ -323,9 +355,11 @@ export const PHASE3: Level[] = [
       'Random access memory is a register file with one port and many more registers. The address picks the word for both reading and writing.\n\n' +
       'Real RAM is built from far smaller cells than your registers, but it behaves just like this.',
     hints: [
-      'A 4-bit decoder makes 16 select lines. AND each with WE.',
-      'Reading is a 16-to-1 multiplexer: four rows of 2-to-1 multiplexers (8, 4, 2, 1).',
-      'At power on the words hold junk. The tests write before they read.',
+      'This is the register file, bigger: 16 registers, and one address used for both reading and writing.',
+      "Writing: a decoder with Select bits set to 4 turns ADDR into 16 lines. AND each with WE for that register's load.",
+      'Reading: pick 1 of 16 with a mux tree. 8 muxes on ADDR bit 0, then 4 on bit 1, 2 on bit 2 and 1 on bit 3.',
+      'You need 16 registers, 16 ANDs, 1 decoder, 1 splitter (width 4) and 15 multiplexers (width 8). Copy and paste saves time.',
+      'Every register: d ← D, clk ← CLK. The mux tree takes register outputs R0 to R15 in order, and its output → Q.',
     ],
     afterword: 'RAM is now a block, with up to 16 address bits. The Toy-8 CPU has 256 bytes of it.',
     palette: P_COUNTER,
@@ -358,7 +392,13 @@ export const PHASE3: Level[] = [
     tutorial:
       'Read-only memory holds values that never change and survive power off: the program a computer starts with. ' +
       'A small ROM is just constants and a multiplexer. Real ROMs bake the bits into the chip.',
-    hints: ['Four constant blocks, one per word.', 'A 4-to-1 multiplexer picks one by ADDR.'],
+    hints: [
+      'No memory is needed. The four words never change, so they can be constants. ADDR just picks one.',
+      "This is a 4-to-1 choice, like the logic unit: three muxes in a tree, steered by ADDR's two bits.",
+      'You need 8 parts: four constants (width 8), one splitter (width 2) and three multiplexers (width 8).',
+      'Set the constants to 0x4E, 0x41, 0x4E, 0x44 for words 0 to 3. Mux 1: a = word 0, b = word 1. Mux 2: a = word 2, b = word 3.',
+      'Split ADDR. o0 is sel for muxes 1 and 2. Mux 3: a = mux 1, b = mux 2, sel = o1, out → Q.',
+    ],
     afterword:
       'The ROM block is unlocked. Its contents are typed in as hex bytes, and it keeps them when the power goes off. Phase 4 puts a program in one.',
     palette: P_RAM,

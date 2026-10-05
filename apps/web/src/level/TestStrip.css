@@ -1,27 +1,19 @@
-/* Test strip: Turing Complete style case columns on a dark panel, in both themes. */
+/*
+ * Test strip: one column per test case, rows Input / Desired / Current, values
+ * as plain 0 and 1 digits. Uses the app's theme tokens in both themes.
+ */
 .ts-section,
 .ts-float {
-  --ts-bg: #17181c;
-  --ts-bg-2: #1f2126;
-  --ts-line: #2c2f36;
-  --ts-label: #f0a540;
-  --ts-text: #d9dce3;
-  --ts-faint: #6c7280;
-  --ts-one: #2e8b3e;
-  --ts-one-hi: #43b057;
-  --ts-zero: #e8445a;
-  --ts-zero-hi: #ff6b7d;
-  --ts-x: #7a808c;
-  --ts-active: rgba(240, 165, 64, 0.16);
-  --ts-select: rgba(255, 255, 255, 0.1);
-  --ts-fail: #ff4d63;
-  --ts-pass: #4cc46a;
-}
-:root[data-theme='light'] .ts-section,
-:root[data-theme='light'] .ts-float {
-  --ts-bg: #1d1f24;
-  --ts-bg-2: #262930;
-  --ts-line: #353943;
+  --ts-bg: var(--island);
+  --ts-bg-2: var(--hover);
+  --ts-line: var(--island-border);
+  --ts-label: var(--text-muted);
+  --ts-text: var(--text);
+  --ts-faint: var(--text-faint);
+  --ts-active: color-mix(in srgb, var(--accent) 14%, transparent);
+  --ts-select: var(--active);
+  --ts-fail: var(--danger);
+  --ts-pass: var(--success);
 }
 
 .ts-section {
@@ -183,6 +175,7 @@
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
+  font-family: var(--font-ui);
 }
 .ts-label.cur {
   color: color-mix(in srgb, var(--ts-label) 70%, var(--ts-text));
@@ -240,7 +233,7 @@
   pointer-events: none;
 }
 .ts-col:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--ts-bg-2);
 }
 .ts-col.is-active {
   background: var(--ts-active);
@@ -262,7 +255,7 @@
   box-shadow: 0 0 0 1px var(--ts-text) inset;
 }
 .ts-col.is-first-fail {
-  background: rgba(255, 77, 99, 0.12);
+  background: color-mix(in srgb, var(--ts-fail) 12%, transparent);
 }
 .ts-col.is-shaking {
   animation: ts-shake 0.42s ease-in-out;
@@ -316,29 +309,33 @@
 }
 
 /* Leaves: a rounded square with one sharp corner. 1 = green, sharp top-left; 0 = red, sharp top-right. */
-.ts-leaf {
+.ts-bit {
   display: block;
-  width: 16px;
-  height: 16px;
-  border-radius: 6px;
+  min-width: 16px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 18px;
+  text-align: center;
 }
-.ts-leaf.b1 {
-  border-top-left-radius: 0;
-  background: linear-gradient(160deg, var(--ts-one-hi), var(--ts-one) 70%);
-  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.18);
+.ts-bit.b1 {
+  color: var(--ts-text);
+  font-weight: 700;
 }
-.ts-leaf.b0 {
-  border-top-right-radius: 0;
-  background: linear-gradient(200deg, var(--ts-zero-hi), var(--ts-zero) 70%);
-  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.18);
+.ts-bit.b0 {
+  color: var(--ts-label);
 }
-.ts-leaf.x {
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
-  background: repeating-linear-gradient(45deg, var(--ts-x) 0 2px, #3b3f48 2px 4.5px);
+.ts-bit.x {
+  color: var(--warning);
+  font-weight: 700;
 }
-.ts-leaf.empty {
-  border: 1.5px solid rgba(255, 255, 255, 0.13);
+.ts-bit.empty {
+  color: var(--ts-faint);
+}
+.ts-cell.wrong .ts-bit {
+  color: var(--ts-fail);
+  font-weight: 700;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1.5px var(--ts-fail);
 }
 
 .ts-pill {
@@ -348,26 +345,28 @@
   height: 18px;
   padding: 0 5px;
   border-radius: 5px;
-  background: #2b2e35;
+  background: var(--ts-bg-2);
   color: var(--ts-text);
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .ts-cell.cur .ts-pill {
-  background: #33373f;
+  background: var(--ts-bg-2);
+  box-shadow: inset 0 0 0 1px var(--ts-line);
 }
 .ts-pill.empty {
   width: 22px;
   background: transparent;
-  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.13);
+  box-shadow: inset 0 0 0 1.5px var(--ts-line);
 }
 .ts-pill.x {
-  background: repeating-linear-gradient(45deg, #4a4f5a 0 2px, #33363e 2px 4.5px);
+  color: var(--warning);
 }
 .ts-cell .ts-pill.wrong {
-  background: color-mix(in srgb, var(--ts-fail) 30%, #2b2e35);
-  color: #fff;
+  background: color-mix(in srgb, var(--ts-fail) 14%, transparent);
+  color: var(--ts-fail);
   box-shadow: inset 0 0 0 1.5px var(--ts-fail);
 }
 
@@ -380,7 +379,7 @@
   animation: lv-in 0.15s ease-out;
 }
 .ts-detail.fail {
-  background: rgba(255, 77, 99, 0.1);
+  background: color-mix(in srgb, var(--ts-fail) 10%, transparent);
 }
 .ts-detail-head {
   display: flex;

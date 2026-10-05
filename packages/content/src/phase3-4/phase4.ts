@@ -150,7 +150,13 @@ export const PHASE4: Level[] = [
     tutorial:
       'A program is a list of instructions in memory. The program counter (PC) holds the address of the next one. ' +
       'Normally it just counts up; a jump loads a new address. At power on its value is junk, so a RESET input sets it to 0.',
-    hints: ['Use the counter block with EN always on.', 'RESET wins: feed the counter\'s D from a multiplexer that picks 0 when RESET is on, and load when JUMP or RESET.'],
+    hints: [
+      'At each rising edge, in this order: RESET makes PC 0. Else JUMP makes PC = TARGET. Else PC adds 1.',
+      'The counter block already does "load d, else count up". You only choose d: 0 when RESET is on, TARGET otherwise.',
+      'Load when JUMP or RESET is on. Keep en at 1 so it counts the rest of the time.',
+      'You need 5 parts: a counter, an 8-bit multiplexer, an 8-bit constant 0, an OR and a constant 1.',
+      'Mux: a = TARGET, b = constant 0, sel = RESET, out → counter d. OR(JUMP, RESET) → load. Constant 1 → en. CLK → clk, q → PC.',
+    ],
     afterword: 'Your CPU will use exactly this. In the full machine, power on clears every register, so RESET is not needed there.',
     palette: P4,
     starter: { parts: [clockPart(), sw('RESET', -16, -4), sw('JUMP', -16, 0), sw('TARGET', -16, 4, 8), lamp('PC', 16, 0, 8, 'hex')], wires: [] },
@@ -187,9 +193,11 @@ export const PHASE4: Level[] = [
       'In the fetch cycle the CPU copies the instruction byte into the instruction register (IR). In the execute cycle the PC already points at the operand byte, ' +
       'so the ROM output is the operand, ready to use.\n\nThe full spec is in the Toy-8 manual (docs/toy8.md).',
     hints: [
-      'A flip-flop whose D is its own output through NOT flips every cycle: that is PHASE.',
-      'The ROM\'s address is the PC. The IR\'s LOAD is NOT PHASE.',
-      'The counter needs D and LOAD connected even if unused: a constant 0 works.',
+      'Three jobs. PHASE goes 0, 1, 0, 1. PC counts up every cycle. IR grabs the ROM byte only when PHASE is 0.',
+      'PHASE is a dff whose d is its own q through a NOT. At each rising edge it stores the opposite, so it toggles.',
+      "PC is a counter with en = 1 and load = 0. Its q drives the ROM's addr, so ROM q shows the byte at PC.",
+      'IR is an 8-bit register: d ← ROM q, load ← NOT PHASE. It stores at the rising edge that ends a fetch cycle.',
+      'You need 7 parts: dff, NOT, counter, register, an 8-bit constant 0 (counter d), a constant 0 (load) and a constant 1 (en). CLK → every clk.',
     ],
     afterword: 'Fetch is done: the CPU now knows what to do. Next, it has to understand it.',
     palette: P4,
@@ -225,7 +233,13 @@ export const PHASE4: Level[] = [
       'Toy-8 packs each instruction byte as A ccc dd ss. A = 1 means an ALU instruction: ccc goes straight to the ALU\'s op pin. ' +
       'A = 0 means a system instruction, and ccc says which one. dd and ss name registers.\n\n' +
       'This layout makes decoding cheap: one 3-bit decoder and eight AND gates.',
-    hints: ['A splitter gives you the 8 bits; joiners rebuild the 2- and 3-bit fields.', 'Decoder on OP, then AND each output with NOT ALU.'],
+    hints: [
+      'The byte is laid out A ccc dd ss. Bit 7 is ALU, bits 6..4 are OP, 3..2 are RD, 1..0 are RS. See docs/toy8.md.',
+      'Split IR into 8 bits; o0 is bit 0, the lowest. Rebuild each field with a joiner of the right width, 1 bit per chunk.',
+      'RS joiner (width 2): i0 ← o0, i1 ← o1. RD: i0 ← o2, i1 ← o3. OP (width 3): i0 ← o4, i1 ← o5, i2 ← o6. ALU ← o7.',
+      'A decoder with Select bits 3 turns OP into lines o0 to o7. They only count when ALU is 0, so AND each with NOT o7.',
+      'You need 14 parts: a splitter, three joiners, a NOT, a decoder and eight ANDs. Decoder o0 → HALT, o1 → LDI, and so on to o7 → JCC.',
+    ],
     afterword: 'The decoder is the CPU\'s control unit in miniature: every other part listens to these lines.',
     palette: P4,
     starter: {
@@ -253,9 +267,11 @@ export const PHASE4: Level[] = [
       'Here IR and IMM are switches and WE stands in for "this is the execute cycle". Later you connect them to the fetch logic.\n\n' +
       'LDI is 0x1_ (0001 dd 00) and MOV is 0x2_ (0010 dd ss). Which register is written comes from the dd bits; what is written comes from a multiplexer.',
     hints: [
-      'Bit 5 of IR tells MOV (1) from LDI (0): use it to pick between IMM and B.',
-      'Write only when WE is on and the instruction is LDI or MOV.',
-      'Your register file from Phase 3, with RA = bits 3..2 and RB = bits 1..0.',
+      'Reading: A shows R[RD] and B shows R[RS], all the time. Writing: at a rising edge with WE on, LDI or MOV stores into R[RD].',
+      'Start from your Phase 3 register file: four 8-bit registers, a write decoder, and two 4-to-1 mux trees for reading.',
+      'Split IR. The A tree selects with o2, then o3 (RD). The B tree selects with o0, then o1 (RS).',
+      'Write data: LDI writes IMM and MOV writes B. IR bit 5 is 1 only for MOV, so use a mux: a = IMM, b = B, sel = o5.',
+      'Join o2, o3 into RD for a 2-bit decoder. Register *k* loads on WE AND (LDI OR MOV) AND decoder o*k*. Copy LDI, MOV from your decoder level.',
     ],
     afterword: 'The CPU can now move data around. Next it learns to compute.',
     palette: P4,
@@ -283,7 +299,13 @@ export const PHASE4: Level[] = [
     tutorial:
       'ALU instructions are 1ccc dd ss: rd ← rd op rs, with op in the ALU\'s own order (add, sub, and, or, xor, not, shl, shr). ' +
       'The flags go into three one-bit registers so a later instruction can test them.',
-    hints: ['ALU a = A, b = B, op = IR bits 6..4.', 'One more multiplexer on the write data: bit 7 picks the ALU result.', 'Flag registers load when WE and bit 7 are both on.'],
+    hints: [
+      'Keep everything from the last level. New: when IR bit 7 is 1, R[RD] ← R[RD] op R[RS], and the flags are saved.',
+      'Place an ALU (width 8). Wire a ← R[RD] (the A value) and b ← R[RS] (the B value). Wire op ← the OP field, IR bits 6..4.',
+      'The write data gets one more 8-bit mux: a = your LDI/MOV value, b = ALU out, sel = IR bit 7.',
+      'Registers now also load for ALU instructions. The write enable becomes WE AND (LDI OR MOV OR bit 7).',
+      'Flags: three registers of width 1. Their d ← ALU zero, neg, carry. Their load ← WE AND bit 7. Their q → Z, N, C.',
+    ],
     afterword: 'Your CPU can calculate. It still cannot remember more than four numbers: next, memory.',
     palette: P4,
     starter: datapathStarter([lamp('Z', 16, 2), lamp('N', 16, 6), lamp('C', 16, 10)]),
@@ -326,7 +348,13 @@ export const PHASE4: Level[] = [
     tutorial:
       'Four registers are not enough for real programs. Data memory holds the rest. The address comes from a register, so a program can walk through an array by adding 1 to it.\n\n' +
       'Toy-8 is a Harvard machine: the program lives in ROM, the data in a separate RAM.',
-    hints: ['RAM addr = B, d = A, we = WE AND ST.', 'For LD, the written value is the RAM output: extend the write-back multiplexers using IR bit 4.'],
+    hints: [
+      'Two new instructions. LD RD, [RS] copies RAM[R[RS]] into R[RD]. ST RD, [RS] copies R[RD] into RAM[R[RS]].',
+      'Place a RAM and set Address bits to 8. Wire addr ← B (R[RS]), d ← A (R[RD]), clk ← CLK.',
+      'RAM we ← WE AND ST. ST is decoder line o4, ANDed with NOT bit 7 like the others.',
+      "LD (0x3_) and MOV (0x2_) differ in IR bit 4. In front of the bit-5 mux's b input, add a mux: a = B, b = RAM q, sel = bit 4.",
+      'Add LD to the writers: registers load on WE AND (LDI OR MOV OR LD OR bit 7).',
+    ],
     afterword: 'The datapath is complete. Now connect it to fetch, and the CPU runs on its own.',
     palette: P4,
     starter: datapathStarter([lamp('Z', 16, 2), lamp('N', 16, 6), lamp('C', 16, 10)]),
@@ -367,9 +395,11 @@ export const PHASE4: Level[] = [
       'JMP loads the PC with the operand. OUT copies a register into an 8-bit OUT register shown on the OUT lamp.\n\n' +
       'You can copy your parts from earlier levels and paste them here.',
     hints: [
-      'PC: counter, d = ROM output, en on, load = execute AND JMP.',
-      'OUT register: d = A, load = execute AND OUT.',
-      'The tests count cycles exactly: 2 per instruction.',
+      'Join the pieces into one machine. PHASE 0 is fetch (IR ← ROM byte), PHASE 1 is execute. Every instruction takes 2 cycles.',
+      'Fetch works as in the fetch level. PHASE is a toggling dff. PC is a counter with en = 1 and q → ROM addr. IR is a register: d ← ROM q, load ← NOT PHASE.',
+      'Datapath, as in load and store: the IR register feeds your splitter, IMM is ROM q, and WE is PHASE (the execute cycle).',
+      'JMP is decoder line o6. Counter d ← ROM q, load ← PHASE AND JMP. On that edge PC takes the operand instead of counting.',
+      'OUT is decoder line o5: an 8-bit register, d ← A (R[RD]), load ← PHASE AND OUT, q → the OUT lamp. The full block list is in docs/toy8.md.',
     ],
     afterword: 'Your CPU runs programs. Loops forever, though: next, decisions.',
     palette: P4,
@@ -391,7 +421,13 @@ export const PHASE4: Level[] = [
     tutorial:
       'A branch is a jump that only happens sometimes. With it come loops that end and if/else. ' +
       'The condition looks at the flags the last ALU instruction stored. After SUB, C means "no borrow": the first number was at least the second.',
-    hints: ['A 4-to-1 multiplexer on RS picks Z, NOT Z, C or N.', 'Jump taken = JMP OR (JCC AND condition).'],
+    hints: [
+      'Jcc jumps only when its condition holds. The condition number is in the RS bits, IR bits 1..0: 0 JZ, 1 JNZ, 2 JC, 3 JN.',
+      'The flags are your Z, N and C registers, set by the last ALU instruction. JNZ needs NOT Z.',
+      'Pick the condition with three 1-bit muxes in a tree: inputs Z, NOT Z, C, N in that order. Select with IR o0, then o1.',
+      'Jump taken = JMP OR (JCC AND condition). JCC is decoder line o7.',
+      'Counter load ← PHASE AND taken, instead of PHASE AND JMP. That is 6 new parts: a NOT, three muxes, an AND and an OR.',
+    ],
     afterword: 'With a conditional branch your CPU can compute anything a bigger one can, given enough time and memory.',
     palette: P4,
     starter: cpuStarter(false),
@@ -416,7 +452,13 @@ export const PHASE4: Level[] = [
     tutorial:
       'A program that is finished should say so. HALT sets a one-bit register; while it is on, nothing loads: not the PC, the registers, memory or OUT.\n\n' +
       'An empty ROM is all zeros, which is HALT: a CPU with no program stops at once.',
-    hints: ['halted register: d = 1, load = execute AND HALT.', 'run = NOT halted. AND it into every load and enable.'],
+    hints: [
+      'HALT is instruction 0x00, decoder line o0. Once it executes, the HALT lamp turns on and the whole machine freezes.',
+      'Remember "halted" in a 1-bit register: d ← constant 1, load ← PHASE AND HALT. Its q → the HALT lamp.',
+      'Then run = NOT halted. Every load and enable must also need run, so nothing changes after HALT.',
+      "Easiest way: execute = run AND PHASE, fetch = run AND NOT PHASE, and the PC counter's en ← run.",
+      'Check it: an empty ROM is all zeros, so HALT should light after 2 cycles with OUT still 0.',
+    ],
     afterword: 'Your CPU is complete. One thing left: give it something worth doing.',
     palette: P4,
     starter: cpuStarter(true),
@@ -442,8 +484,10 @@ export const PHASE4: Level[] = [
       '        OR  R2, R2      ; Z = (b == 0)\n        JZ  done\nloop:   ADD R0, R1\n        SUB R2, R3\n        JNZ loop\ndone:   OUT R0\n        HALT\n```\n\n' +
       'Type it into the machine-code editor and watch it run, then let the tests try other numbers.',
     hints: [
-      'If an earlier program worked, this one should too. If not, step it one cycle at a time and compare with the listing.',
-      'b = 0 must give 0: the JZ before the loop handles it.',
+      'No new hardware this time. If your CPU passed the halt level, this program should run as it is.',
+      'If a test fails, step one cycle at a time. After every 2 cycles, compare the registers with the listing.',
+      'b = 0 must give 0. OR R2, R2 sets Z when R2 is 0, and JZ done then skips the loop.',
+      'Common bugs: flags that load on non-ALU instructions, JNZ reading Z instead of NOT Z, or a SUB whose carry is wrong.',
     ],
     afterword:
       'You built a computer from NAND gates and ran a program on it. Everything from here is the same idea, wider and faster: next, a real 32-bit RISC-V core.',

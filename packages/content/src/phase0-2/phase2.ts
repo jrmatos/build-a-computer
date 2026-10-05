@@ -70,7 +70,13 @@ export const PHASE2: Level[] = [
       'A bus is a bundle of wires that travels together. The joiner bundles single wires into a bus; the splitter does the opposite. ' +
       'Both are now in your parts list.\n\n' +
       'Once Y works, play with it: can you make 42? 200? What is the biggest number you can make?',
-    hints: ['Place a joiner and set its width to 8.', 'Input i0 of the joiner is the lowest bit, worth 1. Wire B0 there.', 'Wire B7 to i7 and the joiner output to Y.'],
+    hints: [
+      'Y is one 8-bit number. B0 adds 1 when on, B1 adds 2, B2 adds 4, and so on up to B7, which adds 128.',
+      'A joiner takes single wires on its left (i0 to i7) and bundles them into one bus on its right.',
+      'You need 1 part: one joiner. A new joiner is already 8 bits wide, 1 bit per chunk.',
+      'Input i0 is the lowest bit, worth 1. Wire B0 → i0, B1 → i1, and so on up to B7 → i7.',
+      "Wire the joiner's output → Y. Turn on B2 and B0: Y should show 5.",
+    ],
     afterword: 'Eight bits make a byte. From now on most inputs and outputs are bytes: one pin, eight wires.',
     palette: P_BUS,
     starter: {
@@ -95,7 +101,12 @@ export const PHASE2: Level[] = [
     goal: 'Add two bits: S is the sum bit and C is the carry. 1 + 1 = 10 in binary, so S = 0 and C = 1.',
     tutorial:
       'Adding in binary works like adding on paper, column by column. One column of two bits has four cases: 0+0 = 0, 0+1 = 1, 1+0 = 1, and 1+1 = 2, which is written 10: sum 0, carry 1.',
-    hints: ['Look at the S column of the truth table. You have built that gate.', 'C is only on when both are on.'],
+    hints: [
+      'Fill in the table: S is 0, 1, 1, 0 and C is 0, 0, 0, 1. Both columns are gates you have built.',
+      'S is 1 when exactly one input is 1: that is XOR. C is 1 only when both are 1: that is AND.',
+      'You need 2 parts: one XOR and one AND.',
+      'Wire A and B into the XOR, and its output → S. Wire A and B into the AND as well, and its output → C.',
+    ],
     afterword: 'A half adder is one XOR and one AND. It is "half" because it cannot take a carry in from the column to its right.',
     palette: P_BUS,
     starter: { parts: [...column(sw, ['A', 'B'], -10), ...column(lamp, ['S', 'C'], 10)], wires: [] },
@@ -110,8 +121,11 @@ export const PHASE2: Level[] = [
     goal: 'Add three bits A, B and Cin. S is the sum bit, Cout the carry out.',
     tutorial: 'A full adder handles one column of a long addition: the two digits plus the carry from the column to its right. Three bits add up to at most 3, which is 11 in binary.',
     hints: [
-      'Two half adders in a row: add A and B, then add Cin to that sum.',
-      'Only one of the two half adders can produce a carry. Combine the carries with OR.',
+      'Count how many of A, B and Cin are 1. S is 1 when the count is odd (1 or 3). Cout is 1 when it is 2 or 3.',
+      'Do it in two steps, like two half adders. First add A and B. Then add Cin to that partial sum.',
+      'Only one of the two steps can make a carry, so Cout is the OR of the two carries.',
+      'You need 5 parts: two XORs, two ANDs and one OR.',
+      'P = A XOR B. S = P XOR Cin. Cout = (A AND B) OR (P AND Cin). Build and wire each gate in that order.',
     ],
     afterword: 'Chain eight of these and you have an 8-bit adder. That is your next level.',
     palette: P_BUS,
@@ -130,9 +144,11 @@ export const PHASE2: Level[] = [
       'This is a ripple-carry adder: the carry ripples from bit 0 to bit 7.\n\n' +
       'Tip: build one full adder, select it, and copy it seven times. Or make it a chip.',
     hints: [
-      'Use a splitter on A and on B (width 8, chunk 1), and a joiner for S.',
-      'Bit 0 takes Cin as its carry in. Bit i takes the carry out of bit i - 1.',
-      'The carry out of bit 7 is Cout.',
+      'Add like on paper: column by column, from the right. Each column is one full adder, like the last level.',
+      'Column 0 adds bit 0 of A, bit 0 of B and Cin. Its carry out goes into column 1, and so on up to column 7.',
+      'You need 2 splitters (for A and B), 8 full adders of 5 gates each, and 1 joiner (for S).',
+      'Splitter output o0 is bit 0, the lowest. Full adder k takes o*k* from both splitters, plus the carry from adder k - 1.',
+      'Adder 0 takes Cin as its carry. Each sum bit k goes to joiner input i*k*, joiner output → S. The carry out of adder 7 → Cout.',
     ],
     afterword: '255 + 1 = 0 with a carry: the adder wraps around. The adder is now in your parts list as a block of any width.',
     palette: P_BUS,
@@ -165,7 +181,13 @@ export const PHASE2: Level[] = [
       'This is two\'s complement, and its magic is that the same adder works for signed and unsigned numbers.\n\n' +
       'To negate: flip every bit, then add 1. Check it: 5 is 00000101, flipped 11111010, plus 1 is 11111011, which is -5.\n\n' +
       'Gates now work on whole buses: set a NOT gate\'s width to 8 and it flips all eight bits. A constant part gives you a fixed value.',
-    hints: ['Set a NOT gate to width 8.', 'Feed the flipped value into an adder. Where can the + 1 come from?', 'The adder\'s carry in is a free + 1.'],
+    hints: [
+      '-A is the number you add to A to get 0. The recipe: flip every bit of A, then add 1.',
+      'One NOT set to width 8 flips all eight bits at once. An adder block does the + 1.',
+      'You need 4 parts: a NOT (width 8), an adder (width 8), an 8-bit constant 0 and a 1-bit constant 1.',
+      'Wire A → NOT. Wire the NOT output → adder a, constant 0 → adder b, constant 1 → adder cin.',
+      "Wire the adder's sum → Y and leave cout unconnected. Check it: A = 5 should show -5.",
+    ],
     afterword: 'Negating -128 gives -128 back: that number has no positive twin in 8 bits. Every fixed-width machine has this quirk.',
     palette: P_ADDER,
     starter: { parts: [sw('A', -14, 0, 8), lamp('Y', 14, 0, 8, 'signed')], wires: [] },
@@ -178,8 +200,14 @@ export const PHASE2: Level[] = [
     order: 6,
     title: 'Subtractor',
     goal: 'Y = A - B on 8 bits (wrapping around below 0).',
-    tutorial: 'A - B is A + (-B). You know how to make -B, and you have an adder.',
-    hints: ['-B is NOT B plus 1.', 'One adder is enough: NOT B into b, and 1 into the carry in.'],
+    tutorial:
+      'A - B is A + (-B). In the last level you made -A by flipping the bits and adding 1. Do the same to B, and let one adder add it to A.',
+    hints: [
+      'A - B is A + (-B). And from the last level, -B is NOT B plus 1.',
+      'One adder can do it all: A on input a, NOT B on input b, and the + 1 on the carry in.',
+      'You need 3 parts: a NOT (width 8), an adder (width 8) and a constant 1.',
+      'Wire A → adder a. Wire B → NOT, and the NOT output → adder b. Wire constant 1 → adder cin, and adder sum → Y.',
+    ],
     afterword: 'One adder, one NOT and one carry bit: that is how real ALUs subtract.',
     palette: P_ADDER,
     starter: ab8([lamp('Y', 14, 0, 8)]),
@@ -193,7 +221,13 @@ export const PHASE2: Level[] = [
     title: 'Equality',
     goal: 'Y is on when A equals B.',
     tutorial: 'Two numbers are equal when every pair of bits is equal. You have a gate that compares two bits, and it works on buses too.',
-    hints: ['XNOR (width 8) tells you, bit by bit, where A and B agree.', 'Split the result and AND all eight bits together.', 'Or: XOR, then check that no bit is on.'],
+    hints: [
+      'A equals B when bit 0 matches bit 0, bit 1 matches bit 1, and so on for all eight. One mismatch makes Y = 0.',
+      'XNOR is 1 when two bits match. Set an XNOR to width 8 and it compares all eight pairs at once.',
+      'Then you need "all eight are 1": an 8-input AND, built from 2-input ANDs like the 3-input AND level.',
+      'You need 9 parts: one XNOR (width 8), one splitter and seven ANDs.',
+      'Wire A, B → XNOR → splitter. AND o0 with o1, o2 with o3, o4 with o5, o6 with o7. AND those four in pairs, then the last two → Y.',
+    ],
     afterword: 'Branch instructions like "jump if equal" use exactly this circuit.',
     palette: P_ADDER,
     starter: ab8([lamp('Y', 14, 0)]),
@@ -210,9 +244,11 @@ export const PHASE2: Level[] = [
       'Subtract and look at the carry. Computing A - B as A + NOT B + 1, the carry out is 1 exactly when no borrow was needed, that is when A >= B.\n\n' +
       'Signed numbers differ only when the signs differ: as unsigned, -1 (255) is bigger than 1, but as signed it is smaller.',
     hints: [
-      'LTU = NOT (carry out of A + NOT B + 1).',
-      'When A and B have the same top bit, LTS = LTU.',
-      'When the top bits differ, the answer flips. LTS = LTU XOR A7 XOR B7.',
+      'Start with LTU. Build A - B like the subtractor. Its cout is 1 when A >= B, so LTU = NOT cout.',
+      'For LTS, bit 7 is the sign bit. When A and B have the same sign, signed and unsigned agree: LTS = LTU.',
+      'When the signs differ, the answer flips. A7 XOR B7 is 1 exactly then, so LTS = LTU XOR A7 XOR B7.',
+      'You need 8 parts: a NOT (width 8), an adder, a constant 1, a 1-bit NOT, two splitters and two XORs.',
+      'Adder: a = A, b = NOT B, cin = 1. Then cout → NOT → LTU. Split A and B, XOR their o7 pins, XOR that with LTU → LTS.',
     ],
     afterword: 'The same bits, two meanings. Instruction sets carry both comparisons (RISC-V has SLT and SLTU) because only you know what the bits mean.',
     palette: P_ADDER,
@@ -234,7 +270,13 @@ export const PHASE2: Level[] = [
     tutorial:
       'A CPU does not have one circuit per instruction that runs alone. It computes every candidate result at once, then a multiplexer picks the one the instruction asked for.\n\n' +
       'OP is a 2-bit number. Its low bit chooses within a pair, its high bit chooses between pairs.',
-    hints: ['Compute all four results with 8-bit gates.', 'Split OP into two bits with a splitter.', 'Three 8-bit multiplexers in a tree: two pick by OP bit 0, one picks by OP bit 1.'],
+    hints: [
+      'Do not build one circuit that changes. Build all four answers at once, then let OP choose one.',
+      'Four gates with width 8 give the answers: A AND B, A OR B, A XOR B and NOT A.',
+      'Choosing 1 of 4 takes three 8-bit multiplexers in a tree. Split OP (width 2) into o0, the low bit, and o1.',
+      'You need 8 parts: four gates, one splitter and three multiplexers. Everything is width 8 except the splitter.',
+      'Mux 1: a = AND, b = OR, sel = o0. Mux 2: a = XOR, b = NOT, sel = o0. Mux 3: a = mux 1, b = mux 2, sel = o1, out → Y.',
+    ],
     afterword: 'Compute everything, select one: you will build the whole ALU this way.',
     palette: P_ADDER,
     starter: { parts: [...column(byteIn(8), ['A', 'B'], -14), sw('OP', -14, 6, 2), lamp('Y', 14, 0, 8, 'hex')], wires: [] },
@@ -261,9 +303,11 @@ export const PHASE2: Level[] = [
       'Shifting left by one doubles a number; shifting right halves it. On a bus, a shift is only wiring: split, then join with every wire moved one place over and a 0 in the gap.\n\n' +
       'To shift by any amount from 0 to 7, shift in stages of 1, 2 and 4. Each bit of SH decides, through a multiplexer, whether its stage is used.',
     hints: [
-      'Shift left by 1: joiner input i0 gets a constant 0, input i(k+1) gets bit k of A.',
-      'Three stages (1, 2, 4), each an 8-bit multiplexer between "unchanged" and "shifted".',
-      'Build a left shifter and a right shifter, and let DIR pick between them.',
+      'A shift is only rewiring. Shift left by 1: bit 0 becomes 0, bit 1 gets old bit 0, bit 2 gets old bit 1, and so on.',
+      'Any amount from 0 to 7 is a sum of 1, 2 and 4. SH bit 0 means "shift by 1", bit 1 "by 2", bit 2 "by 4".',
+      'One stage shifts by k: split the value, then join it back with every bit moved k places and constant 0 in the gaps.',
+      'An 8-bit mux after each stage picks a = unchanged or b = shifted. Chain stages 1, 2, 4 with sel = SH bits o0, o1, o2.',
+      'Build one chain for left and one for right. A last mux picks: a = left, b = right, sel = DIR. That is 21 parts in all.',
     ],
     afterword: 'This is a barrel shifter. log2(8) = 3 stages handle every shift amount, instead of 8 separate circuits.',
     palette: P_ADDER,
@@ -284,9 +328,11 @@ export const PHASE2: Level[] = [
       'Now compute all eight results and select one with OP.\n\n' +
       'The flags summarize the result for the instructions that come after: "jump if zero" reads Z, "jump if negative" reads N, and unsigned comparisons read C.',
     hints: [
-      'Eight results, three select bits: a tree of seven 8-bit multiplexers.',
-      'Z: OR all bits of Y together and invert. N is bit 7 of Y.',
-      'C comes from the add carry when OP = 0 and from the subtract carry when OP = 1. For every other OP it is 0.',
+      'Same plan as the logic unit, just bigger: build all eight results side by side, then let OP pick one.',
+      'Results: 0 is an adder (A, B, cin 0). 1 is the subtractor. 2 to 4 are AND, OR, XOR. 5 is NOT A.',
+      "6 and 7 are your left and right shifters from the last level. Their SH is B's low 3 bits: o0 to o2 of a splitter on B.",
+      'Pick 1 of 8 with seven 8-bit muxes. Split OP (width 3): o0 drives the first four muxes, o1 the next two, o2 the last.',
+      'Flags: split Y. N is o7. Z is NOT of an 8-input OR. C: a mux picks add cout or sub cout by OP o0, ANDed with NOR(o1, o2).',
     ],
     afterword: 'The ALU is now in your parts list as a block, with these exact op codes and flags. Your 8-bit CPU will use it in Phase 4.',
     palette: P_ADDER,
@@ -310,7 +356,12 @@ export const PHASE2: Level[] = [
       'Nothing about the ALU depends on 8: every bit of AND, OR, XOR and NOT is independent, and the adder just has a longer carry chain. ' +
       'Real processors like the RISC-V core you will build in Phase 5 work on 32-bit words.\n\n' +
       'The ALU block you just unlocked takes a width setting. Building the wide version by hand, from four 8-bit slices chained through their carries, is the long way and a good exercise.',
-    hints: ['Place an ALU block and look at its settings.', 'Width 32. The flags come for free.'],
+    hints: [
+      'Same job as the last level, on 32-bit buses. The ALU block you just unlocked already does it.',
+      'You need 1 part: an ALU block. Select it and set Width (bits) to 32 in Settings.',
+      'Wire A → a, B → b and OP → op. Wire out → Y.',
+      'The flag pins are zero → Z, neg → N and carry → C.',
+    ],
     afterword: 'Phase 2 is done. You have a calculator, but it forgets everything the moment the inputs change. Next: memory and time.',
     palette: P_ALU,
     starter: {

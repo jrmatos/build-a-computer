@@ -5,7 +5,7 @@ import { toy8Cpu, toy8Datapath } from './toy8-cpu';
 /**
  * Reference solutions for every Phase 3–4 level, built in code from the
  * level's starter (locked parts kept as they are) plus palette parts only.
- * Test-only: never imported by the game.
+ * Loaded by the game only on "Show solution" (ADR-007).
  */
 
 /** A cross-coupled NAND latch with active-low set/reset; returns Q. */

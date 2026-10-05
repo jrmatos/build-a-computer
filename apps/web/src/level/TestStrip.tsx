@@ -1,5 +1,5 @@
 /**
- * Turing Complete style test strip: one column per test case, rows for every
+ * Test strip: one column per test case, rows for every
  * input, desired output and current output. 1-bit values are "leaves" (green 1,
  * red 0, told apart by which corner is sharp too); wider values are number
  * pills. Columns are virtualized so 65,536-case tests stay smooth.
@@ -512,10 +512,10 @@ function StripColumn(p: ColumnProps) {
 function ValueCell(props: { cell: Cell; width: number; radix: 'hex' | 'dec'; wrong?: boolean; current?: boolean; sep?: boolean }) {
   const { cell } = props;
   let body: ReactNode;
-  if (cell.kind === 'leaf') body = <span className={`ts-leaf b${cell.bit}`} />;
-  else if (cell.kind === 'unknown') body = props.width > 1 ? <span className="ts-pill x">X</span> : <span className="ts-leaf x" />;
+  if (cell.kind === 'leaf') body = <span className={`ts-bit b${cell.bit}`}>{cell.bit}</span>;
+  else if (cell.kind === 'unknown') body = props.width > 1 ? <span className="ts-pill x">X</span> : <span className="ts-bit x">X</span>;
   else if (cell.kind === 'num') body = <span className={`ts-pill ${props.wrong ? 'wrong' : ''}`}>{formatNum(cell.value, props.width, props.radix)}</span>;
-  else body = props.width > 1 ? <span className="ts-pill empty" /> : <span className="ts-leaf empty" />;
+  else body = props.width > 1 ? <span className="ts-pill empty" /> : <span className="ts-bit empty">·</span>;
   return <div className={`ts-cell ${props.sep ? 'sep' : ''} ${props.current ? 'cur' : ''} ${props.wrong ? 'wrong' : ''}`}>{body}</div>;
 }
 

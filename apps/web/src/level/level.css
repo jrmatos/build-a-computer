@@ -694,3 +694,25 @@
   overflow-x: auto;
   white-space: pre;
 }
+
+/* Show solution (ADR-007). */
+.lp-solution {
+  align-self: flex-start;
+  margin-top: 4px;
+  color: var(--text-muted);
+}
+.lp-solution-confirm {
+  margin-top: 6px;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--island-border);
+  background: var(--hover);
+}
+.lp-solution-confirm p {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+.lp-solution-confirm div {
+  display: flex;
+  gap: 8px;
+}
