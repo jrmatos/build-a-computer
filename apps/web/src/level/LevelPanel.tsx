@@ -162,7 +162,11 @@ function SuccessCard({ level }: { level: Level }) {
   const next = useMemo(() => nextLevel(level, LEVELS), [level]);
   const parts = newlyUnlockedParts(level, next);
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => ref.current?.scrollIntoView?.({ block: 'nearest' }), []);
+  // Braces matter: newer Chrome returns a Promise from scrollIntoView, and an
+  // effect must return nothing or a cleanup function.
+  useEffect(() => {
+    ref.current?.scrollIntoView?.({ block: 'nearest' });
+  }, []);
   return (
     <div className="lp-success" role="status" ref={ref}>
       <div className="lp-success-badge" aria-hidden="true">
