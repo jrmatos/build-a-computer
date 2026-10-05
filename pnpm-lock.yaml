@@ -112,6 +112,8 @@ importers:
         specifier: ^4.10.2
         version: 4.10.2
 
+  packages/cc: {}
+
   packages/content:
     dependencies:
       '@build-a-computer/schema':
@@ -133,14 +135,22 @@ importers:
 
   packages/det: {}
 
+  packages/libc: {}
+
   packages/rv-check:
     dependencies:
       '@build-a-computer/asm':
         specifier: workspace:*
         version: link:../asm
+      '@build-a-computer/cc':
+        specifier: workspace:*
+        version: link:../cc
       '@build-a-computer/det':
         specifier: workspace:*
         version: link:../det
+      '@build-a-computer/libc':
+        specifier: workspace:*
+        version: link:../libc
       '@build-a-computer/rv32':
         specifier: workspace:*
         version: link:../rv32

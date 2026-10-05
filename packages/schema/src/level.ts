@@ -77,6 +77,8 @@ export const TestSpec = z.discriminatedUnion('kind', [
         regs: z.record(z.string(), Num).optional(),
         /** Bytes poked into memory before running: hex string at an address. */
         memory: z.array(z.object({ addr: Num, hex: z.string().max(100_000) })).max(64).optional(),
+        /** Disk contents before running (needs the 'disk' device): hex bytes from a 512-byte sector. */
+        disk: z.array(z.object({ sector: Num, hex: z.string().max(2_000_000) })).max(256).optional(),
       })
       .optional(),
     /** Text the program reads from the UART (and keyboard device). */
@@ -101,15 +103,25 @@ export type Device = z.infer<typeof Device>;
 
 /** What a code level gives the player (Phase 6+). */
 export const CodeSetup = z.object({
-  language: z.literal('rv32-asm'),
+  /**
+   * 'rv32-asm': the player's file is main.s. 'c': main.c, compiled by
+   * @build-a-computer/cc and linked with @build-a-computer/libc (crt0 calls
+   * main; its return value is the exit code).
+   */
+  language: z.enum(['rv32-asm', 'c']),
   /** Text the editor starts with. */
   starter: z.string().max(100_000).default(''),
   /** Devices shown as panels; the machine always has the full memory map. */
   devices: z.array(Device).default(['uart']),
   /** RAM size in bytes (multiple of 4 KiB). */
   ramSize: z.number().int().min(4096).max(64 * 1024 * 1024).default(1024 * 1024),
-  /** Optional files the level provides, read-only, assembled with the player's source. */
-  library: z.array(z.object({ name: z.string().max(64), text: z.string().max(100_000) })).max(8).default([]),
+  /**
+   * Read-only files the level provides, built with the player's source: `.s`
+   * files are assembled, `.c` files compiled (C levels and C libraries only).
+   */
+  library: z.array(z.object({ name: z.string().max(64), text: z.string().max(200_000) })).max(16).default([]),
+  /** C levels: link libc unless false. OS levels set false and bring their own runtime. */
+  libc: z.boolean().optional(),
 });
 export type CodeSetup = z.infer<typeof CodeSetup>;
 

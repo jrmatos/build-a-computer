@@ -13,7 +13,9 @@
   },
   "dependencies": {
     "@build-a-computer/asm": "workspace:*",
+    "@build-a-computer/cc": "workspace:*",
     "@build-a-computer/det": "workspace:*",
+    "@build-a-computer/libc": "workspace:*",
     "@build-a-computer/rv32": "workspace:*",
     "@build-a-computer/schema": "workspace:*",
     "@build-a-computer/sim-logic": "workspace:*"
