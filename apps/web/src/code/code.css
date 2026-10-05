@@ -1,0 +1,305 @@
+/*
+ * Code level workspace (ASM-03). Uses the app tokens (styles/tokens.css) plus
+ * a few code colors defined here for both themes.
+ *
+ * Insets are variables so other islands (debugger, console) can reserve room:
+ * set --code-inset-left/right/bottom on .app (or :root) while they are open.
+ */
+:root,
+:root[data-theme='light'] {
+  --code-mnemonic: #5753c9;
+  --code-directive: #c2255c;
+  --code-label: #1864ab;
+  --code-symbol: #364fc7;
+  --code-register: #0b7285;
+  --code-csr: #087f5b;
+  --code-number: #d9480f;
+  --code-string: #2b8a3e;
+  --code-reloc: #9c36b5;
+  --code-comment: #868e96;
+  --code-punct: #5d6474;
+  --code-selection: rgba(105, 101, 219, 0.22);
+  --code-match: rgba(105, 101, 219, 0.14);
+  --code-active-line: rgba(15, 18, 25, 0.035);
+  --code-pc-bg: rgba(105, 101, 219, 0.16);
+}
+
+:root[data-theme='dark'] {
+  --code-mnemonic: #b4b1ff;
+  --code-directive: #f783ac;
+  --code-label: #74c0fc;
+  --code-symbol: #91a7ff;
+  --code-register: #66d9e8;
+  --code-csr: #63e6be;
+  --code-number: #ffa94d;
+  --code-string: #8ce99a;
+  --code-reloc: #e599f7;
+  --code-comment: #6b7280;
+  --code-punct: #a3a9b6;
+  --code-selection: rgba(168, 165, 255, 0.28);
+  --code-match: rgba(168, 165, 255, 0.16);
+  --code-active-line: rgba(255, 255, 255, 0.035);
+  --code-pc-bg: rgba(168, 165, 255, 0.2);
+}
+
+.code-ws {
+  position: absolute;
+  inset: 0;
+  background: var(--board-bg);
+  /* Interface chrome is not selectable, but code is. */
+  user-select: text;
+}
+
+.code-ws__frame {
+  position: absolute;
+  top: 72px;
+  left: var(--code-inset-left, 16px);
+  right: var(--code-inset-right, 332px);
+  bottom: var(--code-inset-bottom, 72px);
+  display: flex;
+  justify-content: center;
+}
+
+.code-ws__sheet {
+  display: flex;
+  flex-direction: column;
+  width: min(920px, 100%);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.code-ws__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 0;
+  border-bottom: 1px solid var(--island-border);
+  user-select: none;
+}
+
+.code-ws__tabs {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.code-ws__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.code-ws__tab:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.code-ws__tab[aria-selected='true'] {
+  border-bottom-color: var(--accent);
+  color: var(--text);
+  font-weight: 600;
+}
+.code-ws__tab:focus-visible,
+.code-ws__action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.code-ws__tab-ro {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--hover);
+  color: var(--text-faint);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.code-ws__tab-err {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+
+.code-ws__action {
+  flex: none;
+  height: 30px;
+  margin-bottom: 4px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.code-ws__action:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+.code-ws__action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.code-ws__body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.code-ws__cm {
+  position: absolute;
+  inset: 0;
+}
+.code-ws__cm[hidden] {
+  display: none;
+}
+
+.code-ws__status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 32px;
+  padding: 4px 12px;
+  border-top: 1px solid var(--island-border);
+  color: var(--text-muted);
+  font-size: 12px;
+  user-select: none;
+}
+
+.code-ws__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+.code-ws__badge::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.code-ws__badge--ok {
+  color: var(--success);
+}
+.code-ws__badge--error {
+  color: var(--danger);
+}
+.code-ws__badge--warn {
+  color: var(--warning);
+}
+
+.code-ws__hint {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.code-ws__pos {
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+/* Token colors (asmLanguage.ts). */
+.cm-asm-mnemonic {
+  color: var(--code-mnemonic);
+  font-weight: 600;
+}
+.cm-asm-directive {
+  color: var(--code-directive);
+}
+.cm-asm-label {
+  color: var(--code-label);
+  font-weight: 600;
+}
+.cm-asm-symbol {
+  color: var(--code-symbol);
+}
+.cm-asm-register {
+  color: var(--code-register);
+}
+.cm-asm-csr {
+  color: var(--code-csr);
+}
+.cm-asm-number {
+  color: var(--code-number);
+}
+.cm-asm-string {
+  color: var(--code-string);
+}
+.cm-asm-reloc {
+  color: var(--code-reloc);
+}
+.cm-asm-comment {
+  color: var(--code-comment);
+  font-style: italic;
+}
+.cm-asm-punct {
+  color: var(--code-punct);
+}
+.cm-asm-error {
+  color: var(--danger);
+}
+
+/* "Code level" chip in the top toolbar. */
+.code-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 14px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  user-select: none;
+}
+.code-chip svg {
+  color: var(--accent);
+}
+.code-chip__lang {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--active);
+  color: var(--accent-strong);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+:root[data-theme='dark'] .code-chip__lang {
+  color: var(--accent);
+}
+
+@media (max-width: 760px) {
+  .code-ws__frame {
+    top: 72px;
+    left: 8px;
+    right: 8px;
+    bottom: 80px;
+  }
+  .code-ws__hint {
+    display: none;
+  }
+}

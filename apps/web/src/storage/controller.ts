@@ -21,7 +21,7 @@ import { rootBoard, setChips } from '../editor/chips';
 import { useEditor } from '../editor/store';
 import { t } from '../i18n';
 import { adoptBoard, applyImport, workspaceData } from '../level/persist';
-import { makeSave } from '../level/saves';
+import { makeSave, sourceFor, sourceToSave } from '../level/saves';
 import { FileSync } from './autosave';
 import { forgetLastHandle, loadLastHandle, saveLastHandle } from './handles';
 import { isNoopMerge, mergeWorkspace, resolveImport, type Side } from './merge';
@@ -87,8 +87,9 @@ export async function exportAll(): Promise<void> {
 
 /** Download only the current level's board (single-board save). */
 export function exportBoard(): void {
-  const { chips, level } = editor();
-  const save: Save = makeSave(level ?? levelById('sandbox')!, rootBoard(), chips);
+  const { chips, level, source } = editor();
+  const lv = level ?? levelById('sandbox')!;
+  const save: Save = makeSave(lv, rootBoard(), chips, undefined, sourceToSave(lv, source));
   const name = `build-a-computer-${save.levelId}.json`;
   void download.save(JSON.stringify(save, null, 2), name);
   toast('storage.boardExported', 'success', { file: name });
@@ -117,6 +118,8 @@ function parse(text: string): ImportedFile | null {
 function loadSave(save: Save): void {
   const { commit, level } = editor();
   commit(() => adoptBoard(save), []);
+  // Code levels: the file's source replaces the editor text (undoable inside the code editor).
+  if (level?.mode === 'code' && save.levelId === level.id && save.source !== undefined) editor().set({ source: sourceFor(level, save) });
   if (level && save.levelId !== level.id) toast('storage.otherLevel', 'info', { id: save.levelId });
   else toast('storage.boardLoaded', 'success');
 }
@@ -327,11 +330,11 @@ export function startStorage(): void {
   // Any change to the workspace marks the connected file dirty (autosave ~2 s later).
   useEditor.subscribe((s, prev) => {
     const changed =
-      rootBoard(s) !== rootBoard(prev) || s.chips !== prev.chips || s.completed !== prev.completed || s.theme !== prev.theme || s.showGrid !== prev.showGrid;
+      rootBoard(s) !== rootBoard(prev) || s.source !== prev.source || s.chips !== prev.chips || s.completed !== prev.completed || s.theme !== prev.theme || s.showGrid !== prev.showGrid;
     if (!changed) return;
     sync.markDirty();
     // The first real edit is a meaningful save: ask the browser to keep our data.
-    if (prev.level && s.level === prev.level && rootBoard(s) !== rootBoard(prev)) void askPersist();
+    if (prev.level && s.level === prev.level && (rootBoard(s) !== rootBoard(prev) || s.source !== prev.source)) void askPersist();
   });
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {

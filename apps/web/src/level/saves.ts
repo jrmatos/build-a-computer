@@ -32,9 +32,13 @@ export function chipCycleMessage(chips: ChipMap, cycle: string[]): string {
   return `A chip cannot contain itself: ${cycle.map((id) => chips[id]?.name ?? id).join(' → ')}`;
 }
 
-/** A save embeds every chip its board uses, transitively, so it loads anywhere. */
-export function makeSave(level: Level, board: Board, chips: ChipMap = {}, now = new Date()): Save {
+/**
+ * A save embeds every chip its board uses, transitively, so it loads anywhere.
+ * Code levels also keep the player's source (`source`).
+ */
+export function makeSave(level: Level, board: Board, chips: ChipMap = {}, now = new Date(), source?: string): Save {
   return {
+    ...(source !== undefined ? { source } : {}),
     kind: 'build-a-computer/save',
     chips: closure(board, chips),
     version: SAVE_VERSION,
@@ -43,6 +47,17 @@ export function makeSave(level: Level, board: Board, chips: ChipMap = {}, now = 
     updatedAt: now.toISOString(),
     board,
   };
+}
+
+/** The source a code level opens with: the save's, else the level's starter. Empty for board levels. */
+export function sourceFor(level: Level, save?: Pick<Save, 'source'> | null): string {
+  if (level.mode !== 'code') return save?.source ?? '';
+  return save?.source ?? level.code?.starter ?? '';
+}
+
+/** Source to store in a save: code levels only, so board saves stay unchanged. */
+export function sourceToSave(level: Level, source: string): string | undefined {
+  return level.mode === 'code' ? source : undefined;
 }
 
 /** Progress from storage, or null if it is unreadable or from a newer version. */

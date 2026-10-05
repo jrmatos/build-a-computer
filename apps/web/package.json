@@ -11,16 +11,24 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@build-a-computer/asm": "workspace:*",
     "@build-a-computer/content": "workspace:*",
+    "@build-a-computer/det": "workspace:*",
     "@build-a-computer/schema": "workspace:*",
     "@build-a-computer/sim-logic": "workspace:*",
     "@build-a-computer/worker": "workspace:*",
+    "@codemirror/autocomplete": "^6.20.3",
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/lint": "^6.9.7",
+    "@codemirror/search": "^6.7.2",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.13",
     "comlink": "^4.4.2",
     "dexie": "^4.4.6",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "zustand": "^5.0.15",
-    "@build-a-computer/det": "workspace:*"
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",

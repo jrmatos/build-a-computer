@@ -677,3 +677,333 @@
     display: none;
   }
 }
+
+/* ---------- RV32 debugger (code levels) ---------- */
+.lv-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+  background: transparent;
+}
+.rv-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 280px;
+  padding: 0 10px 0 6px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.rv-status-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rv-status-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+.rv-status.is-ok .rv-status-dot {
+  background: var(--success);
+}
+.rv-status.is-warn .rv-status-dot {
+  background: var(--warning);
+}
+.rv-status.is-warn {
+  color: var(--text);
+}
+.rv-status.is-error .rv-status-dot {
+  background: var(--danger);
+}
+.rv-status.is-error {
+  color: var(--danger);
+}
+
+.dk-input {
+  min-width: 0;
+  width: 220px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--island-border);
+  border-radius: var(--radius-sm);
+  background: var(--board-bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.dk-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+.dk-input.is-error {
+  border-color: var(--danger);
+}
+.dk-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.dk-check input {
+  accent-color: var(--accent);
+}
+
+/* registers */
+.dk-rv,
+.dk-rv-mem,
+.dk-console {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.dk-rv-pc {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.dk-rv-pc code {
+  font-weight: 600;
+  color: var(--accent-strong);
+}
+.dk-rv-sym {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dk-rv-cols {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 8px 12px;
+  overflow: auto;
+}
+.dk-rv-regs {
+  flex: none;
+  border-collapse: separate;
+  border-spacing: 2px 1px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  align-self: flex-start;
+}
+.dk-rv-reg {
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.dk-rv-x {
+  display: inline-block;
+  width: 3.5ch;
+  color: var(--text-faint);
+}
+.dk-rv-abi {
+  display: inline-block;
+  width: 4.5ch;
+  color: var(--text-muted);
+}
+.dk-rv-val {
+  display: inline-block;
+  min-width: 11ch;
+  text-align: right;
+  color: var(--text);
+}
+.dk-rv-reg.is-changed {
+  background: var(--active);
+}
+.dk-rv-reg.is-changed .dk-rv-val {
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+.dk-rv-csrs {
+  flex: 1;
+  min-width: 280px;
+  padding-left: 12px;
+  border-left: 1px solid var(--island-border);
+}
+.dk-rv-csrs h3 {
+  margin: 0 0 4px;
+}
+.dk-rv-csrs dl {
+  margin: 0;
+}
+.dk-rv-csr {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-height: 19px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.dk-rv-csr dt {
+  width: 7ch;
+  flex: none;
+  color: var(--text-muted);
+}
+.dk-rv-csr dd {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+}
+
+/* memory */
+.dk-rv-mem .dk-hex {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+.dk-rv-addr {
+  min-width: 8ch;
+}
+.dk-hex-row.is-target .dk-rv-addr {
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+.dk-rv-sp {
+  margin-left: 1ch;
+  height: 16px;
+}
+
+/* console */
+.dk-console-out {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 6px 10px;
+  overflow: auto;
+  border: 1px solid var(--island-border);
+  border-radius: var(--radius-sm);
+  background: var(--board-bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+.dk-console-out:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+.dk-console-empty {
+  color: var(--text-faint);
+  font-family: var(--font-ui);
+}
+.dk-console-cursor {
+  display: inline-block;
+  width: 0.6em;
+  height: 1.1em;
+  vertical-align: text-bottom;
+  background: var(--text-faint);
+  opacity: 0;
+}
+.dk-console-out:focus .dk-console-cursor {
+  opacity: 1;
+  background: var(--accent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .dk-console-out:focus .dk-console-cursor {
+    animation: dk-blink 1s steps(1) infinite;
+  }
+}
+@keyframes dk-blink {
+  50% {
+    opacity: 0;
+  }
+}
+.dk-console-in {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  margin-top: 6px;
+}
+.dk-console-in .dk-input {
+  flex: 1;
+  width: auto;
+}
+.dk-console-prompt {
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+}
+
+/* screen */
+.dk-screen {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  position: relative;
+}
+.dk-screen-canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  background: #000;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px var(--island-border);
+}
+.dk-screen .dk-empty {
+  position: absolute;
+}
+
+/* call stack */
+.dk-stack {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: auto;
+}
+.dk-stack-frame {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+}
+.dk-stack-frame.is-current {
+  background: var(--active);
+}
+.dk-stack-n {
+  width: 3ch;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+}
+.dk-stack-name {
+  min-width: 12ch;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text);
+}
+.dk-stack-frame.is-current .dk-stack-name {
+  color: var(--accent-strong);
+}
+
+@media (max-width: 760px) {
+  .rv-status {
+    max-width: 140px;
+  }
+  .dk-rv-cols {
+    flex-direction: column;
+  }
+  .dk-rv-csrs {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .dk-input {
+    width: 140px;
+  }
+}

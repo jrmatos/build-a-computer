@@ -178,6 +178,11 @@ export const PART_ORDER: PartType[] = [
   'decoder',
   'adder',
   'alu',
+  'regfile',
+  'immgen',
+  'rvalu',
+  'branchcmp',
+  'lsu',
 ];
 
 export const PART_GROUPS: { key: string; parts: PartType[] }[] = [
@@ -186,4 +191,5 @@ export const PART_GROUPS: { key: string; parts: PartType[] }[] = [
   { key: 'library.wiring', parts: ['buffer', 'tristate', 'splitter', 'joiner'] },
   { key: 'library.memory', parts: ['dff', 'register', 'counter', 'ram', 'rom'] },
   { key: 'library.arith', parts: ['mux', 'decoder', 'adder', 'alu'] },
+  { key: 'library.riscv', parts: ['regfile', 'immgen', 'rvalu', 'branchcmp', 'lsu'] },
 ];

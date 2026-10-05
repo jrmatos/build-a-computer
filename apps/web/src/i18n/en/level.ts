@@ -30,6 +30,7 @@ export const level: Record<string, string> = {
   'level.solution.yes': 'Show it',
   'level.solution.cancel': 'Keep trying',
   'level.solution.loaded': 'Solution loaded. Run the tests to see it pass; Ctrl+Z restores your board.',
+  'level.solution.loadedCode': 'Solution loaded into the editor. Ctrl+Z in the editor brings your code back.',
   'level.solution.none': 'No solution is written for this level yet.',
   'level.tests.run': 'Run tests',
   'level.tests.running': 'Running…',

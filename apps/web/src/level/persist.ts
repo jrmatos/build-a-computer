@@ -15,7 +15,8 @@ import { memoryStorage, openIndexedDb, type Storage } from './db';
 import { downloadJson } from './download';
 import { acquireLock, lockName, releaseLock } from './lock';
 import { completedIds, emptyProgress, exportProgress, importProgress, ImportError, isUnlocked, withCompleted } from './progress';
-import { adoptSaveChips, decodeProgress, decodeSave, makeSave } from './saves';
+import { adoptSaveChips, decodeProgress, decodeSave, makeSave, sourceFor, sourceToSave } from './saves';
+import { devLevelById, devLevelFromUrl } from '../code/devLevel';
 import { useLevelUi } from './ui';
 
 const AUTOSAVE_MS = 1000;
@@ -30,6 +31,8 @@ let progressBlocked = false;
 let currentId: string | null = null;
 /** Board last loaded or written for the current level; equal means nothing to save. */
 let savedBoard: Board | null = null;
+/** Source last loaded or written for the current code level. */
+let savedSource: string | null = null;
 /** Levels whose stored save is from a newer version (E-DATA-04). */
 const blocked = new Set<string>();
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -71,12 +74,15 @@ async function write(fn: (s: Storage) => Promise<void>): Promise<void> {
 export function flushSave(): Promise<void> {
   clearTimeout(timer);
   timer = undefined;
-  const { level, readOnly, chips } = editor();
+  const { level, readOnly, chips, source } = editor();
   // Inside a chip the editor shows the chip's board; the level's own board is saved.
   const board = rootBoard();
-  if (!level || level.id !== currentId || readOnly || board === savedBoard || blocked.has(level.id)) return writes;
+  if (!level || level.id !== currentId || readOnly || blocked.has(level.id)) return writes;
+  const src = sourceToSave(level, source);
+  if (board === savedBoard && (src === undefined || src === savedSource)) return writes;
   savedBoard = board;
-  const save = makeSave(level, board, chips);
+  savedSource = src ?? null;
+  const save = makeSave(level, board, chips, undefined, src);
   writes = writes.then(() => write((s) => s.putSave(level.id, save))).catch((e) => console.error(e));
   return writes;
 }
@@ -130,9 +136,9 @@ export async function importProgressFile(file: File): Promise<boolean> {
 
 /** Download the current board as a save file (memory-mode banner, E-DATA-02). */
 export function exportBoardFile(): void {
-  const { level, chips } = editor();
+  const { level, chips, source } = editor();
   if (!level) return;
-  downloadJson(`build-a-computer-${level.id}.json`, JSON.stringify(makeSave(level, rootBoard(), chips), null, 2));
+  downloadJson(`build-a-computer-${level.id}.json`, JSON.stringify(makeSave(level, rootBoard(), chips, undefined, sourceToSave(level, source)), null, 2));
 }
 
 // ---------------------------------------------------------------- whole workspace (STO-01)
@@ -182,13 +188,16 @@ export async function applyImport(input: { progress: Progress; saves: Record<str
   if (fresh && currentId && !editor().readOnly && !blocked.has(currentId)) {
     const board = adoptBoard(fresh);
     savedBoard = board;
-    editor().set({ board, past: [], future: [], selection: [], testRun: null, transientBase: null });
+    const level = editor().level;
+    const source = level ? sourceFor(level, fresh) : '';
+    savedSource = source;
+    editor().set({ board, source, past: [], future: [], selection: [], testRun: null, transientBase: null });
   }
 }
 
 // ---------------------------------------------------------------- level opening
 
-async function loadBoard(level: Level): Promise<{ board: Board; newer: boolean }> {
+async function loadBoard(level: Level): Promise<{ board: Board; source: string; newer: boolean }> {
   let raw: unknown;
   try {
     raw = await storage.getSave(level.id);
@@ -196,20 +205,21 @@ async function loadBoard(level: Level): Promise<{ board: Board; newer: boolean }
     console.error(e);
     toMemory('unavailable');
   }
-  if (raw === undefined || raw === null) return { board: level.starter, newer: false };
+  const fresh = { board: level.starter, source: sourceFor(level) };
+  if (raw === undefined || raw === null) return { ...fresh, newer: false };
   if (!chipsReady) await chipsLoading;
   const d = decodeSave(raw, level.id);
-  if (d.kind === 'ok') return { board: adoptBoard(d.save), newer: false };
+  if (d.kind === 'ok') return { board: adoptBoard(d.save), source: sourceFor(level, d.save), newer: false };
   if (d.kind === 'newer') {
     blocked.add(level.id);
     toast('level.save.newer', 'error');
-    return { board: level.starter, newer: true };
+    return { ...fresh, newer: true };
   }
   // Unreadable save: keep a copy under another key so nothing is lost, then start fresh.
   console.error('Unreadable save', level.id, d.error);
   await write((s) => s.putSave(`${level.id}~unreadable-${Date.now()}`, raw)).catch(() => undefined);
   toast('level.save.invalid', 'error');
-  return { board: level.starter, newer: false };
+  return { ...fresh, newer: false };
 }
 
 /**
@@ -248,6 +258,8 @@ export function levelFromUrl(href: string): string | null {
   const url = new URL(href);
   const q = url.searchParams.get('level');
   if (q) return q;
+  const dev = devLevelFromUrl(url);
+  if (dev) return dev;
   const m = /^#\/?level[=/]([a-z0-9-]+)/.exec(url.hash);
   return m?.[1] ?? null;
 }
@@ -285,7 +297,7 @@ async function lockLevel(id: string, steal: boolean): Promise<boolean> {
 export async function openLevel(id: string): Promise<void> {
   const token = ++openToken;
   const st = editor();
-  let level = levelById(id);
+  let level = levelById(id) ?? devLevelById(id);
   if (!level) {
     toast('level.unknown', 'error', { id });
     if (st.level) return;
@@ -303,15 +315,20 @@ export async function openLevel(id: string): Promise<void> {
   await flushSave();
   if (token !== openToken) return;
   releaseLock();
-  const { board, newer } = await loadBoard(level);
+  const { board, source, newer } = await loadBoard(level);
   if (token !== openToken) return;
 
   currentId = level.id;
   savedBoard = board;
+  savedSource = source;
   useLevelUi.getState().set({ newerSave: newer, justCompleted: null, lock: 'held' });
   editor().set({
     level,
     board,
+    source,
+    breakpoints: [],
+    codeDiagnostics: [],
+    rv: null,
     past: [],
     future: [],
     transientBase: null,
@@ -336,14 +353,15 @@ export async function takeOver(): Promise<void> {
   await new Promise((r) => setTimeout(r, 250));
   const ok = await lockLevel(id, true);
   if (!ok || currentId !== id) return;
-  const level = levelById(id);
+  const level = levelById(id) ?? devLevelById(id);
   if (!level) return;
   if (editor().editStack.length) exitChip(0);
-  const { board, newer } = await loadBoard(level);
+  const { board, source, newer } = await loadBoard(level);
   if (currentId !== id) return;
   savedBoard = board;
+  savedSource = source;
   useLevelUi.getState().set({ newerSave: newer });
-  editor().set({ board, past: [], future: [], selection: [], testRun: null });
+  editor().set({ board, source, past: [], future: [], selection: [], testRun: null });
 }
 
 // ---------------------------------------------------------------- startup
@@ -383,6 +401,8 @@ export async function startPersistence(): Promise<void> {
   useEditor.subscribe((s, prev) => {
     const board = rootBoard(s);
     if (board !== rootBoard(prev) && s.level?.id === currentId && board !== savedBoard && !s.readOnly) scheduleSave();
+    // Code levels: the player's source autosaves the same way.
+    else if (s.source !== prev.source && s.level === prev.level && s.level?.id === currentId && s.source !== savedSource && !s.readOnly) scheduleSave();
   });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') void flushSave();
@@ -402,7 +422,8 @@ export async function startPersistence(): Promise<void> {
 
   await chipsLoading;
   const wanted = levelFromUrl(location.href) ?? lastLevel() ?? SANDBOX;
-  const ok = levelById(wanted) && isUnlocked(levelById(wanted)!, editor().completed);
+  const wantedLevel = levelById(wanted) ?? devLevelById(wanted);
+  const ok = wantedLevel && isUnlocked(wantedLevel, editor().completed);
   await openLevel(ok || levelFromUrl(location.href) ? wanted : SANDBOX);
 }
 

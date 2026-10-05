@@ -11,7 +11,7 @@ import { TestStripSection } from './TestStrip';
 import { useLevelUi } from './ui';
 import './level.css';
 import { Markdown, inline } from './Markdown';
-import { loadSolution } from './solution';
+import { loadSolution, loadSourceSolution } from './solution';
 import { zoomToFit } from '../editor/camera';
 
 const COLLAPSE_KEY = 'build-a-computer:level-panel-collapsed';
@@ -216,6 +216,16 @@ function ShowSolution({ level }: { level: Level }) {
     setState('loading');
     const { commit, toast } = useEditor.getState();
     try {
+      if (level.mode === 'code') {
+        const source = await loadSourceSolution(level);
+        if (source === undefined) {
+          toast(t('level.solution.none'), 'info');
+          return;
+        }
+        useEditor.getState().set({ source });
+        toast(t('level.solution.loadedCode'), 'success');
+        return;
+      }
       const board = await loadSolution(level);
       if (!board) {
         toast(t('level.solution.none'), 'info');

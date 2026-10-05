@@ -63,6 +63,15 @@ describe('E-PLAT-01 workspace import merge', () => {
     expect(isNoopMerge(m)).toBe(true);
   });
 
+  it('E-PLAT-01: code saves with the same board but different source are a conflict', () => {
+    const mine = { ...save('x', board()), source: 'nop\n' };
+    const theirs = { ...save('x', board(), '2026-10-02T00:00:00.000Z'), source: 'li a0, 1\n' };
+    const m = mergeWorkspace({ ...empty, saves: { x: mine } }, ws({ saves: { x: theirs } }));
+    expect(m.conflicts).toHaveLength(1);
+    expect(m.conflicts[0]?.incoming.source).toBe('li a0, 1\n');
+    expect(mergeWorkspace({ ...empty, saves: { x: mine } }, ws({ saves: { x: { ...theirs, source: 'nop\n' } } })).unchanged).toEqual(['x']);
+  });
+
   it('E-PLAT-01: differing boards become a conflict with the newer side preselected', () => {
     const mine = save('x', board(nand('p')), '2026-10-01T00:00:00.000Z');
     const theirs = save('x', board(nand('p'), nand('q', 40)), '2026-10-02T00:00:00.000Z');

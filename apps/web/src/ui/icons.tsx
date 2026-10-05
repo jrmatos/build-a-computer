@@ -413,35 +413,53 @@ const SYMBOLS: Record<PartType, ReactNode> = {
       <path d="M2 6h6M2 18h6M23 12h7" />
     </>
   ),
-  // Phase 5 RISC-V blocks: placeholders until the RV blocks agent draws them.
+  // Phase 5 RISC-V datapath blocks.
+  // Register file: a tall bank of word rows, x0 shaded (hard-wired zero), clock wedge.
   regfile: (
     <>
-      <rect x="7" y="3" width="18" height="18" rx="1.5" />
-      <path d="M2 7h5M2 12h5M25 9h5M25 15h5M10 8h12M10 12h12M10 16h12" />
+      <rect x="8" y="2" width="16" height="20" rx="1.5" />
+      <rect x="10.5" y="4.5" width="11" height="2.5" rx="0.6" fill="currentColor" fillOpacity={0.35} strokeWidth={1} />
+      <path d="M10.5 10h11M10.5 13.5h11M10.5 17h11" strokeWidth={1.25} />
+      <path d="M8 17l2.5 2-2.5 2" strokeWidth={1.25} />
+      <path d="M2 6h6M2 11h6M25 8h5M25 15h5" />
     </>
   ),
+  // Immediate generator: scattered instruction fields gathered into one wide word.
   immgen: (
     <>
-      <rect x="7" y="5" width="18" height="14" rx="1.5" />
+      <rect x="7" y="4" width="18" height="16" rx="1.5" />
+      <path d="M10.5 8.5h2.5M15 8.5h2M19.5 8.5h2" strokeWidth={2.25} />
+      <path d="M14 11.75l2 1.75 2-1.75" strokeWidth={1.25} />
+      <path d="M10.5 16.5h11" strokeWidth={2.25} />
       <path d="M2 12h5M25 12h5" />
     </>
   ),
+  // RISC-V ALU: the ALU chevron with an op lead from below and a zero flag.
   rvalu: (
     <>
       <path d="M8 2l15 5v10L8 22v-7.5l3.5-2.5L8 9.5z" />
-      <path d="M2 6h6M2 18h6M23 12h7" />
+      <path d="M2 6h6M2 18h6M23 10h7" />
+      <path d="M15.5 23.5v-4" />
+      <circle cx="27" cy="16" r="1.6" fill="currentColor" stroke="none" />
+      <path d="M23 16h2.4" />
     </>
   ),
+  // Branch comparator: a decision diamond comparing two operands.
   branchcmp: (
     <>
-      <rect x="7" y="5" width="18" height="14" rx="1.5" />
-      <path d="M2 9h5M2 15h5M25 12h5" />
+      <path d="M16 2.5l9 9.5-9 9.5-9-9.5z" />
+      <path d="M17.8 9l-3.6 3 3.6 3" strokeWidth={1.5} />
+      <path d="M2 8h7.8M2 16h7.8M25 12h5" />
     </>
   ),
+  // Load/store unit: a memory word split into byte lanes, one lane selected.
   lsu: (
     <>
       <rect x="7" y="3" width="18" height="18" rx="1.5" />
-      <path d="M2 8h5M2 16h5M25 8h5M25 16h5" />
+      <rect x="9.5" y="8.5" width="13" height="7" rx="0.8" strokeWidth={1.25} />
+      <rect x="15.25" y="8.5" width="3.25" height="7" fill="currentColor" fillOpacity={0.4} stroke="none" />
+      <path d="M12.75 8.5v7M16 8.5v7M19.25 8.5v7" strokeWidth={1} />
+      <path d="M2 7h5M2 12h5M2 17h5M25 7h5M25 12h5M25 17h5" />
     </>
   ),
   chip: (

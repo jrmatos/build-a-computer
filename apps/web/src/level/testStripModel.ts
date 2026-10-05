@@ -61,6 +61,11 @@ const MAX_EXHAUSTIVE_BITS = 16;
 export function portWidths(level: Pick<Level, 'starter' | 'tests'>): Map<string, number> {
   const widths = new Map<string, number>();
   for (const test of level.tests) {
+    if (test.kind === 'riscv') {
+      // Registers are 32 bits wide.
+      for (const r of [...Object.keys(test.setup?.regs ?? {}), ...Object.keys(test.expect.regs ?? {})]) widths.set(r, 32);
+      continue;
+    }
     if (test.kind !== 'exhaustive' && test.kind !== 'random') continue;
     type Sig = { inputs: { name: string; width: number }[]; outputs: { name: string; width: number }[] };
     const sig = (REFERENCE_SIGNATURES as Record<string, Sig | undefined>)[test.reference];

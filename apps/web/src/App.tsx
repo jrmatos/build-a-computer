@@ -1,5 +1,6 @@
 import { Canvas } from './editor/Canvas';
-import { CodeWorkspace } from './code/CodeWorkspace';
+import { lazy, Suspense } from 'react';
+
 import { useEditor } from './editor/store';
 import { ContextMenu } from './ui/ContextMenu';
 import { Footer } from './ui/Footer';
@@ -18,6 +19,9 @@ import { SimControls } from './level/SimControls';
 import { StatusBanner } from './level/StatusBanner';
 import './App.css';
 
+// Code levels pull in CodeMirror and the assembler: load them only when needed (first-level bundle budget).
+const CodeWorkspace = lazy(() => import('./code/CodeWorkspace').then((m) => ({ default: m.CodeWorkspace })));
+
 /**
  * Layout, Excalidraw style: a full-bleed canvas with floating islands.
  * Top left: menu and level. Top center: tools. Top right: simulation and library.
@@ -29,7 +33,13 @@ export function App() {
   const codeMode = useEditor((s) => s.level?.mode === 'code');
   return (
     <div className="app">
-      {codeMode ? <CodeWorkspace /> : <Canvas />}
+      {codeMode ? (
+        <Suspense fallback={null}>
+          <CodeWorkspace />
+        </Suspense>
+      ) : (
+        <Canvas />
+      )}
       <div className="layer">
         <div className="top-left">
           <MainMenu />

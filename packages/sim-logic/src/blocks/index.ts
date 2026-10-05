@@ -2,9 +2,26 @@ import type { PartType } from '@build-a-computer/schema';
 import type { BlockModel } from './types';
 import { adderModel, aluModel, decoderModel, muxModel } from './arith';
 import { counterModel, ramModel, registerModel, romModel } from './memory';
+import { branchcmpModel, immgenModel, lsuModel, regfileModel, rvaluModel } from './rv';
 
 export { adderModel, aluEval, aluModel, decoderModel, muxModel, shiftBits } from './arith';
 export { counterModel, parseRomData, ramModel, registerModel, romModel } from './memory';
+export {
+  branchcmpModel,
+  branchTaken,
+  immFormat,
+  immgenModel,
+  immOf,
+  lsuLoad,
+  lsuMisaligned,
+  lsuModel,
+  lsuStore,
+  regfileModel,
+  RV_ALU_OPS,
+  rvAluOp,
+  rvaluModel,
+} from './rv';
+export type { RegFileState } from './rv';
 export type { RamState, RegisterState, RomParseError, RomParseResult, RomState } from './memory';
 
 /**
@@ -22,4 +39,9 @@ export const BLOCKS: Partial<Record<PartType, BlockModel<any>>> = {
   decoder: decoderModel,
   adder: adderModel,
   alu: aluModel,
+  regfile: regfileModel,
+  immgen: immgenModel,
+  rvalu: rvaluModel,
+  branchcmp: branchcmpModel,
+  lsu: lsuModel,
 };

@@ -7,12 +7,15 @@ import './ui.css';
 
 /** Bottom-left islands: zoom and undo/redo. */
 export function Footer() {
+  // Code levels have no board to zoom or undo; CodeMirror keeps its own history.
+  const codeMode = useEditor((s) => s.level?.mode === 'code');
   const zoom = useEditor((s) => s.camera.zoom);
   const canUndo = useEditor((s) => s.past.length > 0 && !s.readOnly);
   const canRedo = useEditor((s) => s.future.length > 0 && !s.readOnly);
   const undo = useEditor((s) => s.undo);
   const redo = useEditor((s) => s.redo);
 
+  if (codeMode) return null;
   return (
     <div className="gu-footer">
       <div className="island gu-group" role="group" aria-label={t('footer.zoom')}>

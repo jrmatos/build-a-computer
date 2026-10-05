@@ -3,9 +3,14 @@ import { insets } from '../editor/camera';
 import { useEditor } from '../editor/store';
 import { t } from '../i18n';
 import { DiagnosticsPanel, useDiagnostics } from './panels/DiagnosticsPanel';
-import { DOCK_TABS, MAX_HEIGHT, MIN_HEIGHT, useDock, type DockTab } from './panels/dockState';
+import { CallStackPanel } from './panels/CallStackPanel';
+import { ConsolePanel } from './panels/ConsolePanel';
+import { MAX_HEIGHT, MIN_HEIGHT, tabsFor, useDock, type DockTab } from './panels/dockState';
 import { MemoryPanel } from './panels/MemoryPanel';
 import { ProgramPanel } from './panels/ProgramPanel';
+import { RegistersPanel } from './panels/RegistersPanel';
+import { RvMemoryPanel } from './panels/RvMemoryPanel';
+import { ScreenPanel } from './panels/ScreenPanel';
 import { WaveformPanel, useWaveformShortcut } from './panels/WaveformPanel';
 import './panels/panels.css';
 
@@ -24,6 +29,29 @@ const ICONS: Record<DockTab, ReactNode> = {
     </>
   ),
   program: <path d="m8 8-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14" />,
+  registers: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="M7 9h2M7 12h2M7 15h2M12 9h5M12 12h5M12 15h5" />
+    </>
+  ),
+  console: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="m7 9 3 3-3 3M12 15h5" />
+    </>
+  ),
+  screen: (
+    <>
+      <rect x="3" y="4" width="18" height="12" rx="2" />
+      <path d="M8 20h8M12 16v4" />
+    </>
+  ),
+  stack: (
+    <>
+      <path d="M4 7h16M4 12h12M4 17h8" />
+    </>
+  ),
 };
 
 function TabIcon({ tab }: { tab: DockTab }) {
@@ -41,8 +69,13 @@ function TabIcon({ tab }: { tab: DockTab }) {
  */
 export function BottomDock() {
   useWaveformShortcut();
+  const level = useEditor((s) => s.level);
+  const code = level?.mode === 'code';
+  const tabList = tabsFor(level);
   const open = useDock((s) => s.open);
-  const tab = useDock((s) => s.tab);
+  const stored = useDock((s) => s.tab);
+  // A tab from the other kind of level falls back to this level's first tab.
+  const tab = tabList.includes(stored) ? stored : tabList[0]!;
   const height = useDock((s) => s.height);
   const pinned = useDock((s) => s.pinned.length);
   const { setOpen, setTab, setHeight } = useDock.getState();
@@ -72,12 +105,12 @@ export function BottomDock() {
   };
 
   const onTabKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    const i = DOCK_TABS.indexOf(tab);
+    const i = tabList.indexOf(tab);
     let next: DockTab | undefined;
-    if (e.key === 'ArrowRight') next = DOCK_TABS[(i + 1) % DOCK_TABS.length];
-    else if (e.key === 'ArrowLeft') next = DOCK_TABS[(i - 1 + DOCK_TABS.length) % DOCK_TABS.length];
-    else if (e.key === 'Home') next = DOCK_TABS[0];
-    else if (e.key === 'End') next = DOCK_TABS[DOCK_TABS.length - 1];
+    if (e.key === 'ArrowRight') next = tabList[(i + 1) % tabList.length];
+    else if (e.key === 'ArrowLeft') next = tabList[(i - 1 + tabList.length) % tabList.length];
+    else if (e.key === 'Home') next = tabList[0];
+    else if (e.key === 'End') next = tabList[tabList.length - 1];
     if (!next) return;
     e.preventDefault();
     setTab(next);
@@ -104,7 +137,7 @@ export function BottomDock() {
 
   const tabs = (
     <div className="dk-tabs" role="tablist" aria-label={t('panels.label')} onKeyDown={onTabKey}>
-      {DOCK_TABS.map((k) => {
+      {tabList.map((k) => {
         const selected = open && tab === k;
         return (
           <button
@@ -118,7 +151,7 @@ export function BottomDock() {
             aria-selected={selected}
             aria-controls={open ? 'dk-panel' : undefined}
             tabIndex={tab === k ? 0 : -1}
-            className={`dk-tab ${selected ? 'is-active' : ''} ${k === 'memory' && !hasMemory ? 'is-dim' : ''}`}
+            className={`dk-tab ${selected ? 'is-active' : ''} ${k === 'memory' && !hasMemory && !code ? 'is-dim' : ''}`}
             onClick={() => (selected ? setOpen(false) : setTab(k))}
           >
             <TabIcon tab={k} />
@@ -168,7 +201,11 @@ export function BottomDock() {
         <div className="dk-body" id="dk-panel" role="tabpanel" aria-labelledby={`dk-tab-${tab}`}>
           {tab === 'waveform' && <WaveformPanel />}
           {tab === 'diagnostics' && <DiagnosticsPanel entries={diags} />}
-          {tab === 'memory' && <MemoryPanel />}
+          {tab === 'memory' && (code ? <RvMemoryPanel key={level.id} /> : <MemoryPanel />)}
+          {tab === 'registers' && <RegistersPanel />}
+          {tab === 'console' && <ConsolePanel />}
+          {tab === 'screen' && <ScreenPanel />}
+          {tab === 'stack' && <CallStackPanel />}
           {tab === 'program' && <ProgramPanel />}
         </div>
       )}

@@ -13,7 +13,9 @@ import {
   type Netlist,
   type SettleResult,
 } from '@build-a-computer/sim-logic';
-import type { BusValue, LoadOptions, LoadResult, SimApi, Snapshot } from './protocol';
+import { runRiscvTest } from '@build-a-computer/rv-check';
+import type { BusValue, LoadOptions, LoadResult, RvApi, RvLoadResult, RvSnapshot, SimApi, Snapshot } from './protocol';
+import { RvHost } from './rv-host';
 
 /** Longest a run slice may block the worker, in ms (plan: runtime split). */
 const SLICE_MS = 8;
@@ -66,7 +68,9 @@ function makeView(nl: Netlist): View {
  * Owns all simulation state. Runs in a Web Worker in the app, and directly in
  * tests. Time comes from injected functions so tests stay deterministic.
  */
-export class SimHost implements SimApi {
+export class SimHost implements SimApi, RvApi {
+  /** The RISC-V debugger for code levels (RvApi delegates here). */
+  readonly rv: RvHost;
   private nl: Netlist | null = null;
   private engine: FastEngine | null = null;
   private view: View | null = null;
@@ -93,7 +97,44 @@ export class SimHost implements SimApi {
     private readonly now: () => number = () => performance.now(),
     private readonly schedule: (fn: () => void, ms: number) => ReturnType<typeof setTimeout> = (fn, ms) =>
       setTimeout(fn, ms),
-  ) {}
+  ) {
+    this.rv = new RvHost(now, schedule);
+  }
+
+  // RvApi: code levels (Phase 6+), handled by RvHost.
+  rvLoad(source: string, level: Level): RvLoadResult {
+    return this.rv.rvLoad(source, level);
+  }
+  rvRun(): void {
+    this.rv.rvRun();
+  }
+  rvPause(): void {
+    this.rv.rvPause();
+  }
+  rvStep(n: number): void {
+    this.rv.rvStep(n);
+  }
+  rvStepLine(): void {
+    this.rv.rvStepLine();
+  }
+  rvReset(): void {
+    this.rv.rvReset();
+  }
+  rvSetBreakpoints(lines: number[]): void {
+    this.rv.rvSetBreakpoints(lines);
+  }
+  rvInput(text: string): void {
+    this.rv.rvInput(text);
+  }
+  rvMemory(addr: number, length: number): Uint8Array {
+    return this.rv.rvMemory(addr, length);
+  }
+  rvFramebuffer(): { pixels: Uint8Array; palette: Uint32Array } | null {
+    return this.rv.rvFramebuffer();
+  }
+  rvSubscribe(onSnapshot: (s: RvSnapshot) => void): void {
+    this.rv.rvSubscribe(onSnapshot);
+  }
 
   subscribe(onSnapshot: (s: Snapshot) => void): void {
     this.listener = onSnapshot;
@@ -262,14 +303,17 @@ export class SimHost implements SimApi {
    * callbacks land in order). 'program' tests compile a copy of `board` with
    * the program loaded into its ROM; without `board` they fail with a message.
    * Each test gets `budgetMs` of wall-clock time (default 10 s) and runs with
-   * the level's power-on mode.
+   * the level's power-on mode. Code levels (`mode: 'code'`) run each 'riscv'
+   * test on the RV32 machine through rv-check with the player's `source`.
    */
   async runTests(
     level: Level,
     onCase: (r: CaseResult) => void | Promise<void>,
     board?: Board,
     budgetMs = 10_000,
+    source?: string,
   ): Promise<{ passed: number; total: number }> {
+    if (level.mode === 'code') return this.runCodeTests(level, onCase, source ?? '', budgetMs);
     // Without a board, fall back to the last loaded one (already flattened).
     if (board) {
       try {
@@ -316,6 +360,34 @@ export class SimHost implements SimApi {
         for (const r of runTest(nl, t, opts)) await emit({ ...r, test: ti });
       } catch (e) {
         await emit({ index: 0, pass: false, inputs: {}, expected: {}, actual: {}, kind: t.kind, test: ti, message: `The simulator failed while testing: ${e instanceof Error ? e.message : String(e)}` });
+      }
+    }
+    return { passed, total };
+  }
+
+  private async runCodeTests(
+    level: Level,
+    onCase: (r: CaseResult) => void | Promise<void>,
+    source: string,
+    budgetMs: number,
+  ): Promise<{ passed: number; total: number }> {
+    let passed = 0;
+    let total = 0;
+    for (const [ti, t] of level.tests.entries()) {
+      const results: CaseResult[] = [];
+      if (t.kind !== 'riscv') {
+        results.push({ index: 0, pass: false, inputs: {}, expected: {}, actual: {}, kind: t.kind, message: `A code level cannot run a '${t.kind}' test.` });
+      } else {
+        try {
+          for (const r of runRiscvTest(source, t, level, { now: this.now, budgetMs })) results.push(r);
+        } catch (e) {
+          results.push({ index: 0, pass: false, inputs: {}, expected: {}, actual: {}, kind: t.kind, message: `The emulator failed while testing: ${e instanceof Error ? e.message : String(e)}` });
+        }
+      }
+      for (const r of results) {
+        total++;
+        if (r.pass) passed++;
+        await onCase({ ...r, test: ti });
       }
     }
     return { passed, total };

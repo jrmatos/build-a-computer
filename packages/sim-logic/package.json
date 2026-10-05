@@ -18,6 +18,7 @@
     "@build-a-computer/schema": "workspace:*"
   },
   "devDependencies": {
+    "@build-a-computer/rv32": "workspace:*",
     "fast-check": "^4.10.2"
   }
 }

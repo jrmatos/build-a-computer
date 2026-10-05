@@ -248,8 +248,23 @@ const BAR1 = 0.61;
 const BLOCK_IN = 0.5;
 const BLOCK_TOP = -0.72;
 
-const BLOCKS = new Set<PartType>(['register', 'counter', 'ram', 'rom', 'mux', 'decoder', 'adder', 'alu', 'chip']);
-const CLOCKED = new Set<PartType>(['dff', 'register', 'counter', 'ram']);
+const BLOCKS = new Set<PartType>([
+  'register',
+  'counter',
+  'ram',
+  'rom',
+  'mux',
+  'decoder',
+  'adder',
+  'alu',
+  'regfile',
+  'immgen',
+  'rvalu',
+  'branchcmp',
+  'lsu',
+  'chip',
+]);
+const CLOCKED = new Set<PartType>(['dff', 'register', 'counter', 'ram', 'regfile']);
 
 /**
  * Per-part caches that also depend on the chip registry (chip pins and names):
@@ -340,6 +355,22 @@ function blockLayout(part: Part): BlockLayout {
     case 'adder':
       title = 'ADD';
       break;
+    // Phase 5 RISC-V datapath blocks (fixed 32-bit).
+    case 'regfile':
+      title = 'REGS 32×32';
+      break;
+    case 'immgen':
+      title = 'IMM';
+      break;
+    case 'rvalu':
+      title = 'ALU';
+      break;
+    case 'branchcmp':
+      title = 'BR?';
+      break;
+    case 'lsu':
+      title = 'LSU';
+      break;
     case 'chip': {
       const def = getChipRegistry()[part.chip ?? ''];
       title = def && !def.deleted ? def.name : '?';
@@ -348,7 +379,7 @@ function blockLayout(part: Part): BlockLayout {
     default:
       title = part.type.toUpperCase();
   }
-  const shape = part.type === 'mux' ? 'mux' : part.type === 'alu' ? 'alu' : 'rect';
+  const shape = part.type === 'mux' ? 'mux' : part.type === 'alu' || part.type === 'rvalu' ? 'alu' : 'rect';
   L = { x0, x1, y0, y1, shape, title, ty: (y0 + y1) / 2 };
   const upright = part.rot === 0 || part.rot === 180;
   if (upright && (part.type === 'register' || part.type === 'counter' || part.type === 'ram' || part.type === 'rom')) {

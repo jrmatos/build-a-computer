@@ -1,4 +1,5 @@
 export const ui: Record<string, string> = {
+  'library.riscv': 'RISC-V datapath',
   'help.save': 'Save to your file (or export)',
   'help.saveAs': 'Save to a new file',
   'help.openFile': 'Open a file',

@@ -1,6 +1,9 @@
 import { PART_TYPES, Level, type PartType } from '@build-a-computer/schema';
 import { PHASE0_2_LEVELS } from './phase0-2';
 import { PHASE3_4_LEVELS } from './phase3-4';
+import { PHASE5_LEVELS } from './phase5';
+import { PHASE6_LEVELS } from './phase6';
+import { PHASE7_LEVELS } from './phase7';
 
 /**
  * Every level of the game, aggregated from one module per phase group.
@@ -27,7 +30,7 @@ const SANDBOX = Level.parse({
 });
 
 /** Every level, validated at load. A schema error here fails the build. */
-export const LEVELS: Level[] = [SANDBOX, ...PHASE0_2_LEVELS, ...PHASE3_4_LEVELS].map((l) => Level.parse(l));
+export const LEVELS: Level[] = [SANDBOX, ...PHASE0_2_LEVELS, ...PHASE3_4_LEVELS, ...PHASE5_LEVELS, ...PHASE6_LEVELS, ...PHASE7_LEVELS].map((l) => Level.parse(l));
 
 export const levelById = (id: string): Level | undefined => LEVELS.find((l) => l.id === id);
 export { defineLevel, type LevelDraft } from './define';

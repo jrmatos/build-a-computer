@@ -19,6 +19,12 @@ export async function loadSolution(level: Level): Promise<Board | undefined> {
 const GAP_X = 3;
 const GAP_Y = 2;
 
+/** Code levels: the reference program's source, loaded lazily like boards. */
+export async function loadSourceSolution(level: Level): Promise<string | undefined> {
+  const { referenceSource } = await import('@build-a-computer/content/solutions');
+  return referenceSource(level);
+}
+
 export function layoutSolution(board: Board): Board {
   const byId = new Map(board.parts.map((p) => [p.id, p]));
   const outPins = new Map(board.parts.map((p) => [p.id, new Set(pinsOf(p).filter((q) => q.dir === 'out').map((q) => q.name))]));

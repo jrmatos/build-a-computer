@@ -1,8 +1,22 @@
 import { create } from 'zustand';
+import type { Level } from '@build-a-computer/schema';
 
-/** Bottom dock tabs, Turing Complete style. */
-export const DOCK_TABS = ['waveform', 'diagnostics', 'memory', 'program'] as const;
+/** Bottom dock tabs, Turing Complete style. Board levels and code levels show different sets. */
+export const DOCK_TABS = ['waveform', 'diagnostics', 'memory', 'program', 'registers', 'console', 'screen', 'stack'] as const;
 export type DockTab = (typeof DOCK_TABS)[number];
+
+export const BOARD_TABS: readonly DockTab[] = ['waveform', 'diagnostics', 'memory', 'program'];
+
+/** Tabs for the level: registers, memory and call stack always; console and screen by device. */
+export function tabsFor(level: Level | null): readonly DockTab[] {
+  if (level?.mode !== 'code') return BOARD_TABS;
+  const devices = level.code?.devices ?? [];
+  const tabs: DockTab[] = ['registers', 'memory'];
+  if (devices.includes('uart') || devices.includes('keyboard')) tabs.push('console');
+  if (devices.includes('framebuffer')) tabs.push('screen');
+  tabs.push('stack');
+  return tabs;
+}
 
 export const MIN_HEIGHT = 140;
 export const MAX_HEIGHT = 640;

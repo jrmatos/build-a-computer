@@ -57,7 +57,8 @@ function incomingChips(ws: Workspace): ChipMap {
   return out;
 }
 
-const sameBoard = (a: Save, b: Save) => stableStringify(a.board) === stableStringify(b.board);
+/** Same work: same board and, for code levels, the same source. */
+const sameBoard = (a: Save, b: Save) => stableStringify(a.board) === stableStringify(b.board) && (a.source ?? '') === (b.source ?? '');
 
 export function mergeWorkspace(local: LocalWorkspace, ws: Workspace): WorkspaceMerge {
   const progress = mergeProgress(local.progress, ws.progress);

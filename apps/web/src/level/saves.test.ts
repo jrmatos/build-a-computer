@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { levelById } from '@build-a-computer/content';
 import { memoryStorage } from './db';
 import type { Board, ChipDef, ChipMap } from '@build-a-computer/schema';
-import { adoptSaveChips, decodeProgress, decodeSave, makeSave } from './saves';
+import { adoptSaveChips, decodeProgress, decodeSave, makeSave, sourceFor, sourceToSave } from './saves';
+import { devLevelById } from '../code/devLevel';
 import { emptyProgress } from './progress';
 
 const level = levelById('meet-nand')!;
@@ -34,6 +35,21 @@ describe('save validation', () => {
     expect(decodeProgress({ ...emptyProgress(), version: 2 }).kind).toBe('newer');
     expect(decodeProgress({ kind: 'x' }).kind).toBe('invalid');
     expect(decodeProgress(undefined).kind).toBe('invalid');
+  });
+});
+
+describe('code level source', () => {
+  const code = devLevelById('dev-code')!;
+  it('round-trips the player source through a save', () => {
+    const save = makeSave(code, code.starter, {}, new Date(0), sourceToSave(code, 'li a0, 1\n'));
+    const d = decodeSave(JSON.parse(JSON.stringify(save)), code.id);
+    expect(d.kind === 'ok' && d.save.source).toBe('li a0, 1\n');
+    expect(sourceFor(code, d.kind === 'ok' ? d.save : null)).toBe('li a0, 1\n');
+  });
+  it('starts from the level starter without a save; board levels keep no source', () => {
+    expect(sourceFor(code)).toBe(code.code!.starter);
+    expect(sourceToSave(level, 'x')).toBeUndefined();
+    expect('source' in makeSave(level, level.starter)).toBe(false);
   });
 });
 
