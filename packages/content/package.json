@@ -5,18 +5,23 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./solutions": "./solutions/index.ts"
+    "./full": "./src/full.ts",
+    "./solutions": "./solutions/index.ts",
+    "./datasets": "./datasets/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "build": "tsc -p tsconfig.json",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "links": "vitest run --root ../../tools/link-check live.test.ts"
   },
   "dependencies": {
     "@build-a-computer/schema": "workspace:*"
   },
   "devDependencies": {
     "@build-a-computer/asm": "workspace:*",
+    "@build-a-computer/js-check": "workspace:*",
+    "@build-a-computer/os-kit": "workspace:*",
     "@build-a-computer/rv-check": "workspace:*",
     "@build-a-computer/rv32": "workspace:*",
     "@build-a-computer/sim-logic": "workspace:*"

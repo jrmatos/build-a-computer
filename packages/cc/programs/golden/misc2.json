@@ -1,0 +1,5 @@
+{
+ "sourceSha256": "9af4b2e28b9d0fc8dc6c355992180856e543858345c6a4115cee17980f91482c",
+ "uart": "list = 3\nops = -11\nlate = 9\ntypes = 12\nconst pointer\nbin = 45\nbig = 0xffffffffffffffff\ntable = 142\nsumarr = 18\n&* = 7\nsizeof type = 72\ns tail = 104\nvoidret = 110\nuc = 255\ngoto into loop = 45\n2d = 14\ntwo\n",
+ "exitCode": 0
+}

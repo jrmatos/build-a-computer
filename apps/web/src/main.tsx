@@ -7,6 +7,7 @@ import { startSimSync } from './sim/client';
 import { migrateLegacyStorage } from './storage/legacy-migration';
 import { useEditor } from './editor/store';
 import { t } from './i18n';
+import { startPwa } from './pwa/register';
 import './styles/tokens.css';
 
 async function boot() {
@@ -16,6 +17,7 @@ async function boot() {
   await startPersistence();
   if (migration.failed.length) useEditor.getState().toast(t('storage.migration.failed'), 'error');
   startSimSync();
+  startPwa();
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <ErrorBoundary>

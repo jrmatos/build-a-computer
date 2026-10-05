@@ -14,6 +14,12 @@ import {
 import { FileStatus } from '../storage/FileStatus';
 import { IconPackage, IconSave, IconUnlink, IconUpload } from '../storage/icons';
 import { ImportDialog } from '../storage/ImportDialog';
+import { CommunityLayer } from '../community/CommunityLayer';
+import { AchievementsLayer } from '../achievements/Achievements';
+import { TrophyIcon } from '../achievements/icons';
+import { openAchievements } from '../achievements/runtime';
+import { IconFlag, IconShare } from '../community/icons';
+import { useCommunityUi } from '../community/ui';
 import { installFileKeys } from '../storage/keys';
 import { useFileUi } from '../storage/state';
 import { t } from '../i18n';
@@ -166,9 +172,23 @@ export function MainMenu() {
           />
           <MenuItem icon={<IconDownload />} label={t('storage.menu.exportBoard')} onSelect={() => run(exportBoard)} />
           <div className="gu-menu-sep" role="separator" />
+          <MenuItem
+            icon={<IconShare />}
+            label={t('community.menu.share')}
+            disabled={level?.mode !== 'board' && level !== null}
+            onSelect={() => run(() => useCommunityUi.getState().set({ shareOpen: true }))}
+          />
+          <MenuItem
+            icon={<IconFlag />}
+            label={t(level?.track === 'sandbox' ? 'community.menu.create' : 'community.menu.createSandboxOnly')}
+            disabled={level?.track !== 'sandbox' || readOnly}
+            onSelect={() => run(() => useCommunityUi.getState().set({ editorOpen: true }))}
+          />
+          <div className="gu-menu-sep" role="separator" />
           <MenuItem icon={<IconReset />} label={t('menu.reset')} danger disabled={readOnly} onSelect={() => run(() => setConfirmReset(true))} />
           <div className="gu-menu-sep" role="separator" />
           <MenuItem icon={<IconLevels />} label={t('menu.levels')} onSelect={() => run(() => set({ levelsOpen: true }))} />
+          <MenuItem icon={<TrophyIcon size={16} />} label={t('ach.menu')} onSelect={() => run(openAchievements)} />
           <MenuItem icon={<IconHelp />} label={t('menu.help')} shortcut="?" onSelect={() => run(() => set({ helpOpen: true }))} />
           <div className="gu-menu-sep" role="separator" />
           <MenuItem
@@ -190,6 +210,8 @@ export function MainMenu() {
       )}
 
       <ImportDialog />
+      <CommunityLayer />
+      <AchievementsLayer />
 
       {confirmReset && (
         <Dialog

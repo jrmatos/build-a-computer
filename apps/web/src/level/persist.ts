@@ -4,7 +4,7 @@
  * memory with a banner (E-DATA-02); newer saves are refused and never
  * overwritten (E-DATA-04); old saves migrate forward (E-DATA-05).
  */
-import { LEVELS, levelById } from '@build-a-computer/content';
+import { LEVELS, levelById, loadLevel, type LevelInfo } from '@build-a-computer/content';
 import { mergeProgress, type Board, type Level, type Progress, type Save } from '@build-a-computer/schema';
 import { zoomToFit } from '../editor/camera';
 import { exitChip, rootBoard, setChips, startChipLibrary } from '../editor/chips';
@@ -16,8 +16,28 @@ import { downloadJson } from './download';
 import { acquireLock, lockName, releaseLock } from './lock';
 import { completedIds, emptyProgress, exportProgress, importProgress, ImportError, isUnlocked, withCompleted } from './progress';
 import { adoptSaveChips, decodeProgress, decodeSave, makeSave, sourceFor, sourceToSave } from './saves';
-import { devLevelById, devLevelFromUrl } from '../code/devLevel';
+import { devLevelById as devCodeLevelById, devLevelFromUrl as devCodeLevelFromUrl } from '../code/devLevel';
+import { devJsLevelById, devJsLevelFromUrl } from '../ml/devLevel';
 import { useLevelUi } from './ui';
+import { communityLevelById, loadCommunity } from '../community/registry';
+import { loadBest } from '../community/best';
+
+/** Development-only levels (code workspace, Track 2 workspace). */
+const devLevelById = (id: string) => devCodeLevelById(id) ?? devJsLevelById(id);
+const devLevelFromUrl = (url: URL) => devCodeLevelFromUrl(url) ?? devJsLevelFromUrl(url);
+
+/** What the level map and unlock rules know of any level (built-in catalog entry, dev or community level). */
+const levelInfo = (id: string): LevelInfo | Level | undefined => levelById(id) ?? devLevelById(id) ?? communityLevelById(id);
+
+/**
+ * A level's full definition: a built-in level loads its phase group's chunk
+ * (rejects when that fails, e.g. offline before the app was cached); dev and
+ * community levels are already whole.
+ */
+async function fullLevel(id: string): Promise<Level | undefined> {
+  if (levelById(id)) return loadLevel(id);
+  return devLevelById(id) ?? communityLevelById(id);
+}
 
 const AUTOSAVE_MS = 1000;
 const LAST_LEVEL_KEY = 'build-a-computer:last-level';
@@ -297,23 +317,45 @@ async function lockLevel(id: string, steal: boolean): Promise<boolean> {
 export async function openLevel(id: string): Promise<void> {
   const token = ++openToken;
   const st = editor();
-  let level = levelById(id) ?? devLevelById(id);
-  if (!level) {
+  const info = levelInfo(id);
+  let target = info;
+  if (!info) {
     toast('level.unknown', 'error', { id });
     if (st.level) return;
-    level = levelById(SANDBOX)!;
-  } else if (!isUnlocked(level, st.completed)) {
-    toast('level.locked', 'error', { title: level.title });
+    target = levelById(SANDBOX)!;
+  } else if (!isUnlocked(info, st.completed)) {
+    toast('level.locked', 'error', { title: info.title });
     if (st.level) {
       writeUrl(st.level.id);
       return;
     }
-    level = levelById(SANDBOX)!;
+    target = levelById(SANDBOX)!;
   }
+  const title = target!.title;
+  // The level's content loads while the current board is saved.
+  const loading = fullLevel(target!.id);
+  loading.catch(() => undefined);
   // Leave any chip being edited so its changes land and the level's board is current.
   if (editor().editStack.length) exitChip(0);
   await flushSave();
   if (token !== openToken) return;
+  let level: Level | undefined;
+  try {
+    level = await loading;
+  } catch (e) {
+    console.error(e);
+  }
+  if (token !== openToken) return;
+  if (!level) {
+    toast('level.loadFailed', 'error', { title });
+    if (editor().level) {
+      writeUrl(editor().level!.id);
+      return;
+    }
+    // Nothing open yet: the sandbox needs no download.
+    level = (await loadLevel(SANDBOX))!;
+    if (token !== openToken) return;
+  }
   releaseLock();
   const { board, source, newer } = await loadBoard(level);
   if (token !== openToken) return;
@@ -353,8 +395,9 @@ export async function takeOver(): Promise<void> {
   await new Promise((r) => setTimeout(r, 250));
   const ok = await lockLevel(id, true);
   if (!ok || currentId !== id) return;
-  const level = levelById(id) ?? devLevelById(id);
-  if (!level) return;
+  const cur = editor().level;
+  const level = cur?.id === id ? cur : await fullLevel(id).catch(() => undefined);
+  if (!level || currentId !== id) return;
   if (editor().editStack.length) exitChip(0);
   const { board, source, newer } = await loadBoard(level);
   if (currentId !== id) return;
@@ -421,11 +464,13 @@ export async function startPersistence(): Promise<void> {
   }
 
   await chipsLoading;
+  // Community packs (COM-03) must be known before a pack level can reopen; best results load beside them.
+  await Promise.all([loadCommunity(), loadBest()]);
   const wanted = levelFromUrl(location.href) ?? lastLevel() ?? SANDBOX;
-  const wantedLevel = levelById(wanted) ?? devLevelById(wanted);
+  const wantedLevel = levelInfo(wanted);
   const ok = wantedLevel && isUnlocked(wantedLevel, editor().completed);
   await openLevel(ok || levelFromUrl(location.href) ? wanted : SANDBOX);
 }
 
 /** All levels, for the level map. */
-export const allLevels = (): readonly Level[] => LEVELS;
+export const allLevels = (): readonly LevelInfo[] => LEVELS;

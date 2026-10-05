@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LEVELS, levelById } from '@build-a-computer/content';
+import { LEVELS, levelById } from '@build-a-computer/content/full';
 import type { Level } from '@build-a-computer/schema';
 import {
   completedIds,
@@ -59,7 +59,14 @@ describe('next level and unlocked parts', () => {
   it('groups the sandbox first, then by phase', () => {
     const g = groupLevels(LEVELS);
     expect(g[0]?.track).toBe('sandbox');
-    expect(g.slice(1).map((x) => x.phase)).toEqual([...g.slice(1).map((x) => x.phase)].sort((a, b) => a - b));
+    // Each track's groups stay together, in phase order (Track 2 restarts at phase 1).
+    const tracks = [...new Set(g.slice(1).map((x) => x.track))];
+    for (const track of tracks) {
+      const phases = g.filter((x) => x.track === track).map((x) => x.phase);
+      expect(phases, track).toEqual([...phases].sort((a, b) => a - b));
+      const first = g.findIndex((x) => x.track === track);
+      expect(g.slice(first, first + phases.length).every((x) => x.track === track), track).toBe(true);
+    }
   });
 });
 

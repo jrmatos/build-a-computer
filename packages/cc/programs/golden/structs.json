@@ -1,0 +1,5 @@
+{
+ "sourceSha256": "e18f6fda5ccef9e327c1ba03420764c5ecd4ccea1b3e871b025e833456a97e03",
+ "uart": "c1 = 7\nc3 = 6\ns6 = 66\ni2 = -391\nmix = 500\nbig = 126\nbig after = 10\nll1 = 0xffffff0000000000\ncopy = 11999\nmany = 50\nnest = 210\nnest2 = 304\nsizes = 4456\nunion c0 = 68\nunion s1 = 4386\nunion u = 2132947780 0x7f223344\narr = 108\nptrdiff = 2\nanon = 321\npts = 34\ncompound = 78\nternary struct = 2\n",
+ "exitCode": 10
+}

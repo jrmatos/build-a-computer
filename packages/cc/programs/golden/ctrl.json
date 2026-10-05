@@ -1,0 +1,5 @@
+{
+ "sourceSha256": "97086015012f131abc57ef29a2b5b5c1cebca788cf241af3ee48e4b9df072ff1",
+ "uart": "classify = 22351\nsw2 = 11210\ngotos = 45\nloops = 311\ndo = 2106\nwhile1 = 7\ncomma for = 55\ndecl for = 62\nforever = 6\ndangling = 2\nodd switch = 55\n",
+ "exitCode": 0
+}

@@ -8,10 +8,13 @@
  * device; the file is a copy the player owns. A failing file never blocks or
  * loses in-browser saves (E-PLAT-02).
  */
-import { levelById } from '@build-a-computer/content';
+import { SANDBOX } from '@build-a-computer/content';
 import {
+  isPackData,
   NewerVersionError,
   parseImportFile,
+  parseUntrustedJson,
+  WORKSPACE_LIMITS,
   WORKSPACE_VERSION,
   type ImportedFile,
   type Save,
@@ -28,6 +31,8 @@ import { isNoopMerge, mergeWorkspace, resolveImport, type Side } from './merge';
 import { requestPersistentStorage } from './persistence';
 import { DownloadProvider, LocalFileProvider, StorageError, type FileHandleLike } from './provider';
 import { useFileUi, type ImportPreview } from './state';
+import { emitAchievement } from '../achievements/events';
+import { achievementsForExport, importAchievements, onAchievementsChange } from '../achievements/runtime';
 
 const editor = () => useEditor.getState();
 const ui = () => useFileUi.getState();
@@ -59,6 +64,7 @@ export const workspaceFileName = (d = today()) => `build-a-computer-workspace-${
 
 export async function buildWorkspace(): Promise<Workspace> {
   const { progress, saves } = await workspaceData();
+  const achievements = await achievementsForExport();
   const { chips, theme, showGrid } = editor();
   return {
     kind: 'build-a-computer/workspace',
@@ -69,6 +75,7 @@ export async function buildWorkspace(): Promise<Workspace> {
     saves,
     chips,
     settings: { theme, showGrid },
+    achievements,
   };
 }
 
@@ -78,6 +85,7 @@ export async function exportAll(): Promise<void> {
   try {
     await download.save(JSON.stringify(await buildWorkspace(), null, 2), name);
     toast('storage.exported', 'success', { file: name });
+    emitAchievement({ type: 'workspace-exported' });
   } catch (e) {
     console.error(e);
     toast('storage.exportFailed', 'error');
@@ -88,7 +96,7 @@ export async function exportAll(): Promise<void> {
 /** Download only the current level's board (single-board save). */
 export function exportBoard(): void {
   const { chips, level, source } = editor();
-  const lv = level ?? levelById('sandbox')!;
+  const lv = level ?? SANDBOX;
   const save: Save = makeSave(lv, rootBoard(), chips, undefined, sourceToSave(lv, source));
   const name = `build-a-computer-${save.levelId}.json`;
   void download.save(JSON.stringify(save, null, 2), name);
@@ -114,12 +122,22 @@ function parse(text: string): ImportedFile | null {
   }
 }
 
+/** Pack files are told apart by their top-level `kind` (a cheap text check first, then the parsed object). */
+function looksLikePack(text: string): boolean {
+  if (!text.includes('build-a-computer/pack')) return false;
+  try {
+    return isPackData(parseUntrustedJson(text, WORKSPACE_LIMITS));
+  } catch {
+    return false;
+  }
+}
+
 /** A single-board save loads onto the current board (undoable), as before. */
 function loadSave(save: Save): void {
   const { commit, level } = editor();
   commit(() => adoptBoard(save), []);
   // Code levels: the file's source replaces the editor text (undoable inside the code editor).
-  if (level?.mode === 'code' && save.levelId === level.id && save.source !== undefined) editor().set({ source: sourceFor(level, save) });
+  if ((level?.mode === 'code' || level?.mode === 'js') && save.levelId === level.id && save.source !== undefined) editor().set({ source: sourceFor(level, save) });
   if (level && save.levelId !== level.id) toast('storage.otherLevel', 'info', { id: save.levelId });
   else toast('storage.boardLoaded', 'success');
 }
@@ -140,6 +158,12 @@ async function receive(text: string, fileName: string, mode: ImportPreview['mode
     toast('storage.connected', 'success', { file: fileName });
     return;
   }
+  // Community level packs (COM-03) come in through Import too; they are checked, never merged.
+  if (looksLikePack(text)) {
+    const { importPackText } = await import('../community/packImport');
+    await importPackText(text, fileName);
+    return;
+  }
   const file = parse(text);
   if (!file) return;
   if (file.kind === 'save') {
@@ -154,7 +178,12 @@ async function receive(text: string, fileName: string, mode: ImportPreview['mode
   const preview: ImportPreview = { fileName, mode, workspace: file.workspace, merge, handle, lastModified };
   if (isNoopMerge(merge)) {
     if (mode === 'open') await applyPreview(preview, {});
-    else toast('storage.nothingNew', 'info', { file: fileName });
+    else {
+      // Achievements merge without asking: a union never loses anything.
+      const gained = await importAchievements(file.workspace.achievements);
+      if (gained) toast('ach.import.gained', 'success', { count: gained });
+      else toast('storage.nothingNew', 'info', { file: fileName });
+    }
     return;
   }
   ui().set({ preview });
@@ -167,6 +196,7 @@ export async function applyPreview(p: ImportPreview, choices: Record<string, Sid
   const r = resolveImport(p.merge, choices);
   if (p.merge.chipsChanged.length) setChips(p.merge.chips);
   await applyImport({ progress: p.merge.progress, saves: r.write, backups: r.backups });
+  await importAchievements(p.workspace.achievements);
   const s = p.workspace.settings;
   if (s) editor().set({ ...(s.theme ? { theme: s.theme } : {}), ...(s.showGrid !== undefined ? { showGrid: s.showGrid } : {}) });
   if (p.mode === 'open' && p.handle) {
@@ -336,6 +366,7 @@ export function startStorage(): void {
     // The first real edit is a meaningful save: ask the browser to keep our data.
     if (prev.level && s.level === prev.level && (rootBoard(s) !== rootBoard(prev) || s.source !== prev.source)) void askPersist();
   });
+  onAchievementsChange(() => sync.markDirty());
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') void sync.flush();
@@ -369,6 +400,7 @@ async function restoreHandle(): Promise<void> {
     const f = await LocalFileProvider.read(rec.handle);
     const file = parseImportFile(f.text);
     if (file.kind !== 'workspace' || editor().readOnly) return;
+    await importAchievements(file.workspace.achievements);
     const { progress, saves } = await workspaceData();
     const merge = mergeWorkspace({ progress, saves, chips: editor().chips }, file.workspace);
     if (isNoopMerge(merge) && remembered === rec.handle) await connectHandle(rec.handle, f.lastModified);

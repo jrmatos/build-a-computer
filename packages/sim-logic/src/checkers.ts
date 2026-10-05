@@ -9,6 +9,9 @@ export type { CaseResult, CheckOptions, CheckerEngine, TestKind } from './checke
 export { MAX_EXHAUSTIVE_BITS, runExhaustive, runRandom, runTruthTable } from './checkers/combinational';
 export { runSequence } from './checkers/sequence';
 export { loadProgram, parseProgram, runProgram } from './checkers/program';
+export { Rig } from './checkers/common';
+export { MAX_DEBUG_FRAMES, debugPlan, stepCase } from './checkers/debug';
+export type { DebugCheck, DebugFrame, DebugOp, DebugPlan, DebugTrace, StepCaseOptions, StepCaseResult } from './checkers/debug';
 
 /**
  * Run any test kind, streaming one result per case (LVL-02, LVL-07, TOY-03).

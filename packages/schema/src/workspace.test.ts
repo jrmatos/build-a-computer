@@ -74,6 +74,24 @@ describe('Workspace', () => {
   });
 });
 
+describe('Workspace achievements (additive, optional)', () => {
+  it('a workspace without achievements still loads', () => {
+    expect(migrateWorkspace(workspace).achievements).toBeUndefined();
+  });
+
+  it('round-trips achievements, keeping ids this app does not know', () => {
+    const ach = { unlocked: { 'first-light': { at: '2026-10-05T09:00:00.000Z' }, 'from-the-future': { at: '2026-10-06T09:00:00.000Z' } }, stats: { runs: 3, revealed: ['or-gate'] } };
+    const out = migrateWorkspace({ ...workspace, achievements: ach });
+    expect(out.achievements).toEqual(ach);
+  });
+
+  it('fills defaults and rejects bad timestamps', () => {
+    expect(migrateWorkspace({ ...workspace, achievements: {} }).achievements).toEqual({ unlocked: {}, stats: {} });
+    expect(() => migrateWorkspace({ ...workspace, achievements: { unlocked: { x: { at: 'yesterday' } } } })).toThrow();
+    expect(() => migrateWorkspace({ ...workspace, achievements: { stats: { runs: -1 } } })).toThrow();
+  });
+});
+
 describe('E-DATA-04 / E-DATA-05 workspace migrations', () => {
   it('E-DATA-04: refuses a workspace from a newer version', () => {
     expect(() => migrateWorkspace({ ...workspace, version: WORKSPACE_VERSION + 1 })).toThrow(NewerVersionError);

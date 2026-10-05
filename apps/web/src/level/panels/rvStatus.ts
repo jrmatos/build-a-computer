@@ -9,7 +9,7 @@ export function rvStatus(state: RvState | undefined, diagnostics: readonly Sourc
   const errors = diagnostics.filter((d) => d.severity === 'error').length;
   if (!state) return errors ? { text: t('panels.rv.ctl.status.errors', { n: errors }), tone: 'error' } : { text: t('panels.rv.ctl.status.ready'), tone: 'info' };
   if (state.running) return { text: t('panels.rv.ctl.status.running'), tone: 'ok' };
-  const inLib = state.file !== undefined && state.file !== 'main.s';
+  const inLib = state.file !== undefined && state.file !== 'main.s' && state.file !== 'main.c';
   const at = state.line !== undefined ? (inLib ? t('panels.rv.ctl.status.atFileLine', { line: state.line, file: state.file ?? '' }) : t('panels.rv.ctl.status.atLine', { line: state.line })) : t('panels.rv.ctl.status.atPc', { pc: `0x${(state.pc >>> 0).toString(16).padStart(8, '0')}` });
   switch (state.reason) {
     case 'breakpoint':

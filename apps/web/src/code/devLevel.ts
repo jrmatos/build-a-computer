@@ -1,11 +1,13 @@
 /**
- * Development only: an in-memory code level for working on the code
- * workspace before the Phase 6 levels ship. Open it with `?devcode=1` (or
- * `#level=dev-code`). Production builds never return it.
+ * Development only: in-memory code levels for working on the code workspace
+ * before the real levels ship. `?devcode=1` (or `#level=dev-code`) opens the
+ * assembly level, `?devc=1` (or `#level=dev-c`) the C level. Production
+ * builds never return them.
  */
 import { Level } from '@build-a-computer/schema';
 
 export const DEV_CODE_LEVEL_ID = 'dev-code';
+export const DEV_C_LEVEL_ID = 'dev-c';
 
 const STARTER = `# Sum the numbers 1..10 into a0, then exit.
     .text
@@ -41,11 +43,74 @@ print:
 2:  ret
 `;
 
-let cached: Level | null = null;
+const C_STARTER = `#include <stdio.h>
+#include "util.h"
 
-/** The dev level, or undefined outside development. */
+/* Sum the numbers 1..n. */
+int sum_to(int n) {
+    int s = 0;
+    for (int i = 1; i <= n; i++)
+        s += i;
+    return s;
+}
+
+int main(void) {
+    int s = sum_to(10);
+    printf("sum = %d\\n", s);
+    return square(s) == 3025 ? 0 : 1;
+}
+`;
+
+const UTIL_H = `#ifndef UTIL_H
+#define UTIL_H
+
+/* Library: x * x. */
+int square(int x);
+
+#endif
+`;
+
+const UTIL_C = `#include "util.h"
+
+int square(int x) {
+    return x * x;
+}
+`;
+
+let cached: Level | null = null;
+let cachedC: Level | null = null;
+
+/** A dev level, or undefined outside development. */
 export function devLevelById(id: string): Level | undefined {
-  if (!import.meta.env.DEV || id !== DEV_CODE_LEVEL_ID) return undefined;
+  if (!import.meta.env.DEV) return undefined;
+  if (id === DEV_C_LEVEL_ID) {
+    cachedC ??= Level.parse({
+      id: DEV_C_LEVEL_ID,
+      version: 1,
+      track: 'nand-to-os',
+      phase: 8,
+      order: 99,
+      title: 'Dev: C workspace',
+      goal: 'Development level for the C editor. Print the sum of 1..10 and return 0 from main.',
+      tutorial: 'Edit **main.c**. `util.h` and `util.c` are read-only library files compiled with yours; the **libc** tab lists the headers you can include.',
+      palette: [],
+      starter: { parts: [], wires: [] },
+      mode: 'code',
+      code: {
+        language: 'c',
+        starter: C_STARTER,
+        devices: ['uart'],
+        library: [
+          { name: 'util.h', text: UTIL_H },
+          { name: 'util.c', text: UTIL_C },
+        ],
+      },
+      tests: [{ kind: 'riscv', name: 'sum of 1..10', expect: { uart: 'sum = 55\n', exitCode: 0 } }],
+      draft: true,
+    });
+    return cachedC;
+  }
+  if (id !== DEV_CODE_LEVEL_ID) return undefined;
   cached ??= Level.parse({
     id: DEV_CODE_LEVEL_ID,
     version: 1,
@@ -65,7 +130,9 @@ export function devLevelById(id: string): Level | undefined {
   return cached;
 }
 
-/** `?devcode=1` opens the dev level (development only). */
+/** `?devcode=1` opens the assembly dev level, `?devc=1` the C one (development only). */
 export function devLevelFromUrl(url: URL): string | null {
-  return import.meta.env.DEV && url.searchParams.get('devcode') ? DEV_CODE_LEVEL_ID : null;
+  if (!import.meta.env.DEV) return null;
+  if (url.searchParams.get('devc')) return DEV_C_LEVEL_ID;
+  return url.searchParams.get('devcode') ? DEV_CODE_LEVEL_ID : null;
 }

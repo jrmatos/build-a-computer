@@ -2,12 +2,13 @@ import * as Comlink from 'comlink';
 import { create } from 'zustand';
 import type { Board, ChipMap, Level } from '@build-a-computer/schema';
 import { closure, type CaseResult } from '@build-a-computer/sim-logic';
-import type { RvApi, RvLoadResult, RvSnapshot, SimApi, Snapshot } from '@build-a-computer/worker';
+import type { JsApi, JsDebugResult, JsRunState, RvApi, RvLoadOptions, RvLoadResult, RvSnapshot, SimApi, Snapshot } from '@build-a-computer/worker';
+import type { CaseDebugApi, CaseDebugStart } from '@build-a-computer/worker';
 import { t } from '../i18n';
 import { useEditor } from '../editor/store';
 
-/** The worker serves boards (SimApi) and the RV32 machine (RvApi). */
-type Api = SimApi & RvApi;
+/** The worker serves boards (SimApi), the RV32 machine (RvApi) and the Track 2 sandbox (JsApi). */
+type Api = SimApi & RvApi & JsApi;
 
 /**
  * Main-thread handle to the simulation worker. The UI never simulates: it
@@ -18,7 +19,7 @@ let worker: Worker | null = null;
 let api: Comlink.Remote<Api> | null = null;
 let lastLoaded: { board: Board; chips: ChipMap } | null = null;
 /** Last program loaded into the RV32 machine (code levels), replayed after a crash. */
-let lastRv: { source: string; level: Level } | null = null;
+let lastRv: { source: string; level: Level; opts?: RvLoadOptions } | null = null;
 
 function start(): Comlink.Remote<Api> {
   worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
@@ -26,6 +27,8 @@ function start(): Comlink.Remote<Api> {
   api = Comlink.wrap<Api>(worker);
   void api.subscribe(Comlink.proxy((s: Snapshot) => useEditor.getState().set({ snapshot: s })));
   api.rvSubscribe(Comlink.proxy(onRvSnapshot)).catch((e: unknown) => console.error(e));
+  // A worker without the JS sandbox rejects this; js.call reports that when the player runs code.
+  Promise.resolve(api.jsSubscribe(Comlink.proxy(onJsState))).catch(() => undefined);
   return api;
 }
 
@@ -37,9 +40,9 @@ function restart(): void {
   const remote = start();
   if (lastLoaded) void remote.load(lastLoaded.board, lastLoaded.chips);
   if (lastRv) {
-    const { source, level } = lastRv;
+    const { source, level, opts } = lastRv;
     void remote
-      .rvLoad(source, level)
+      .rvLoad(source, level, opts)
       .then(() => remote.rvSetBreakpoints(useEditor.getState().breakpoints))
       .catch((e: unknown) => console.error(e));
   }
@@ -102,9 +105,14 @@ export const sim = {
     const { board, source } = useEditor.getState();
     // Tests run on the level's own board (chips are flattened in the worker); code levels send the source.
     type RunTests = (l: typeof level, cb: typeof onCase, b?: Board, budgetMs?: number, src?: string) => Promise<{ passed: number; total: number }>;
-    const src = level.mode === 'code' ? source : undefined;
+    const src = level.mode === 'code' || level.mode === 'js' ? source : undefined;
     return call((r) => (r.runTests as unknown as RunTests)(level, Comlink.proxy(onCase), board, undefined, src));
   },
+  /** Case debugger (level/debug): replay one test case on the live board, then show any frame of it. */
+  debugStart: (level: Level, test: number, index: number, inputs: Record<string, number> | undefined, board: Board) =>
+    call((r) => (r as unknown as Comlink.Remote<CaseDebugApi>).debugStart(level, test, index, inputs, board) as Promise<CaseDebugStart>),
+  debugSeek: (frame: number) => call((r) => (r as unknown as Comlink.Remote<CaseDebugApi>).debugSeek(frame)),
+  debugEnd: () => call((r) => (r as unknown as Comlink.Remote<CaseDebugApi>).debugEnd()),
 };
 
 // ---------- RV32 debugger (code levels) ----------
@@ -121,9 +129,18 @@ export interface RvDebug {
   loads: number;
   /** The source and level of the last successful load; Run reloads when they change. */
   loaded: { source: string; level: Level } | null;
+  /** "Debug this test": index in level.tests of the 'riscv' test the machine is set up for, or null. */
+  test: number | null;
 }
 
-export const useRvDebug = create<RvDebug>()(() => ({ symbols: [], entry: 0, prevRegs: null, stop: 0, loads: 0, loaded: null }));
+export const useRvDebug = create<RvDebug>()(() => ({ symbols: [], entry: 0, prevRegs: null, stop: 0, loads: 0, loaded: null, test: null }));
+
+/** rvLoad options for the test being debugged (C levels stop at main). */
+function debugOptions(level: Level): RvLoadOptions | undefined {
+  const test = useRvDebug.getState().test;
+  if (test === null || level.tests[test]?.kind !== 'riscv') return undefined;
+  return { test, stopAtMain: level.code?.language === 'c' };
+}
 
 let lastStopKey = '';
 let lastStopRegs: number[] | null = null;
@@ -153,14 +170,15 @@ async function rvLoad(quiet = false): Promise<RvLoadResult | undefined> {
   const { source, level, breakpoints } = useEditor.getState();
   if (!level || level.mode !== 'code') return undefined;
   if (quiet && !source.trim()) return undefined;
-  const res = await call((r) => r.rvLoad(source, level));
+  const opts = debugOptions(level);
+  const res = await call((r) => r.rvLoad(source, level, opts));
   if (!res) return undefined;
   useEditor.getState().set({ codeDiagnostics: res.diagnostics });
   lastStopRegs = null;
   lastStopKey = '';
   useRvDebug.setState((d) => ({ symbols: res.symbols, entry: res.entry, prevRegs: null, loads: d.loads + 1, loaded: res.ok ? { source, level } : null }));
   if (res.ok) {
-    lastRv = { source, level };
+    lastRv = { source, level, ...(opts ? { opts } : {}) };
     await call((r) => r.rvSetBreakpoints(breakpoints));
   } else {
     lastRv = null;
@@ -202,6 +220,24 @@ export const rv = {
   input: (text: string) => call((r) => r.rvInput(text)),
   memory: (addr: number, length: number) => call((r) => r.rvMemory(addr >>> 0, length)),
   framebuffer: () => call((r) => r.rvFramebuffer()),
+  /**
+   * "Debug this test": reload the machine with `level.tests[index]`'s setup,
+   * input and disk (stopped at the entry, or at main in C). Snapshots then
+   * carry the test's expectations (`rv.test`); Reset and reloads keep the test.
+   */
+  debugTest: async (index: number) => {
+    const level = useEditor.getState().level;
+    if (!level || level.mode !== 'code' || level.tests[index]?.kind !== 'riscv') return undefined;
+    if (useEditor.getState().rv?.state.running) await call((r) => r.rvPause());
+    useRvDebug.setState({ test: index });
+    return rvLoad();
+  },
+  /** Leave test debugging: back to the plain debugger (first test's setup). */
+  stopDebug: async () => {
+    if (useRvDebug.getState().test === null) return undefined;
+    useRvDebug.setState({ test: null });
+    return rvLoad(true);
+  },
 };
 
 /** Keep the machine's breakpoints in step with the editor and load each code level once on open. */
@@ -212,7 +248,7 @@ function startRvSync(): void {
     lastRv = null;
     lastStopKey = '';
     lastStopRegs = null;
-    useRvDebug.setState({ symbols: [], entry: 0, prevRegs: null, loaded: null });
+    useRvDebug.setState({ symbols: [], entry: 0, prevRegs: null, loaded: null, test: null });
     useEditor.getState().set({ rv: null });
     if (level?.mode === 'code') void rvLoad(true);
   };
@@ -226,6 +262,134 @@ function startRvSync(): void {
     if (s.breakpoints !== bps) {
       bps = s.breakpoints;
       if (s.level?.mode === 'code') void call((r) => r.rvSetBreakpoints(bps));
+    }
+  });
+}
+
+// ---------- Track 2: the player's JavaScript (js levels) ----------
+
+/** What jsCall resolves to. */
+export type JsCallResult = Awaited<ReturnType<JsApi['jsCall']>>;
+
+/** Options the workspace may pass with a call; a sandbox that does not know them ignores them. */
+export interface JsCallOptions {
+  /** Resume training from a saved checkpoint (E-ML-06): the state the code passed to checkpoint(state). */
+  resume?: { step: number; state: unknown };
+}
+
+/** Bumps per call so a late stream from an earlier run cannot overwrite a newer one's start. */
+let jsRun = 0;
+
+/** "Debug this test" on js levels: the test being debugged and the outcome of its last run. */
+export interface JsDebugState {
+  /** Index in level.tests, or null when not debugging a test. */
+  test: number | null;
+  running: boolean;
+  /** The last debug run of `test` (verdict with the full diff). */
+  result: JsDebugResult | null;
+}
+
+export const useJsDebug = create<JsDebugState>()(() => ({ test: null, running: false, result: null }));
+
+function onJsState(s: JsRunState): void {
+  if (useEditor.getState().level?.mode !== 'js') return;
+  useEditor.getState().set({ js: s });
+}
+
+const emptyJs = (): JsRunState => ({ running: false, log: '', samples: [] });
+
+export const js = {
+  /**
+   * Call `entry(...args)` from the player's main.js in the sandbox. State
+   * (console, samples, errors) streams into store.js; the final result is
+   * merged in when the call resolves.
+   */
+  call: async (entry: string, args: unknown[], opts?: JsCallOptions): Promise<JsCallResult | undefined> => {
+    const { source, level } = useEditor.getState();
+    if (!level || level.mode !== 'js') return undefined;
+    const run = ++jsRun;
+    useEditor.getState().set({ js: { ...emptyJs(), running: true } });
+    type Call = (src: string, l: Level, e: string, a: unknown[], o?: JsCallOptions) => Promise<JsCallResult>;
+    let res: JsCallResult | undefined;
+    try {
+      res = await (remote().jsCall as unknown as Call)(source, level, entry, args, opts);
+    } catch (e) {
+      res = { ok: false, error: { message: t('ml.run.unavailable', { reason: e instanceof Error ? e.message : String(e) }) } };
+    }
+    const cur = useEditor.getState();
+    if (run !== jsRun || cur.level?.id !== level.id) return res;
+    const prev = cur.js ?? emptyJs();
+    cur.set({
+      js: {
+        ...prev,
+        running: false,
+        result: res.ok ? res.result : prev.result,
+        error: res.ok ? undefined : (res.error ?? prev.error),
+      },
+    });
+    return res;
+  },
+  /**
+   * "Debug this test": run only `level.tests[index]` with its args, seed and
+   * time limit. Console and samples stream into store.js as for `call`; the
+   * verdict (as the checker judges it, with the full diff) lands in useJsDebug.
+   */
+  debug: async (index: number): Promise<JsDebugResult | null | undefined> => {
+    const { source, level } = useEditor.getState();
+    if (!level || level.mode !== 'js' || level.tests[index]?.kind !== 'js') return undefined;
+    const run = ++jsRun;
+    useJsDebug.setState({ test: index, running: true, result: null });
+    useEditor.getState().set({ js: { ...emptyJs(), running: true } });
+    type Debug = (src: string, l: Level, i: number) => Promise<JsDebugResult | null>;
+    let res: JsDebugResult | null;
+    try {
+      res = await (remote().jsDebugCall as unknown as Debug)(source, level, index);
+    } catch (e) {
+      res = { ok: false, test: index, error: { message: t('ml.run.unavailable', { reason: e instanceof Error ? e.message : String(e) }) } };
+    }
+    const cur = useEditor.getState();
+    if (run !== jsRun || cur.level?.id !== level.id) return res;
+    useJsDebug.setState({ test: index, running: false, result: res });
+    const prev = cur.js ?? emptyJs();
+    cur.set({
+      js: {
+        ...prev,
+        running: false,
+        result: res?.ok ? res.result : prev.result,
+        error: res && !res.ok ? (res.error ?? prev.error) : undefined,
+      },
+    });
+    return res;
+  },
+  /** Close the test debugger. */
+  closeDebug: () => useJsDebug.setState({ test: null, running: false, result: null }),
+  /** Stop the running code (terminates its sandbox). */
+  stop: async () => {
+    jsRun++;
+    if (useJsDebug.getState().running) useJsDebug.setState({ running: false });
+    try {
+      await remote().jsStop();
+    } catch (e) {
+      console.error(e);
+    }
+    const cur = useEditor.getState();
+    if (cur.js?.running) cur.set({ js: { ...cur.js, running: false } });
+  },
+  /** Forget the last run's output (console, result, curves). */
+  clear: () => useEditor.getState().set({ js: null }),
+};
+
+/** Stop the sandbox and clear its output when the player leaves a js level. */
+function startJsSync(): void {
+  let level = useEditor.getState().level;
+  useEditor.subscribe((s) => {
+    if (s.level === level) return;
+    const was = level;
+    level = s.level;
+    if (was?.mode === 'js' && was.id !== s.level?.id) {
+      if (s.js?.running) void js.stop();
+      useEditor.getState().set({ js: null });
+      useJsDebug.setState({ test: null, running: false, result: null });
     }
   });
 }
@@ -253,6 +417,7 @@ export function startSimSync(): void {
   };
   flush();
   startRvSync();
+  startJsSync();
   useEditor.subscribe((s) => {
     if ((s.board !== last || s.chips !== lastChips) && !pending) {
       pending = true;

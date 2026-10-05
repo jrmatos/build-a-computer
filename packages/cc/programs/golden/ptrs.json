@@ -1,0 +1,5 @@
+{
+ "sourceSha256": "f8ea08ad6972df7a617a8d8d519f17944d363a167efe8159bc4aaeef089580e8",
+ "uart": "sum2d = 108\nsumrow = 39\nrp = 14\nflat = 14\nneg idx = 3\nzzzzz\nwp = 197\nvt = 21\nlit = 40\nfns = 18\nswap = 23\narea = 1212\npp = 8\nps = 50\nuchar loop = 1521\ncounts = 321\nvoid* = 2\nvoid* arith = 122\npp = 97\nextern = 42\n",
+ "exitCode": 0
+}

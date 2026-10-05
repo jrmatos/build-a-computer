@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Level, type PartType } from '@build-a-computer/schema';
 import { REFERENCES, REFERENCE_SIGNATURES } from '@build-a-computer/sim-logic';
-import { LEVELS } from '../index';
+import { LEVELS } from '../full';
 import { PHASE0_2_LEVELS } from './index';
 import { MODELS } from './models';
 import { solutionFor } from '../../solutions/phase0-2';

@@ -813,3 +813,27 @@ describe('DEV-08 Sv32 paging', () => {
     expect(m.hart.reg(A1)).toBe(7);
   });
 });
+
+describe('onTrap hook', () => {
+  it('stops before the trap is taken when it returns stop', () => {
+    const m = boot([asm('addi', A0, 0, 7), asm('ebreak'), asm('addi', A0, 0, 9)]);
+    const seen: number[][] = [];
+    m.hart.onTrap = (cause, tval, epc) => {
+      seen.push([cause, tval, epc]);
+      return 'stop';
+    };
+    const r = m.run(100);
+    expect(r.reason).toBe('stopped');
+    expect(seen).toEqual([[CAUSE.breakpoint, at(1), at(1)]]);
+    expect(m.hart.pc).toBe(at(1));
+    expect(m.hart.mcause).toBe(0);
+    expect(m.hart.reg(A0)).toBe(7);
+  });
+
+  it("takes the trap normally when it returns 'take'", () => {
+    const m = boot([asm('ecall')]);
+    m.hart.onTrap = () => 'take';
+    runToHandler(m);
+    expect(m.hart.mcause).toBe(CAUSE.ecallM);
+  });
+});

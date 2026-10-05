@@ -12,6 +12,9 @@ import { RegistersPanel } from './panels/RegistersPanel';
 import { RvMemoryPanel } from './panels/RvMemoryPanel';
 import { ScreenPanel } from './panels/ScreenPanel';
 import { WaveformPanel, useWaveformShortcut } from './panels/WaveformPanel';
+import { DebugPanel } from './debug/DebugPanel';
+import { canDebug, useDebug } from './debug/store';
+import { useBoardCaseDebug } from './debug/useBoardCaseDebug';
 import './panels/panels.css';
 
 const ICONS: Record<DockTab, ReactNode> = {
@@ -52,6 +55,12 @@ const ICONS: Record<DockTab, ReactNode> = {
       <path d="M4 7h16M4 12h12M4 17h8" />
     </>
   ),
+  debug: (
+    <>
+      <rect x="7" y="7" width="10" height="13" rx="5" />
+      <path d="M9 7a3 3 0 0 1 6 0M12 11v9M3 13h4M17 13h4M4 7l3 2M20 7l-3 2M4 20l3-2M20 20l-3-2" />
+    </>
+  ),
 };
 
 function TabIcon({ tab }: { tab: DockTab }) {
@@ -70,14 +79,24 @@ function TabIcon({ tab }: { tab: DockTab }) {
 export function BottomDock() {
   useWaveformShortcut();
   const level = useEditor((s) => s.level);
+  useBoardCaseDebug(level);
   const code = level?.mode === 'code';
-  const tabList = tabsFor(level);
+  // The case debugger only shows on levels with board cases to replay.
+  const debuggable = canDebug(level);
+  const tabList = tabsFor(level).filter((k) => k !== 'debug' || debuggable);
   const open = useDock((s) => s.open);
   const stored = useDock((s) => s.tab);
   // A tab from the other kind of level falls back to this level's first tab.
   const tab = tabList.includes(stored) ? stored : tabList[0]!;
   const height = useDock((s) => s.height);
   const pinned = useDock((s) => s.pinned.length);
+  // Case debugger badge: a dot while a case is loaded (red when it fails).
+  const debugging = useDebug((s) => {
+    const ss = s.session;
+    if (!ss || ss.levelId !== level?.id) return null;
+    const c = ss.trace?.checks[ss.check];
+    return c && !c.pass ? 'fail' : 'on';
+  });
   const { setOpen, setTab, setHeight } = useDock.getState();
   const diags = useDiagnostics();
   const errors = diags.filter((d) => d.severity === 'error').length;
@@ -101,6 +120,7 @@ export function BottomDock() {
         </span>
       );
     if (k === 'waveform' && pinned) return <span className="dk-badge">{pinned}</span>;
+    if (k === 'debug' && debugging) return <span className={`dk-badge ${debugging === 'fail' ? 'is-error' : ''}`} aria-hidden="true">●</span>;
     return null;
   };
 
@@ -207,6 +227,7 @@ export function BottomDock() {
           {tab === 'screen' && <ScreenPanel />}
           {tab === 'stack' && <CallStackPanel />}
           {tab === 'program' && <ProgramPanel />}
+          {tab === 'debug' && <DebugPanel />}
         </div>
       )}
     </section>

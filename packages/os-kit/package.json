@@ -1,0 +1,23 @@
+{
+  "name": "@build-a-computer/os-kit",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@build-a-computer/asm": "workspace:*",
+    "@build-a-computer/cc": "workspace:*"
+  },
+  "devDependencies": {
+    "@build-a-computer/rv-check": "workspace:*",
+    "@build-a-computer/rv32": "workspace:*",
+    "@build-a-computer/schema": "workspace:*"
+  }
+}

@@ -3,7 +3,8 @@ import { createHash } from 'node:crypto';
 import { Level, TestSpec } from '@build-a-computer/schema';
 import type { CaseResult } from '@build-a-computer/sim-logic';
 import { type RiscvTest, runRiscvTest } from './check';
-import { EXIT_STUB_ADDR, buildProgram, createMachine, regIndex, runMachine } from './machine';
+import { buildProgram } from './build';
+import { EXIT_STUB_ADDR, createMachine, regIndex, runMachine } from './machine';
 
 const level = (code: Record<string, unknown> = {}): Level =>
   Level.parse({
@@ -20,7 +21,8 @@ const level = (code: Record<string, unknown> = {}): Level =>
     code: { language: 'rv32-asm', ...code },
   });
 
-const spec = (t: Record<string, unknown>): RiscvTest => TestSpec.parse({ kind: 'riscv', ...t }) as RiscvTest;
+const spec = (t: Record<string, unknown>): RiscvTest =>
+  TestSpec.parse({ kind: 'riscv', ...t }) as RiscvTest;
 
 const run = (src: string, t: Record<string, unknown>, lvl = level(), opts = {}): CaseResult => {
   const out = [...runRiscvTest(src, spec(t), lvl, opts)];
@@ -100,7 +102,11 @@ describe('runRiscvTest', () => {
   });
 
   it('sets sp to the top of RAM and ra to the exit stub', () => {
-    const r = run('ebreak', { expect: { regs: { sp: 0x80000000 + 64 * 1024, ra: EXIT_STUB_ADDR } } }, level({ ramSize: 64 * 1024 }));
+    const r = run(
+      'ebreak',
+      { expect: { regs: { sp: 0x80000000 + 64 * 1024, ra: EXIT_STUB_ADDR } } },
+      level({ ramSize: 64 * 1024 }),
+    );
     expect(r.pass).toBe(true);
   });
 
@@ -113,7 +119,10 @@ describe('runRiscvTest', () => {
 
   it('E-SIM-10: the wall-clock budget ends a long run', () => {
     let t = 0;
-    const r = run('loop: j loop', { maxSteps: 200_000_000, expect: {} }, level(), { now: () => (t += 1000), budgetMs: 5000 });
+    const r = run('loop: j loop', { maxSteps: 200_000_000, expect: {} }, level(), {
+      now: () => (t += 1000),
+      budgetMs: 5000,
+    });
     expect(r.pass).toBe(false);
     expect(r.message).toMatch(/ran out of time/);
   });
@@ -121,7 +130,9 @@ describe('runRiscvTest', () => {
   it('E-CPU-08: an illegal instruction names its line and word', () => {
     const r = run('nop\n.word 0xffffffff\nebreak', { expect: {} });
     expect(r.pass).toBe(false);
-    expect(r.message).toBe('Illegal instruction 0xffffffff at line 2 (pc 0x80000004): the CPU cannot run that word.');
+    expect(r.message).toBe(
+      'Illegal instruction 0xffffffff at line 2 (pc 0x80000004): the CPU cannot run that word.',
+    );
   });
 
   it('E-CPU-08: running off the end of the code says to add an exit', () => {
@@ -209,7 +220,9 @@ _start:
 .data
 msg: .asciz "The quick brown fox jumps over the lazy dog"`;
     const r = run(src, { expect: { uart: 'The quick brown fox jumps over the lazy cat' } });
-    expect(r.message).toBe('UART output is wrong: expected …" the lazy cat", got …" the lazy dog".');
+    expect(r.message).toBe(
+      'UART output is wrong: expected …" the lazy cat", got …" the lazy dog".',
+    );
   });
 
   it('checks the framebuffer hash over 64,000 pixel bytes', () => {
@@ -242,9 +255,17 @@ _start:
   call double
   li a7, 93
   ecall`;
-    const r = run(src, { expect: { exitCode: 42 } }, level({ library: [{ name: 'lib.s', text: lib }] }));
+    const r = run(
+      src,
+      { expect: { exitCode: 42 } },
+      level({ library: [{ name: 'lib.s', text: lib }] }),
+    );
     expect(r.pass).toBe(true);
-    const bad = run('call missing\nebreak', { expect: {} }, level({ library: [{ name: 'lib.s', text: lib }] }));
+    const bad = run(
+      'call missing\nebreak',
+      { expect: {} },
+      level({ library: [{ name: 'lib.s', text: lib }] }),
+    );
     expect(bad.message).toMatch(/^The program does not assemble/);
   });
 
@@ -256,13 +277,19 @@ _start:
   });
 
   it('a trap inside a library names the library file', () => {
-    const r = run('call boom\nebreak', { expect: {} }, level({ library: [{ name: 'lib.s', text: '.globl boom\nboom:\n  .word 0\n' }] }));
+    const r = run(
+      'call boom\nebreak',
+      { expect: {} },
+      level({ library: [{ name: 'lib.s', text: '.globl boom\nboom:\n  .word 0\n' }] }),
+    );
     expect(r.message).toMatch(/at lib\.s line 3/);
   });
 
   it('unknown register names in the test are reported', () => {
     expect(run('ebreak', { expect: { regs: { q9: 1 } } }).message).toMatch(/unknown register "q9"/);
-    expect(run('ebreak', { setup: { regs: { foo: 1 } }, expect: {} }).message).toMatch(/unknown register "foo"/);
+    expect(run('ebreak', { setup: { regs: { foo: 1 } }, expect: {} }).message).toMatch(
+      /unknown register "foo"/,
+    );
   });
 
   it('E-CPU-11: wfi with nothing to wake it fails instead of hanging', () => {

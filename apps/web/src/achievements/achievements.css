@@ -1,0 +1,438 @@
+/* Achievements: tier colors per theme, medals, toast, dialog grid. */
+:root,
+:root[data-theme='light'] {
+  --ach-bronze: #b0703a;
+  --ach-silver: #7d8798;
+  --ach-gold: #b98900;
+  --ach-platinum: #6965db;
+}
+:root[data-theme='dark'] {
+  --ach-bronze: #dc9d68;
+  --ach-silver: #b9c1ce;
+  --ach-gold: #f0c541;
+  --ach-platinum: #a8a5ff;
+}
+
+.tier-bronze {
+  --tier: var(--ach-bronze);
+}
+.tier-silver {
+  --tier: var(--ach-silver);
+}
+.tier-gold {
+  --tier: var(--ach-gold);
+}
+.tier-platinum {
+  --tier: var(--ach-platinum);
+}
+
+.ach-faint {
+  color: var(--text-faint);
+  font-weight: 400;
+}
+.ach-faint.small {
+  font-size: 12px;
+}
+
+/* ---------- medal ---------- */
+.ach-medal {
+  position: relative;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  color: var(--tier);
+  background: color-mix(in srgb, var(--tier) 13%, var(--island));
+  border: 2px solid color-mix(in srgb, var(--tier) 70%, transparent);
+  box-shadow: inset 0 0 0 3px var(--island);
+}
+.ach-medal--sm {
+  width: 26px;
+  height: 26px;
+  border-width: 1.5px;
+  box-shadow: inset 0 0 0 2px var(--island);
+}
+.ach-medal--lg {
+  width: 48px;
+  height: 48px;
+}
+.ach-medal.is-locked {
+  color: var(--text-faint);
+  background: var(--hover);
+  border: 2px dashed var(--island-border);
+  box-shadow: none;
+}
+.ach-medal__q {
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--text-faint);
+}
+.ach-medal__lock {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: var(--island);
+  border: 1px solid var(--island-border);
+  color: var(--text-muted);
+}
+
+/* ---------- toast ---------- */
+.ach-toasts {
+  position: fixed;
+  top: 68px;
+  left: 50%;
+  z-index: 41;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  pointer-events: none;
+}
+.ach-toasts__stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.ach-toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 300px;
+  max-width: 440px;
+  padding: 10px 10px 10px 12px;
+  border-color: color-mix(in srgb, var(--tier) 45%, var(--island-border));
+  pointer-events: auto;
+  animation: ach-toast-in 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+.ach-toast .ach-medal {
+  animation: ach-medal-in 0.5s 0.08s cubic-bezier(0.2, 0.9, 0.3, 1.4) both;
+}
+@keyframes ach-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.98);
+  }
+}
+@keyframes ach-medal-in {
+  from {
+    transform: scale(0.6) rotate(-20deg);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ach-toast,
+  .ach-toast .ach-medal {
+    animation: none;
+  }
+}
+.ach-toast__text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+.ach-toast__kicker {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tier);
+}
+.ach-toast__text strong {
+  font-size: 14px;
+}
+.ach-toast__desc {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.ach-toast__actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  align-self: flex-start;
+}
+.gu-btn.ach-toast__view {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12.5px;
+}
+
+/* ---------- dialog ---------- */
+.ach-summary {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 14px;
+  margin: 4px 0 12px;
+  border: 1px solid var(--island-border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 5%, var(--island));
+}
+.ach-ring {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  color: var(--accent-strong);
+  background:
+    radial-gradient(closest-side, var(--island) 76%, transparent 78%),
+    conic-gradient(var(--accent) var(--pct), var(--hover) 0);
+}
+.ach-summary__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.ach-summary__text strong {
+  font-size: 16px;
+}
+.gu-dialog__body .ach-summary__text span {
+  color: var(--text-muted);
+}
+.ach-tiers {
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  gap: 4px 14px;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+.ach-tier-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ach-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--tier);
+}
+
+.ach-filter {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  margin-bottom: 4px;
+  border-radius: 8px;
+  background: var(--hover);
+}
+.ach-filter button {
+  height: 26px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.ach-filter button.is-on {
+  background: var(--island);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+.ach-filter button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.ach-cat h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 16px 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.ach-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ach-card {
+  display: flex;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--island-border);
+  border-radius: var(--radius);
+  background: var(--island);
+}
+.ach-card.is-unlocked {
+  border-color: color-mix(in srgb, var(--tier) 40%, var(--island-border));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--tier) 7%, var(--island)),
+    var(--island) 60%
+  );
+}
+.ach-card.is-locked {
+  background: color-mix(in srgb, var(--hover) 45%, var(--island));
+}
+.ach-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.ach-card__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ach-card__head strong {
+  font-size: 13.5px;
+}
+.ach-card.is-locked .ach-card__head strong {
+  color: var(--text-muted);
+}
+.gu-dialog__body .ach-card p {
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.ach-tier-pill {
+  flex: none;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tier);
+}
+.ach-card.is-locked .ach-tier-pill {
+  color: var(--text-faint);
+}
+.ach-card__date {
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+.ach-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.ach-progress__bar {
+  flex: 1;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--hover);
+  overflow: hidden;
+}
+.ach-progress__bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+.ach-progress__num {
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+.gu-dialog__body p.ach-note {
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+/* ---------- level map chip ---------- */
+.ach-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--island-border);
+  border-radius: 999px;
+  background: var(--island);
+  color: var(--accent-strong);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.ach-chip:hover {
+  background: var(--active);
+}
+.ach-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------- success card ---------- */
+.ach-success {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0 4px;
+}
+.ach-success__label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.ach-success ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ach-success__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px 0 3px;
+  border: 1px solid color-mix(in srgb, var(--tier) 40%, var(--island-border));
+  border-radius: 999px;
+  background: var(--island);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ach-success__item:hover {
+  background: color-mix(in srgb, var(--tier) 10%, var(--island));
+}
+
+@media (max-width: 560px) {
+  .ach-summary {
+    flex-wrap: wrap;
+  }
+  .ach-tiers {
+    width: 100%;
+    grid-template-columns: repeat(4, auto);
+  }
+  .ach-toast {
+    min-width: 0;
+  }
+}
+
+/* Level map header: trophy chip beside the close button. */
+.lm-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

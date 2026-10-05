@@ -1,0 +1,15 @@
+ok: three blocks
+ok: heap starts after the globals
+ok: 8-byte aligned
+ok: blocks do not overlap
+ok: writing b leaves a alone
+ok: first fit reuses the freed block
+ok: a and b merged into one free block
+ok: everything merged back together
+ok: calloc zeroes
+ok: realloc keeps the contents
+ok: malloc(0) is NULL
+ok: too big is NULL
+ok: calloc overflow is NULL
+ok: the heap runs out before the stack
+ok: all of it can be used again

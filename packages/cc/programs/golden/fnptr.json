@@ -1,0 +1,5 @@
+{
+ "sourceSha256": "35510dfe76d6ef47679ee40bfd223e43359bbc60b901aa3a7bea36d716e11787",
+ "uart": "apply = 90605\npick = 7\nfold = 945\nderef call = 15\nadd = 9\nsub = 3\nmul = 18\nsay: hi\ngetter null = 1\nsorted = 13579\nfn == fn = 3\n",
+ "exitCode": 0
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { levelById } from '@build-a-computer/content';
+import { levelById } from '@build-a-computer/content/full';
 import type { Board } from '@build-a-computer/schema';
 import { HISTORY_TICKS, SimHost } from './host';
 

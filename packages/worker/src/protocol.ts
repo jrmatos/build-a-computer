@@ -1,5 +1,9 @@
 import type { Board, ChipMap, Level } from '@build-a-computer/schema';
 import type { CaseResult, Diagnostic } from '@build-a-computer/sim-logic';
+import type { RiscvCaseResult, RunSetup, RvCheck } from '@build-a-computer/rv-check';
+import type { JsCaseDetail, JsCaseResult, JsDiffNode, JsMismatch } from '@build-a-computer/js-check';
+
+export type { RiscvCaseResult, RvCheck, JsCaseDetail, JsCaseResult, JsDiffNode, JsMismatch };
 
 /** A snapshot of the running simulation, posted to the UI at most 60 times a second. */
 export interface Snapshot {
@@ -84,7 +88,7 @@ export interface SourceDiagnostic {
   endColumn: number;
   message: string;
   severity: 'error' | 'warning';
-  /** File name: the player's file is 'main.s'; level libraries use their own names. */
+  /** File name: the player's file is 'main.s' ('main.c' in C levels); level libraries and libc use their own names. */
   file: string;
 }
 
@@ -94,6 +98,37 @@ export interface RvLoadResult {
   /** Labels with their addresses, for the debugger. */
   symbols: { name: string; addr: number }[];
   entry: number;
+  /** The test being debugged (rvLoad with `opts.test`), when it is a 'riscv' test. */
+  test?: { index: number; name: string };
+}
+
+/** rvLoad options for "Debug this test". */
+export interface RvLoadOptions {
+  /** Index in `level.tests` of a 'riscv' test: the machine gets ITS setup, input and disk, and snapshots carry `test`. */
+  test?: number;
+  /** C levels: run the startup code and stop at the first instruction of `main`. */
+  stopAtMain?: boolean;
+}
+
+/** The debugged test, live: every expectation with its current value, and the verdict once the program ends. */
+export interface RvTestView {
+  index: number;
+  name: string;
+  /** What the test sets before the first instruction (shown in the test panel). */
+  setup: RunSetup;
+  input?: string;
+  /** The test's step limit; past it the test fails ("never stopped"). */
+  maxSteps: number;
+  /** Every expectation with its current value (UART cut around the first difference when long). */
+  checks: RvCheck[];
+  /**
+   * The test's verdict for the run so far, set when the program ends (exit,
+   * trap), reaches ebreak (where the test ends), waits forever, or runs past
+   * maxSteps. Cleared when it runs again.
+   */
+  verdict?: RiscvCaseResult;
+  /** With the verdict: how many times each line of the player's file ran (absent for runs over 1,000,000 steps). */
+  lineHits?: { line: number; count: number }[];
 }
 
 export type RvStopReason = 'breakpoint' | 'step' | 'paused' | 'ebreak' | 'exit' | 'trap' | 'wfi' | 'budget' | 'error';
@@ -124,6 +159,8 @@ export interface RvSnapshot {
   uart: string;
   /** Bumps whenever framebuffer pixels or palette changed. */
   fbVersion: number;
+  /** "Debug this test": the test's expectations against the machine now. */
+  test?: RvTestView;
 }
 
 /**
@@ -131,8 +168,13 @@ export interface RvSnapshot {
  * and the RV32 machine (RvApi); they never run at the same time.
  */
 export interface RvApi {
-  /** Assemble + link `source` with the level's library files, reset the machine with the level's setup. */
-  rvLoad(source: string, level: Level): RvLoadResult;
+  /**
+   * Assemble + link `source` with the level's library files, reset the machine
+   * with the first test's setup, or with `opts.test`'s setup, input and disk
+   * ("Debug this test"). The worker's SimHost answers asynchronously: it loads
+   * the RISC-V subsystem on the first call.
+   */
+  rvLoad(source: string, level: Level, opts?: RvLoadOptions): RvLoadResult | Promise<RvLoadResult>;
   rvRun(): void;
   rvPause(): void;
   /** Execute n instructions (stops early at breakpoints/exit). */
@@ -166,6 +208,26 @@ export interface JsRunState {
   error?: { message: string; line?: number; column?: number };
   /** Result of the last call, JSON-safe (tensors as {shape, data}). */
   result?: unknown;
+  /** Latest checkpoint(state) from training code, for resume after a reload (E-ML-06). */
+  checkpoint?: { step: number; state: unknown };
+  /** "Debug this test" (jsDebugCall): the test's index, and its verdict once the call ends. */
+  test?: { index: number; verdict?: JsCaseResult };
+}
+
+/** What jsDebugCall resolves to. */
+export interface JsDebugResult {
+  ok: boolean;
+  result?: unknown;
+  error?: { message: string; line?: number };
+  /** Index of the test in level.tests. */
+  test: number;
+  /** The test's verdict (as the checker judges it) with the full diff tree in `detail.diff`. */
+  verdict?: JsCaseResult;
+}
+
+export interface JsCallOptions {
+  /** Resume training: restoreCheckpoint() returns this state inside the sandbox. */
+  resume?: { step: number; state: unknown };
 }
 
 /**
@@ -175,7 +237,15 @@ export interface JsRunState {
  */
 export interface JsApi {
   /** Run `entry(...args)` from the player's module (main.js) with the level's modules and datasets. */
-  jsCall(source: string, level: Level, entry: string, args: unknown[]): Promise<{ ok: boolean; result?: unknown; error?: { message: string; line?: number } }>;
+  jsCall(
+    source: string,
+    level: Level,
+    entry: string,
+    args: unknown[],
+    opts?: JsCallOptions,
+  ): Promise<{ ok: boolean; result?: unknown; error?: { message: string; line?: number } }>;
+  /** "Debug this test": run only `level.tests[testIndex]` (its args, seed, time limit) and judge it; null for a non-'js' test. */
+  jsDebugCall(source: string, level: Level, testIndex: number): Promise<JsDebugResult | null>;
   /** Stop the running code (terminates its sandbox). */
   jsStop(): void;
   jsSubscribe(onState: (s: JsRunState) => void): void;

@@ -1,0 +1,5 @@
+{
+ "sourceSha256": "bc238e32c07b523e5dbe8c67513da12e5ba1764482d908c29954a1d756bbd2a4",
+ "uart": "g1 = 5\nga = 36668\nhello\nhi gs2 len = 8\nzero\none\ntwo\na rec = 54321\nb rec = 90006\n(null) rec = 0\nd rec = 77000\nnrecs = 4\ngpt = 12\nmatrix = 46\nello\nmid = 7\nnelem = 3\nhash = 9349501\nmixed = 117\nun = 68\nfptr = 1\nfns = 50\nci = 13\nev = 31\nla = 3\nlc = 99\nlp = 3\nlocal lr = 11\nlm = 321\nlps = 134\nlpts = 8\ndyn = 28\ncounter = 121110\n",
+ "exitCode": 15
+}

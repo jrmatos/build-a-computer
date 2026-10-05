@@ -3,9 +3,13 @@ import type { Level } from '@build-a-computer/schema';
 import { useEditor } from '../editor/store';
 import { sim } from '../sim/client';
 import { t } from '../i18n';
+import { recordBest } from '../community/best';
+import { useCommunityUi } from '../community/ui';
 import { markCompleted } from './persist';
 import { plannedTotal } from './testStripModel';
 import { useLevelUi } from './ui';
+import { rerun as rerunDebugCase, suspendForTestRun } from './debug/store';
+import { emitAchievement } from '../achievements/events';
 
 /** Cases the level's tests will run (truth rows, vectors, sequence checks, programs). */
 export const totalCases = (level: Level | null): number => plannedTotal(level);
@@ -24,7 +28,11 @@ export async function runLevelTests(): Promise<void> {
   const level = st.level;
   if (running || !level || !canRunTests(level) || st.editStack.length > 0) return;
   running = true;
+  // The case debugger may have a program in the live ROM: put the board back first.
+  const resumeDebug = await suspendForTestRun();
   const total = totalCases(level);
+  // The board that is tested (the level's own board: chips are never being edited here).
+  const board = st.board;
   const cases: CaseResult[] = [];
   let pending = false;
   let finished = false;
@@ -54,10 +62,15 @@ export async function runLevelTests(): Promise<void> {
     const passed = result?.passed ?? cases.filter((c) => c.pass).length;
     const tot = result?.total ?? total;
     cur.set({ testRun: { running: false, cases: [...cases], passed, total: tot } });
-    if (result && tot > 0 && passed === tot) {
+    if (result) emitAchievement({ type: 'tests-run', levelId: level.id, passed, total: tot });
+    // A shared board viewed read-only (COM-01) can be tested, but it is not the player's solution.
+    if (result && tot > 0 && passed === tot && !useCommunityUi.getState().shared) {
       const first = !cur.completed.includes(level.id);
+      // COM-04: local best (parts, wires, cycles) for the run that just passed.
+      await recordBest(level, board, cases).catch((e: unknown) => console.error(e));
       await markCompleted(level);
       useLevelUi.getState().set({ justCompleted: level.id });
+      emitAchievement({ type: 'level-completed', levelId: level.id, first });
       if (first) cur.toast(t('level.toast.completed', { title: level.title }), 'success');
     }
   } catch (e) {
@@ -67,6 +80,7 @@ export async function runLevelTests(): Promise<void> {
     if (cur.level === level) cur.set({ testRun: { running: false, cases: [...cases], passed: 0, total } });
   } finally {
     running = false;
+    if (resumeDebug) void rerunDebugCase();
   }
 }
 
@@ -79,6 +93,7 @@ export async function loadCaseInputs(inputs: Record<string, number>): Promise<st
   const { board, snapshot } = useEditor.getState();
   // Switches only respond while the board is powered: power on to show the case.
   if (snapshot && !snapshot.powered) await sim.power(true);
+  emitAchievement({ type: 'case-debugged', levelId: useEditor.getState().level?.id });
   const missed: string[] = [];
   const jobs: Promise<unknown>[] = [];
   for (const [label, value] of Object.entries(inputs)) {

@@ -1,0 +1,139 @@
+/* Test case diffs (code and JS tests): test strip detail row and test debuggers. */
+.ts-debug-btn {
+  margin-left: auto;
+  padding: 2px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent-strong);
+  font: 600 12px var(--font-ui);
+  cursor: pointer;
+}
+.ts-debug-btn:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.ts-debug-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.cd-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--text);
+}
+.cd-more {
+  color: var(--text-faint);
+}
+.cd-mono,
+.cd-list code {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+.cd-label {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text);
+}
+.cd-k {
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+}
+.cd-bad {
+  color: var(--danger);
+}
+.cd-uart,
+.cd-mem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cd-row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 6px;
+}
+.cd-row code {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.cd-want,
+.cd-got {
+  border-radius: 3px;
+  padding: 0 1px;
+  color: inherit;
+}
+.cd-want {
+  background: color-mix(in srgb, var(--success) 22%, transparent);
+}
+.cd-got {
+  background: color-mix(in srgb, var(--danger) 22%, transparent);
+}
+.cd-byte {
+  display: inline-block;
+  min-width: 2ch;
+  margin-right: 0.6ch;
+  color: var(--text-muted);
+}
+.cd-byte.bad {
+  color: var(--text);
+  font-weight: 700;
+  background: color-mix(in srgb, var(--success) 20%, transparent);
+  border-radius: 3px;
+}
+.cd-byte.bad.got {
+  background: color-mix(in srgb, var(--danger) 22%, transparent);
+}
+.cd-metric {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.cd-value {
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+.cd-value.ok {
+  color: var(--success);
+}
+.cd-value.bad {
+  color: var(--danger);
+}
+.cd-bar {
+  position: relative;
+  display: inline-block;
+  width: 120px;
+  height: 8px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--text-faint) 25%, transparent);
+}
+.cd-bar-range {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--success) 45%, transparent);
+}
+.cd-bar-dot {
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 50%;
+  border: 2px solid var(--island, #fff);
+}
+.cd-bar-dot.ok {
+  background: var(--success);
+}
+.cd-bar-dot.bad {
+  background: var(--danger);
+}

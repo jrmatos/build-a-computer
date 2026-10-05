@@ -1,0 +1,5 @@
+{
+ "sourceSha256": "dc52615b24a36c885e8237461f531dd2036448693d3c4fcf4661e43aa728c8eb",
+ "uart": "size bf = 8\nsize pte = 4\nsize mixbf = 8\ngb.a = 5\ngb.b = 17\ngb.c = -3\ngb.d = 703710\ngb.e = -100\nb.a = 1\nb.b = 2\nb.c = -6\nb.d = 0\nb.e = -2048\nassign value = 8\npte raw = 246363149 0x0eaf340d\npte r = 1\npte ppn = 4194303\npte rsw = 3\nm = 1623\nm.x = -21\nloop = 152\n",
+ "exitCode": 253
+}

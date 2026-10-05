@@ -1,0 +1,112 @@
+name: Link check
+
+# CNT-02: checks every level resource link (GET with redirects; YouTube through
+# oEmbed; the page title is compared with the recorded verifiedTitle to catch
+# soft 404s). The weekly run opens one issue per failing link (E-RES-01,
+# E-RES-02). It never edits or swaps a link.
+#
+# On pull requests that touch content it runs as a dry run: the report goes to
+# the job summary, no issue is opened and the job does not fail (an external
+# site being down must not block a PR). E-RES-05 (missing verifiedTitle or
+# verifiedAt) is enforced offline by `pnpm test` in ci.yml.
+#
+# Fork-safe (E-PLAT-07): `pull_request` (never `pull_request_target`), no
+# secrets, read-only token for the dry run. Only the scheduled or manual run on
+# this repository gets `issues: write`.
+on:
+  schedule:
+    - cron: '17 6 * * 1' # Mondays 06:17 UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Report only; do not open issues'
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - 'packages/content/**'
+      - 'tools/link-check/**'
+      - '.github/workflows/link-check.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: link-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Check resource links
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      failing: ${{ steps.summary.outputs.failing }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4 # version from package.json "packageManager"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Run the link checker
+        run: pnpm --filter @build-a-computer/content links
+        env:
+          LINK_CHECK: '1'
+          LINK_CHECK_OUT: ${{ runner.temp }}/link-check
+
+      - name: Summary
+        id: summary
+        run: |
+          cat "$RUNNER_TEMP/link-check/report.md" >> "$GITHUB_STEP_SUMMARY"
+          echo "failing=$(jq length "$RUNNER_TEMP/link-check/issues.json")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: link-check-report
+          path: ${{ runner.temp }}/link-check/
+          retention-days: 30
+
+  issues:
+    name: Open issues for failing links
+    needs: check
+    # Never on pull requests (dry run) and never from a fork.
+    if: >-
+      github.event_name != 'pull_request' &&
+      !github.event.repository.fork &&
+      !(github.event_name == 'workflow_dispatch' && inputs.dry_run) &&
+      needs.check.outputs.failing != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: link-check-report
+          path: report
+
+      - name: Open one issue per failing link (skips ones already open)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh label create broken-link --color B60205 --description 'A level resource link failed the weekly check' 2>/dev/null || true
+          jq -c '.[]' report/issues.json | while read -r issue; do
+            title=$(jq -r '.title' <<<"$issue")
+            existing=$(gh issue list --state open --label broken-link --search "\"$title\" in:title" --json title --jq "map(select(.title == \"$title\")) | length")
+            if [ "$existing" != "0" ]; then
+              echo "Already open: $title"
+              continue
+            fi
+            jq -r '.body' <<<"$issue" > body.md
+            gh issue create --title "$title" --body-file body.md --label broken-link
+          done

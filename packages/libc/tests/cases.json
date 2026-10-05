@@ -1,0 +1,11 @@
+[
+  { "name": "hello", "exitCode": 0 },
+  { "name": "printf", "exitCode": 0 },
+  { "name": "sprintf", "exitCode": 0 },
+  { "name": "strings", "exitCode": 0 },
+  { "name": "heap", "exitCode": 0 },
+  { "name": "misc", "exitCode": 42 },
+  { "name": "input", "exitCode": 9, "input": "Hello 123\nrest" },
+  { "name": "assert", "exitCode": 134 },
+  { "name": "machine", "exitCode": 0 }
+]

@@ -1,0 +1,257 @@
+/* ---------- Community (M14): share banner, pack import, level editor ---------- */
+.cm-muted {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.gu-dialog__body p.cm-muted {
+  font-size: 12px;
+}
+.cm-good {
+  color: var(--success);
+  font-weight: 600;
+}
+.cm-bad,
+.gu-dialog__body p.cm-bad {
+  color: var(--danger);
+}
+
+.cm-share {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Shared board banner, under the toolbar. */
+.cm-banner {
+  position: fixed;
+  top: 76px;
+  width: max-content;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: calc(100vw - 32px);
+  padding: 10px 12px 10px 16px;
+  border-left: 3px solid var(--accent);
+  pointer-events: auto;
+  z-index: 20;
+}
+.cm-banner__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 13px;
+}
+.cm-banner__text span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.cm-banner__actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+@media (max-width: 720px) {
+  .cm-banner {
+    flex-direction: column;
+    align-items: stretch;
+    top: auto;
+    bottom: 72px;
+  }
+}
+
+/* Pack import report. */
+.cm-pack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cm-pack__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cm-pack__list li {
+  display: flex;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--island-border);
+  border-radius: var(--radius-sm);
+}
+.cm-pack__list li > span:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cm-pack__list small {
+  color: var(--danger);
+}
+.cm-pack__mark {
+  font-weight: 700;
+  width: 1em;
+}
+.is-ok .cm-pack__mark {
+  color: var(--success);
+}
+.is-bad .cm-pack__mark {
+  color: var(--danger);
+}
+
+/* Level editor. */
+.cm-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.cm-editor h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 650;
+}
+.cm-editor fieldset {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--island-border);
+  border-radius: var(--radius-sm);
+  min-width: 0;
+}
+.cm-editor legend {
+  padding: 0 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.cm-cols,
+.cm-grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.cm-grid2 .gu-field > span {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.cm-span2 {
+  grid-column: span 2;
+}
+@media (max-width: 640px) {
+  .cm-cols,
+  .cm-grid2 {
+    grid-template-columns: 1fr;
+  }
+  .cm-span2 {
+    grid-column: auto;
+  }
+}
+.cm-textarea {
+  height: auto;
+  min-height: 56px;
+  padding: 6px 10px;
+  font-family: var(--font-ui);
+  resize: vertical;
+}
+.cm-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 12px 2px 0;
+  font-size: 13px;
+}
+.cm-check small {
+  color: var(--text-faint);
+}
+.cm-palette {
+  display: flex;
+  flex-wrap: wrap;
+}
+.cm-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cm-table-wrap {
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid var(--island-border);
+  border-radius: var(--radius-sm);
+}
+.cm-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.cm-table th,
+.cm-table td {
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--island-border);
+  text-align: left;
+}
+.cm-table th {
+  position: sticky;
+  top: 0;
+  background: var(--island);
+  font-weight: 600;
+}
+.cm-table .is-out {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.cm-cell {
+  width: 80px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--island-border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+.cm-x {
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 16px;
+}
+.cm-x:hover {
+  color: var(--danger);
+}
+.cm-foot-status {
+  flex: 1;
+  align-self: center;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.gu-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Level map: community packs and best results. */
+.lm-best {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.lm-pack-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.lm-pack-head p {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.lp-best {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.lp-best strong {
+  color: var(--success);
+}

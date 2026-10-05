@@ -1,0 +1,34 @@
+/* Update prompt: an Excalidraw-style island under the top toolbar, clear of the hints and toasts at the bottom. */
+.bac-update {
+  position: fixed;
+  left: 50%;
+  top: 76px;
+  z-index: 41;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  animation: bac-update-in 0.18s ease-out;
+}
+@keyframes bac-update-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+}
+.bac-update .gu-toast__text {
+  white-space: normal;
+}
+.bac-update__reload {
+  height: 28px;
+  padding: 0 12px;
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.bac-update__reload:hover:not(:disabled) {
+  background: var(--accent-strong);
+}
+.bac-update__reload:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}

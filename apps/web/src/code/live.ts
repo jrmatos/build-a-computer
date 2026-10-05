@@ -1,10 +1,12 @@
 /**
- * Live assembly: 300 ms after the player stops typing, assemble main.s with
- * the level's library on the main thread (cheap) and publish the diagnostics
- * to store.codeDiagnostics for the squiggles. The worker's rvLoad on Run/Step
- * reports the same diagnostics.
+ * Live checking: 300 ms after the player stops typing, assemble main.s with
+ * the level's library (assembly levels) or compile main.c against libc's and
+ * the level's headers (C levels) on the main thread, and publish the
+ * diagnostics to store.codeDiagnostics for the squiggles. The worker's rvLoad
+ * on Run/Step reports the same diagnostics.
  */
 import { useEditor } from '../editor/store';
+import { checkC } from './cDiagnostics';
 import { checkSource } from './diagnostics';
 
 export const LIVE_DELAY_MS = 300;
@@ -16,7 +18,7 @@ export function startLiveAssembly(): () => void {
     timer = undefined;
     const { source, level } = useEditor.getState();
     if (level?.mode !== 'code') return;
-    const diags = checkSource(source, level);
+    const diags = level.code?.language === 'c' ? checkC(source, level) : checkSource(source, level);
     const cur = useEditor.getState().codeDiagnostics;
     if (JSON.stringify(cur) !== JSON.stringify(diags)) useEditor.getState().set({ codeDiagnostics: diags });
   };

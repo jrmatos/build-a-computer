@@ -66,8 +66,16 @@ const ACC_STORE = 1;
 const ACC_FETCH = 2;
 const TLB_SIZE = 256;
 
-/** Why `run` returned. */
-export type StopReason = 'budget' | 'wfi';
+/** Why `run` returned. 'stopped': an `onTrap` hook asked to stop. */
+export type StopReason = 'budget' | 'wfi' | 'stopped';
+
+/**
+ * Called just before the hart takes a trap. `cause` has bit 31 set for
+ * interrupts; `epc` is the trapping pc. Return 'stop' to stop instead: no
+ * state changes, pc stays at `epc`, WFI is cleared and `run` returns with
+ * reason 'stopped' (the step that trapped still counts as a cycle).
+ */
+export type TrapHook = (cause: number, tval: number, epc: number) => 'take' | 'stop';
 
 export interface RunResult {
   /** Steps executed (instructions retired plus exceptions taken). */
@@ -191,6 +199,10 @@ export class Hart {
   idleSkip: boolean;
   /** Misaligned loads/stores: 'trap' (default, E-CPU-05) or 'emulate' in hardware. */
   misaligned: 'trap' | 'emulate';
+  /** Optional trap hook (see `TrapHook`): lets a host stop on ebreak, exit, or unhandled traps. */
+  onTrap: TrapHook | undefined = undefined;
+  /** Set when `onTrap` returned 'stop'; `run` returns 'stopped' and clears it. */
+  private stopRequested = false;
 
   constructor(opts: HartOptions) {
     const probe = new Uint16Array(new Uint8Array([1, 0]).buffer);
@@ -319,6 +331,12 @@ export class Hart {
 
   /** Take a trap: `cause` with bit 31 set for interrupts. `epc` is the trapping pc. */
   private takeTrap(cause: number, tval: number, epc: number): void {
+    if (this.onTrap && this.onTrap(cause >>> 0, tval >>> 0, epc >>> 0) === 'stop') {
+      this._pc = epc | 0;
+      this.waiting = false;
+      this.stopRequested = true;
+      return;
+    }
     const interrupt = cause < 0 || cause >= 0x80000000;
     const code = cause & 0x7fffffff;
     const deleg = interrupt ? this.mideleg : this.medeleg;
@@ -583,6 +601,10 @@ export class Hart {
         this.takeTrap((irq | 0x80000000) >>> 0, 0, this._pc);
         this.cycles++;
         steps++;
+        if (this.stopRequested) {
+          this.stopRequested = false;
+          return { steps, reason: 'stopped' };
+        }
         continue;
       }
       let limit = maxSteps - steps;
@@ -591,6 +613,10 @@ export class Hart {
         if (t > 0 && t < limit && (this.mie & MIP_MTIP) !== 0) limit = t;
       }
       steps += this.chunk(limit);
+      if (this.stopRequested) {
+        this.stopRequested = false;
+        return { steps, reason: 'stopped' };
+      }
     }
     return { steps, reason: 'budget' };
   }

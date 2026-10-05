@@ -10,6 +10,8 @@ import type { Level } from '@build-a-computer/schema';
 import type { TestRun } from '../editor/store';
 import { t } from '../i18n';
 import { loadCaseInputs } from './runTests';
+import { useCaseDebug, type DebugCaseHandler } from './panels/caseDebug';
+import { CaseDiffSummary, caseDiffTitle } from './panels/CaseDiff';
 import {
   actualValue,
   assignResults,
@@ -106,7 +108,7 @@ interface ShownColumn {
   expect: Record<string, number> | undefined;
 }
 
-export function TestStrip({ level, run, floating = false }: { level: Level; run: TestRun | null; floating?: boolean }) {
+export function TestStrip({ level, run, floating = false, onDebugCase }: { level: Level; run: TestRun | null; floating?: boolean; onDebugCase?: DebugCaseHandler }) {
   const plan = useMemo(() => planStrip(level), [level]);
   const cases = run?.cases as StreamedCase[] | undefined;
   const { byColumn, extra } = useMemo(() => assignResults(plan, cases ?? []), [plan, cases]);
@@ -245,6 +247,20 @@ export function TestStrip({ level, run, floating = false }: { level: Level; run:
     }
   }
 
+  // Per-case Debug action: the prop, else the handler registered for the column's test kind.
+  const handlers = useCaseDebug((s) => s.handlers);
+  const debugFor = useCallback(
+    (i: number): (() => void) | undefined => {
+      const c = column(i);
+      const kind = c.plan?.kind ?? c.result?.kind;
+      const test = c.plan?.test ?? c.result?.test;
+      const fn = onDebugCase ?? (kind ? handlers[kind] : undefined);
+      if (!fn || !kind || test === undefined) return undefined;
+      return () => fn({ column: i, test, index: c.plan?.index ?? c.result?.index ?? 0, kind });
+    },
+    [column, handlers, onDebugCase],
+  );
+
   const select = useCallback(
     (i: number) => {
       if (count === 0) return;
@@ -252,6 +268,11 @@ export function TestStrip({ level, run, floating = false }: { level: Level; run:
       setSelected(k);
       scrollTo(k);
       const c = column(k);
+      // Code and JS tests have no board inputs: their Debug action loads the test instead.
+      if (c.plan?.kind === 'riscv' || c.plan?.kind === 'js') {
+        setNote('');
+        return;
+      }
       if (!c.inputs) {
         setNote(t('level.strip.pending'));
         return;
@@ -317,6 +338,7 @@ export function TestStrip({ level, run, floating = false }: { level: Level; run:
         programRow={hasProgram}
         program={program}
         onClick={() => select(i)}
+        onDebug={debugFor(i)}
       />,
     );
   }
@@ -419,7 +441,7 @@ export function TestStrip({ level, run, floating = false }: { level: Level; run:
         {t('level.strip.help')}
       </p>
       {detail && detailIdx !== null && (
-        <Detail i={detailIdx} c={detail} inputs={inputs} outputs={outputs} radix={radix} isSelected={selected !== null} />
+        <Detail i={detailIdx} c={detail} inputs={inputs} outputs={outputs} radix={radix} isSelected={selected !== null} onDebug={debugFor(detailIdx)} />
       )}
       {note && (
         <p className="ts-note" aria-live="polite">
@@ -454,6 +476,7 @@ interface ColumnProps {
   programRow: boolean;
   program: boolean;
   onClick: () => void;
+  onDebug?: (() => void) | undefined;
 }
 
 function StripColumn(p: ColumnProps) {
@@ -499,7 +522,8 @@ function StripColumn(p: ColumnProps) {
       className={`ts-col is-${p.state} ${p.selected ? 'is-selected' : ''} ${p.shake ? 'is-shaking' : ''} ${p.firstFail ? 'is-first-fail' : ''} ${p.program ? 'is-program' : ''}`}
       style={{ left: p.x, width: p.w }}
       onClick={p.onClick}
-      title={t('level.strip.case', { n: p.i + 1 })}
+      onDoubleClick={p.onDebug}
+      title={caseDiffTitle(t('level.strip.case', { n: p.i + 1 }), c.result)}
     >
       <div className="ts-head-cell">
         {p.state === 'pass' ? <PassMark /> : p.state === 'fail' ? <FailMark /> : p.program ? t('level.strip.program') : null}
@@ -534,7 +558,7 @@ function describe(c: ShownColumn, inputs: Port[], outputs: Port[], radix: 'hex' 
   return parts.join(', ');
 }
 
-function Detail(props: { i: number; c: ShownColumn; inputs: Port[]; outputs: Port[]; radix: 'hex' | 'dec'; isSelected: boolean }) {
+function Detail(props: { i: number; c: ShownColumn; inputs: Port[]; outputs: Port[]; radix: 'hex' | 'dec'; isSelected: boolean; onDebug?: (() => void) | undefined }) {
   const { c, i } = props;
   const fail = c.result && !c.result.pass;
   const ins = props.inputs.map((p) => `${p.label}=${show(c.inputs?.[p.label], p.width, props.radix)}`).join(' ');
@@ -547,6 +571,11 @@ function Detail(props: { i: number; c: ShownColumn; inputs: Port[]; outputs: Por
         {fail ? <FailMark /> : c.result ? <PassMark /> : null}
         <strong>{fail && !props.isSelected ? t('level.strip.firstFail', { n: i + 1 }) : t('level.strip.case', { n: i + 1 })}</strong>
         <code>{ins}</code>
+        {props.onDebug && (
+          <button type="button" className="ts-debug-btn" onClick={props.onDebug} title={t('panels.case.debugTitle')}>
+            {t('panels.case.debug')}
+          </button>
+        )}
       </div>
       {wrongs.length > 0 && !(fail && c.result?.message) && (
         <p className="ts-detail-line">
@@ -562,6 +591,7 @@ function Detail(props: { i: number; c: ShownColumn; inputs: Port[]; outputs: Por
         </p>
       )}
       {fail && c.result?.message && <p className="ts-detail-line">{c.result.message}</p>}
+      {fail && c.result && <CaseDiffSummary result={c.result} />}
       {c.result?.summary && <p className="ts-detail-line muted">{c.result.summary}</p>}
     </div>
   );
@@ -582,7 +612,7 @@ const FailMark = () => (
  * The strip with its header: collapse, and pop out into a wide bottom-center
  * island above the bottom dock (resizable by its side edges).
  */
-export function TestStripSection({ level, run }: { level: Level; run: TestRun | null }) {
+export function TestStripSection({ level, run, onDebugCase }: { level: Level; run: TestRun | null; onDebugCase?: DebugCaseHandler }) {
   const [open, setOpen] = useState(() => readPref(OPEN_KEY, '1') === '1');
   const [floating, setFloating] = useState(() => readPref(FLOAT_KEY, '0') === '1');
   const toggleOpen = () => {
@@ -635,7 +665,7 @@ export function TestStripSection({ level, run }: { level: Level; run: TestRun | 
         {createPortal(
           <FloatIsland>
             {head}
-            {open && <TestStrip level={level} run={run} floating />}
+            {open && <TestStrip level={level} run={run} floating onDebugCase={onDebugCase} />}
           </FloatIsland>,
           layer,
         )}
@@ -645,7 +675,7 @@ export function TestStripSection({ level, run }: { level: Level; run: TestRun | 
   return (
     <div className="ts-section">
       {head}
-      {open && <TestStrip level={level} run={run} />}
+      {open && <TestStrip level={level} run={run} onDebugCase={onDebugCase} />}
     </div>
   );
 }

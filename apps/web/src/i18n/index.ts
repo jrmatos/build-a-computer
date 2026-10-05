@@ -11,8 +11,13 @@ import { panels } from './en/panels';
 import { chips } from './en/chips';
 import { storage } from './en/storage';
 import { code } from './en/code';
+import { community } from './en/community';
+import { pwa } from './en/pwa';
+import { ml } from './en/ml';
+import { debug } from './en/debug';
+import { achievements } from './en/achievements';
 
-const en: Record<string, string> = { ...app, ...editor, ...ui, ...level, ...chips, ...panels, ...storage, ...code };
+const en: Record<string, string> = { ...app, ...editor, ...ui, ...level, ...chips, ...panels, ...storage, ...code, ...ml, ...pwa, ...community, ...achievements, ...debug };
 
 /** Locales load from here once translations exist. */
 const locales: Record<string, Record<string, string>> = { en };

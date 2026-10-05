@@ -1,0 +1,5 @@
+{
+ "sourceSha256": "d4a68a6e97dcd46f85169b4659d077a75afe92d07795a7e9c5f9c55c5f8770f0",
+ "uart": "SQ = 16\nMAX = 9\nhello world\n4\n\"quoted\\n\" 'c'\nCAT = 5\nXCAT = 42\nno args\nargs %d\nCOUNT = 0\nSELF = 11\nF = 5\nNEG = 5\nOK = 1\nARITH = 1\nDEF2 = 1\nVERSION = 4\nLINE = 61\npreproc.c\nEMPTY = 1\nLOCAL = 77\nMULTI = 2\n",
+ "exitCode": 0
+}

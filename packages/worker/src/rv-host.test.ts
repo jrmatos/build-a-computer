@@ -60,21 +60,21 @@ loop:
 `;
 
 describe('RvHost (RvApi through SimHost)', () => {
-  it('rvLoad returns diagnostics with 1-based ranges and the file name', () => {
+  it('rvLoad returns diagnostics with 1-based ranges and the file name', async () => {
     const { host } = makeHost();
-    const r = host.rvLoad('nop\n  addd a0, a0, a0\n', level());
+    const r = await host.rvLoad('nop\n  addd a0, a0, a0\n', level());
     expect(r.ok).toBe(false);
     const d = r.diagnostics[0]!;
     expect(d).toMatchObject({ file: 'main.s', line: 2, column: 3, endLine: 2, severity: 'error' });
     expect(d.endColumn).toBeGreaterThan(d.column);
-    const lib = host.rvLoad('call f\nebreak', level({ library: [{ name: 'lib.s', text: '.globl f\nf: bogus\n' }] }));
+    const lib = await host.rvLoad('call f\nebreak', level({ library: [{ name: 'lib.s', text: '.globl f\nf: bogus\n' }] }));
     expect(lib.ok).toBe(false);
     expect(lib.diagnostics[0]).toMatchObject({ file: 'lib.s', line: 2 });
   });
 
-  it('rvLoad returns symbols and the entry; the state starts at the entry with sp at top of RAM', () => {
+  it('rvLoad returns symbols and the entry; the state starts at the entry with sp at top of RAM', async () => {
     const { host, last } = makeHost();
-    const r = host.rvLoad(SUM, level({ ramSize: 64 * 1024 }));
+    const r = await host.rvLoad(SUM, level({ ramSize: 64 * 1024 }));
     expect(r.ok).toBe(true);
     expect(r.entry).toBe(0x80000000);
     expect(r.symbols).toEqual(expect.arrayContaining([{ name: '_start', addr: 0x80000000 }, { name: 'loop', addr: 0x8000000c }]));
@@ -87,9 +87,9 @@ describe('RvHost (RvApi through SimHost)', () => {
     expect(s.csrs).toMatchObject({ mstatus: 0, mtvec: 0, mepc: 0, mcause: 0, mtval: 0, mie: 0, mip: 0, satp: 0 });
   });
 
-  it('runs to exit and reports the exit code', () => {
+  it('runs to exit and reports the exit code', async () => {
     const { host, pump, last, snaps } = makeHost();
-    host.rvLoad(SUM, level());
+    await host.rvLoad(SUM, level());
     host.rvRun();
     expect(snaps.some((x) => x.state.running)).toBe(true);
     pump();
@@ -107,9 +107,9 @@ describe('RvHost (RvApi through SimHost)', () => {
     expect(last().state.exitCode).toBeUndefined();
   });
 
-  it('stops at a breakpoint by line, then continues to the next hit', () => {
+  it('stops at a breakpoint by line, then continues to the next hit', async () => {
     const { host, pump, last } = makeHost();
-    host.rvLoad(SUM, level());
+    await host.rvLoad(SUM, level());
     host.rvSetBreakpoints([7]);
     host.rvRun();
     pump();
@@ -125,9 +125,9 @@ describe('RvHost (RvApi through SimHost)', () => {
     expect(last().state.reason).toBe('exit');
   });
 
-  it('a breakpoint on a comment line breaks at the next line with code', () => {
+  it('a breakpoint on a comment line breaks at the next line with code', async () => {
     const { host, pump, last } = makeHost();
-    host.rvLoad('# start\nnop\nli a0, 1\nebreak', level());
+    await host.rvLoad('# start\nnop\nli a0, 1\nebreak', level());
     host.rvSetBreakpoints([1]);
     host.rvRun();
     pump();
@@ -140,9 +140,9 @@ describe('RvHost (RvApi through SimHost)', () => {
     expect(last().state).toMatchObject({ reason: 'breakpoint', line: 3 });
   });
 
-  it('rvStep executes n instructions; rvStepLine moves to the next source line', () => {
+  it('rvStep executes n instructions; rvStepLine moves to the next source line', async () => {
     const { host, last } = makeHost();
-    host.rvLoad('_start:\n  li a0, 0x12345678\n  li a1, 2\n  call f\n  ebreak\nf:\n  addi a1, a1, 1\n  ret\n', level());
+    await host.rvLoad('_start:\n  li a0, 0x12345678\n  li a1, 2\n  call f\n  ebreak\nf:\n  addi a1, a1, 1\n  ret\n', level());
     host.rvStep(1); // li with a large value is two instructions: still on line 2
     expect(last().state).toMatchObject({ reason: 'step', line: 2 });
     host.rvStepLine();
@@ -161,9 +161,9 @@ describe('RvHost (RvApi through SimHost)', () => {
     expect(last().state.reason).toBe('ebreak');
   });
 
-  it('E-SIM-10: pause works during an infinite loop', () => {
+  it('E-SIM-10: pause works during an infinite loop', async () => {
     const { host, pump, last, queue } = makeHost();
-    host.rvLoad('li a0, 1\nloop: addi a0, a0, 1\nj loop', level());
+    await host.rvLoad('li a0, 1\nloop: addi a0, a0, 1\nj loop', level());
     host.rvRun();
     expect(pump(5)).toBe(5);
     expect(queue.length).toBe(1); // still scheduled: never blocks
@@ -176,9 +176,9 @@ describe('RvHost (RvApi through SimHost)', () => {
     expect([2, 3]).toContain(s.line);
   });
 
-  it('step-line on a line that loops forever can be paused', () => {
+  it('step-line on a line that loops forever can be paused', async () => {
     const { host, pump, last } = makeHost();
-    host.rvLoad('loop: j loop', level());
+    await host.rvLoad('loop: j loop', level());
     host.rvStepLine();
     pump(3);
     expect(last().state.running).toBe(true);
@@ -186,7 +186,7 @@ describe('RvHost (RvApi through SimHost)', () => {
     expect(last().state.reason).toBe('paused');
   });
 
-  it('echoes UART input; wfi waits and input resumes the run', () => {
+  it('echoes UART input; wfi waits and input resumes the run', async () => {
     const src = `
 .equ UART, 0x10000000
 _start:
@@ -215,7 +215,7 @@ done:
   ebreak
 `;
     const { host, pump, last } = makeHost();
-    expect(host.rvLoad(src, level()).ok).toBe(true);
+    expect((await host.rvLoad(src, level())).ok).toBe(true);
     host.rvRun();
     pump();
     // Parked in wfi: pc already points at the next instruction.
@@ -230,9 +230,9 @@ done:
     expect(last().state.reason).toBe('ebreak');
   });
 
-  it('an unhandled trap stops with a plain-English message', () => {
+  it('an unhandled trap stops with a plain-English message', async () => {
     const { host, pump, last } = makeHost();
-    host.rvLoad('nop\n.word 0xffffffff\n', level());
+    await host.rvLoad('nop\n.word 0xffffffff\n', level());
     host.rvRun();
     pump();
     const s = last().state;
@@ -242,7 +242,7 @@ done:
     expect(s.pc).toBe(0x80000004);
   });
 
-  it('framebuffer: pixels + RGBA palette, fbVersion bumps on writes; null without the device', () => {
+  it('framebuffer: pixels + RGBA palette, fbVersion bumps on writes; null without the device', async () => {
     const src = `
   li t0, 0x20000000
   li t1, 9
@@ -253,9 +253,9 @@ done:
   sw t1, 0(t0)       # palette entry 0
   ebreak`;
     const { host, last } = makeHost();
-    host.rvLoad(src, level());
+    await host.rvLoad(src, level());
     expect(host.rvFramebuffer()).toBeNull();
-    host.rvLoad(src, level({ devices: ['uart', 'framebuffer'] }));
+    await host.rvLoad(src, level({ devices: ['uart', 'framebuffer'] }));
     const v0 = last().fbVersion;
     host.rvStep(2);
     expect(last().fbVersion).toBe(v0);
@@ -273,21 +273,21 @@ done:
     expect(host.rvFramebuffer()!.palette[0]).toBe(0x112233ff);
   });
 
-  it('rvMemory reads RAM and returns zeros for device windows', () => {
+  it('rvMemory reads RAM and returns zeros for device windows', async () => {
     const { host } = makeHost();
-    host.rvLoad('ebreak\n.data\nv: .word 0x11223344', level());
+    await host.rvLoad('ebreak\n.data\nv: .word 0x11223344', level());
     const ram = host.rvMemory(0x80000004, 4);
     expect(Array.from(ram)).toEqual([0x44, 0x33, 0x22, 0x11]);
     expect(Array.from(host.rvMemory(0x10000000, 4))).toEqual([0, 0, 0, 0]);
   });
 
-  it('applies the first riscv test setup to the debug machine', () => {
+  it('applies the first riscv test setup to the debug machine', async () => {
     const { host, last } = makeHost();
-    host.rvLoad('ebreak', level({}, [{ kind: 'riscv', setup: { regs: { a0: 5 } }, expect: {} }]));
+    await host.rvLoad('ebreak', level({}, [{ kind: 'riscv', setup: { regs: { a0: 5 } }, expect: {} }]));
     expect(last().state.regs[10]).toBe(5);
   });
 
-  it('the uart tail keeps the last 64 KiB', () => {
+  it('the uart tail keeps the last 64 KiB', async () => {
     const { host, pump, last } = makeHost();
     const src = `
   li s0, 0x10000000
@@ -299,7 +299,7 @@ done:
   li t1, 66
   sb t1, 0(s0)
   ebreak`;
-    host.rvLoad(src, level());
+    await host.rvLoad(src, level());
     host.rvRun();
     pump();
     expect(last().uart.length).toBe(64 * 1024);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LEVELS } from './index';
+import { LEVELS } from './full';
 import { allPass, pendingReason } from '../solutions/harness';
 
 const playable = LEVELS.filter((l) => l.tests.length > 0);

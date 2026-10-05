@@ -11,6 +11,20 @@ const SIM_PACKAGES = 'packages/{sim-logic,det,rv32,asm,cc,tensor,rv-check}/src/*
 
 const banned = (names, message) => names.map((name) => ({ name, message }));
 
+/** Globals simulation packages may not use; `allow` lifts single names for a file-level exception. */
+const simGlobals = (allow = []) =>
+  [
+    ...banned(
+      ['window', 'document', 'navigator', 'location', 'localStorage', 'sessionStorage', 'indexedDB'],
+      'Simulation packages must not touch the DOM or browser storage.',
+    ),
+    ...banned(['fetch', 'XMLHttpRequest', 'WebSocket', 'EventSource'], 'Simulation packages must not use the network.'),
+    ...banned(
+      ['performance', 'setTimeout', 'setInterval', 'setImmediate', 'requestAnimationFrame'],
+      'Simulation must be deterministic: no clocks or timers.',
+    ),
+  ].filter((entry) => !allow.includes(entry.name));
+
 export default tseslint.config(
   { ignores: ['**/dist/**', '**/node_modules/**', '**/.turbo/**', '**/coverage/**'] },
   js.configs.recommended,
@@ -23,29 +37,7 @@ export default tseslint.config(
   {
     files: [SIM_PACKAGES],
     rules: {
-      'no-restricted-globals': [
-        'error',
-        ...banned(
-          [
-            'window',
-            'document',
-            'navigator',
-            'location',
-            'localStorage',
-            'sessionStorage',
-            'indexedDB',
-          ],
-          'Simulation packages must not touch the DOM or browser storage.',
-        ),
-        ...banned(
-          ['fetch', 'XMLHttpRequest', 'WebSocket', 'EventSource'],
-          'Simulation packages must not use the network.',
-        ),
-        ...banned(
-          ['performance', 'setTimeout', 'setInterval', 'setImmediate', 'requestAnimationFrame'],
-          'Simulation must be deterministic: no clocks or timers.',
-        ),
-      ],
+      'no-restricted-globals': ['error', ...simGlobals()],
       'no-restricted-properties': [
         'error',
         { object: 'Date', property: 'now', message: 'Simulation must be deterministic.' },
@@ -81,6 +73,12 @@ export default tseslint.config(
         },
       ],
     },
+  },
+  {
+    // The WebGPU backend is the one tensor file allowed to read navigator.gpu
+    // (docs/plan.md "ML compute"); everything else in tensor stays pure.
+    files: ['packages/tensor/src/backend/webgpu.ts'],
+    rules: { 'no-restricted-globals': ['error', ...simGlobals(['navigator'])] },
   },
   {
     // Tests run only in Node and may compare against node:crypto and friends.

@@ -21,6 +21,46 @@ export const WorkspaceSettings = z.object({
 });
 export type WorkspaceSettings = z.infer<typeof WorkspaceSettings>;
 
+const AchId = z.string().min(1).max(64);
+const IdList = z.array(AchId).max(2000);
+
+/**
+ * Achievements earned on this device (local only, ADR-008). Additive and
+ * optional, so files from before achievements still load and no version bump
+ * is needed. Ids unknown to this app are kept (a newer app may know them).
+ * Import merges: union of unlocks with the earliest timestamp, union of id
+ * lists, max of counters (apps/web/src/achievements/engine.ts).
+ */
+export const WorkspaceAchievements = z.object({
+  /** Unlocked achievement id -> when it was first earned. */
+  unlocked: z
+    .record(AchId, z.object({ at: z.string().datetime() }))
+    .refine((o) => Object.keys(o).length <= 1000, 'Too many achievements')
+    .default({}),
+  /** Facts the rules need that progress does not hold. */
+  stats: z
+    .object({
+      /** Test runs started, all levels. */
+      runs: z.number().int().min(0).optional(),
+      /** Levels with at least one finished test run. */
+      tried: IdList.optional(),
+      /** Levels whose very first test run passed. */
+      firstPass: IdList.optional(),
+      /** Levels where a hint was opened. */
+      hinted: IdList.optional(),
+      /** Levels whose solution was shown (ADR-007): no skill achievements there. */
+      revealed: IdList.optional(),
+      /** Levels first completed on the first test run. */
+      clean: IdList.optional(),
+      /** Levels first completed without opening a hint. */
+      noHints: IdList.optional(),
+      /** Levels solved with no more parts than the reference solution. */
+      minimal: IdList.optional(),
+    })
+    .default({}),
+});
+export type WorkspaceAchievements = z.infer<typeof WorkspaceAchievements>;
+
 export const WorkspaceV1 = z
   .object({
     /** Legacy 'ground-up/workspace' is accepted and normalized. */
@@ -33,6 +73,8 @@ export const WorkspaceV1 = z
     saves: z.record(z.string().min(1).max(64), Save),
     chips: ChipMap.default({}),
     settings: WorkspaceSettings.optional(),
+    /** Optional and additive: older files have none. */
+    achievements: WorkspaceAchievements.optional(),
   })
   .superRefine((w, ctx) => {
     for (const [id, s] of Object.entries(w.saves)) {

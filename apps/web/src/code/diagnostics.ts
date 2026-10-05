@@ -14,6 +14,14 @@ import type { Text } from '@codemirror/state';
 /** The player's file name, as diagnostics and the debugger report it. */
 export const MAIN_FILE = 'main.s';
 
+/** The player's file on C levels. */
+export const C_MAIN_FILE = 'main.c';
+
+/** The player's file for a level: main.c on C levels, else main.s. */
+export function mainFileFor(level: Pick<Level, 'code'> | null | undefined): string {
+  return level?.code?.language === 'c' ? C_MAIN_FILE : MAIN_FILE;
+}
+
 /** 1-based line and column of a UTF-16 offset. */
 export function lineCol(text: string, offset: number): { line: number; column: number } {
   const o = Math.max(0, Math.min(offset, text.length));
@@ -72,10 +80,11 @@ function offsetOf(doc: Text, line: number, column: number): number {
  * Store diagnostics for one file to CodeMirror lint diagnostics. An empty
  * range grows to the rest of the word (or the line) so the squiggle shows.
  */
-export function toCmDiagnostics(diags: readonly SourceDiagnostic[], doc: Text, file: string): CmDiagnostic[] {
+export function toCmDiagnostics(diags: readonly SourceDiagnostic[], doc: Text, file: string, mainFile: string = MAIN_FILE): CmDiagnostic[] {
   const out: CmDiagnostic[] = [];
+  const source = /\.[ch]$/i.test(file) ? 'cc' : 'asm';
   for (const d of diags) {
-    if ((d.file || MAIN_FILE) !== file) continue;
+    if ((d.file || mainFile) !== file) continue;
     let from = offsetOf(doc, d.line, d.column);
     let to = Math.max(from, offsetOf(doc, d.endLine, d.endColumn));
     if (to === from) {
@@ -90,7 +99,7 @@ export function toCmDiagnostics(diags: readonly SourceDiagnostic[], doc: Text, f
         if (from >= to) from = to - 1;
       }
     }
-    out.push({ from, to, severity: d.severity, message: d.message, source: 'asm' });
+    out.push({ from, to, severity: d.severity, message: d.message, source });
   }
   return out;
 }

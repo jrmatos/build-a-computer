@@ -1,0 +1,5 @@
+{
+ "sourceSha256": "fb5b1c21c48b277e3ef098245bd3b35f139e155b01fefe77108f1c8c0ca8334e",
+ "uart": "sum = 15\nsum0 = 0\nsum10 = 55\nsumll = 0x0000010000000002\nsumll odd = 0x0000000100000006\nfwd = 100\nfmt = 7290\nmany = 42\n",
+ "exitCode": 0
+}

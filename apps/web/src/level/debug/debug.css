@@ -1,0 +1,505 @@
+/* Case debugger (bottom dock tab). Colors come from the app's theme tokens, so both themes work. */
+.dbg {
+  --dbg-pass: var(--success);
+  --dbg-fail: var(--danger);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  outline: none;
+  font-size: 12.5px;
+}
+.dbg:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
+}
+.dbg-muted {
+  color: var(--text-muted);
+}
+.dbg-small {
+  font-size: 11.5px;
+}
+.dbg-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.dbg-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.dbg-bar {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+.dbg-kind {
+  white-space: nowrap;
+}
+.dbg-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+}
+.dbg-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 4px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.dbg-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 11.5px;
+  background: var(--hover);
+  color: var(--text-muted);
+}
+.dbg-badge.pass {
+  background: color-mix(in srgb, var(--dbg-pass) 16%, transparent);
+  color: var(--dbg-pass);
+}
+.dbg-badge.fail {
+  background: color-mix(in srgb, var(--dbg-fail) 16%, transparent);
+  color: var(--dbg-fail);
+}
+.dbg-ico.pass {
+  color: var(--dbg-pass);
+}
+.dbg-ico.fail {
+  color: var(--dbg-fail);
+}
+
+.dbg-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  overflow: auto;
+}
+.dbg-col {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dbg-keys {
+  flex: none;
+  margin: 4px 0 0;
+  font-size: 11px;
+}
+
+/* Why */
+.dbg-reason {
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  border-left: 3px solid var(--dbg-pass);
+  background: color-mix(in srgb, var(--dbg-pass) 8%, transparent);
+  line-height: 1.45;
+}
+.dbg-reason.fail {
+  border-left-color: var(--dbg-fail);
+  background: color-mix(in srgb, var(--dbg-fail) 8%, transparent);
+}
+.dbg-reason p {
+  margin: 0;
+}
+.dbg-reason p + p {
+  margin-top: 4px;
+}
+.dbg-why-line.fail {
+  color: var(--dbg-fail);
+}
+
+/* Values table */
+.dbg-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.dbg-table th,
+.dbg-table td {
+  text-align: left;
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--island-border);
+  font-weight: 400;
+}
+.dbg-table thead th {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+.dbg-table tbody th[scope='row'] {
+  font-weight: 600;
+}
+.dbg-group th {
+  color: var(--text-faint);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding-top: 6px;
+}
+.dbg-out.is-wrong .dbg-actual,
+.dbg-out.is-unknown .dbg-actual {
+  color: var(--dbg-fail);
+  font-weight: 600;
+}
+.dbg-out.is-focus {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.dbg-mark {
+  width: 18px;
+}
+.dbg-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.dbg-link:hover {
+  color: var(--accent-strong);
+}
+.dbg-bits td {
+  border-bottom: 1px solid var(--island-border);
+  padding-bottom: 6px;
+}
+.dbg-bitrow {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.dbg-bitrow > span:first-child {
+  width: 56px;
+  flex: none;
+  font-size: 11px;
+}
+.dbg-bit {
+  display: inline-block;
+  min-width: 0.7em;
+  text-align: center;
+  border-radius: 2px;
+}
+.dbg-bit.gap {
+  margin-right: 0.35em;
+}
+.dbg-bit.want {
+  background: color-mix(in srgb, var(--dbg-pass) 22%, transparent);
+  color: var(--text);
+}
+.dbg-bit.bad {
+  background: color-mix(in srgb, var(--dbg-fail) 26%, transparent);
+  color: var(--dbg-fail);
+  font-weight: 700;
+}
+
+/* Timeline */
+.dbg-transport .dk-btn.icon {
+  width: 26px;
+  height: 26px;
+  font-size: 13px;
+}
+.dbg-frame {
+  margin-left: 4px;
+  font-size: 12px;
+}
+.dbg-scrub {
+  position: relative;
+  padding-top: 12px;
+}
+.dbg-scrub input[type='range'] {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.dbg-marks {
+  position: absolute;
+  inset: 0 8px auto 8px;
+  height: 12px;
+}
+.dbg-markpin {
+  position: absolute;
+  top: 1px;
+  width: 9px;
+  height: 9px;
+  margin-left: -4.5px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--island);
+  background: var(--dbg-pass);
+  cursor: pointer;
+}
+.dbg-markpin.fail {
+  background: var(--dbg-fail);
+}
+.dbg-markpin.is-focus {
+  box-shadow: 0 0 0 1.5px var(--text);
+}
+.dbg-markpin.is-current {
+  transform: scale(1.35);
+}
+.dbg-markpin:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.dbg-lanes {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+.dbg-lane-names {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+.dbg-lane-names span {
+  display: flex;
+  align-items: center;
+}
+.dbg-lanes svg {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--text) 3%, transparent);
+}
+.dbg-lane {
+  fill: none;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.dbg-lane.in {
+  stroke: var(--text-muted);
+}
+.dbg-lane.out {
+  stroke: var(--accent);
+}
+.dbg-bus {
+  fill: color-mix(in srgb, var(--text-muted) 10%, transparent);
+  stroke: var(--text-muted);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.dbg-bus.out {
+  fill: color-mix(in srgb, var(--accent) 12%, transparent);
+  stroke: var(--accent);
+}
+.dbg-bus-text {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  fill: var(--text);
+}
+.dbg-lane-check {
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+  vector-effect: non-scaling-stroke;
+}
+.dbg-lane-check.pass {
+  stroke: var(--dbg-pass);
+}
+.dbg-lane-check.fail {
+  stroke: var(--dbg-fail);
+}
+.dbg-cursor {
+  stroke: var(--text);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.dbg-checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 160px;
+  overflow: auto;
+}
+.dbg-checkbtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  padding: 2px 6px;
+  text-align: left;
+  cursor: pointer;
+}
+.dbg-checkbtn:hover {
+  background: var(--hover);
+}
+.dbg-checkbtn.is-current {
+  background: var(--active);
+}
+.dbg-checkbtn.is-focus {
+  border-color: var(--island-border);
+}
+.dbg-checkbtn.fail .dbg-checkvals {
+  color: var(--dbg-fail);
+}
+.dbg-checkn {
+  width: 52px;
+  flex: none;
+  color: var(--text-muted);
+}
+.dbg-checkvals {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Path */
+.dbg-outs {
+  gap: 4px;
+}
+.dbg-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--island-border);
+  border-radius: 999px;
+  background: var(--island);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.dbg-chip.is-focus {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.dbg-parts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 2px 6px;
+  max-height: 120px;
+  overflow: auto;
+}
+.dbg-part {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  padding: 2px 6px;
+  cursor: pointer;
+  text-align: left;
+}
+.dbg-part:hover {
+  background: var(--hover);
+}
+.dbg-part.is-selected {
+  background: var(--active);
+  color: var(--accent-strong);
+}
+.dbg-part span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dbg-selected h4 {
+  margin: 4px 0 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.dbg-selected p {
+  margin: 0 0 4px;
+}
+.dbg-pins {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 2px 10px;
+  margin: 0;
+}
+.dbg-pins div {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+.dbg-pins dt {
+  margin: 0;
+}
+.dbg-pins dd {
+  margin: 0;
+}
+.dbg-pins .out dt {
+  font-weight: 600;
+}
+
+.dbg-empty {
+  max-width: 560px;
+}
+.dbg-empty h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+.dbg-empty p {
+  margin: 0 0 10px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.dbg-checkbtn:focus-visible,
+.dbg-chip:focus-visible,
+.dbg-part:focus-visible,
+.dbg-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* "Run tests" + "Debug" row in the level panel */
+.dbg-run-row {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+.dbg-run-row > .lv-btn.block {
+  flex: 1;
+  min-width: 0;
+}
+.dbg-run-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.dbg-run-btn.is-fail {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+}
+
+.dbg-other-check {
+  margin: 0;
+}

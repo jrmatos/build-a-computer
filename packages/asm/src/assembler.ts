@@ -1258,7 +1258,10 @@ class Assembler {
         this.cur = s;
         this.emitBytes(codeFill(s.size, s.align - (s.size % s.align)));
       }
-      if (s.size === 0 && s.name !== '.text') continue;
+      // An empty section is dropped unless a label lives in it (e.g. libc's
+      // `_end` at the end of .bss): the linker must still place that label.
+      const labelled = [...this.symbols.values()].some((y) => y.section === s.name);
+      if (s.size === 0 && s.name !== '.text' && !labelled) continue;
       sections.push({
         name: s.name,
         group: s.group,

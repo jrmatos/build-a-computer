@@ -5,20 +5,42 @@
  * slices so pause always works (E-SIM-10).
  */
 
-import { type Diagnostic, type LinkResult, lineForAddress } from '@build-a-computer/asm';
+import type { Diagnostic } from '@build-a-computer/asm';
 import {
-  MAIN_FILE,
+  type Program,
+  type RiscvCaseResult,
+  type RiscvDebugSetup,
+  type RunEnd,
   type RunSetup,
   type StopEvent,
   SetupError,
+  applyInput,
+  asmToProgramDiagnostic,
   buildProgram,
+  checkExpectRegs,
+  clipCheck,
   createMachine,
+  judgeRiscv,
+  LINE_HITS_MAX_STEPS,
+  lineHits,
+  machineReadout,
+  riscvChecks,
+  riscvDebugSetup,
   runMachine,
   trapMessage,
 } from '@build-a-computer/rv-check';
 import type { Machine } from '@build-a-computer/rv32';
 import type { Level } from '@build-a-computer/schema';
-import type { RvApi, RvLoadResult, RvSnapshot, RvState, RvStopReason, SourceDiagnostic } from './protocol';
+import type {
+  RvApi,
+  RvLoadOptions,
+  RvLoadResult,
+  RvSnapshot,
+  RvState,
+  RvStopReason,
+  RvTestView,
+  SourceDiagnostic,
+} from './protocol';
 
 const SLICE_MS = 8;
 const SNAPSHOT_MS = 1000 / 60;
@@ -32,44 +54,34 @@ const MAX_SYNC_STEPS = 1_000_000;
 const UART_TAIL = 64 * 1024;
 /** Most bytes one rvMemory call returns. */
 const MAX_MEMORY_READ = 1024 * 1024;
+/** Most instructions run from `_start` to `main` (C levels, stopAtMain). */
+const MAX_TO_MAIN = 5_000_000;
 
 const MODES = { 3: 'M', 1: 'S', 0: 'U' } as const;
 
-/** 1-based line/column of a 0-based character offset. */
-function position(text: string, offset: number): { line: number; column: number } {
-  let line = 1;
-  let lineStart = 0;
-  const end = Math.min(offset, text.length);
-  for (let i = 0; i < end; i++) {
-    if (text.charCodeAt(i) === 10) {
-      line++;
-      lineStart = i + 1;
-    }
-  }
-  return { line, column: end - lineStart + 1 };
-}
-
 /** Convert an assembler diagnostic to the protocol's 1-based range form. */
 export function toSourceDiagnostic(d: Diagnostic, text: string | undefined): SourceDiagnostic {
-  const end = text !== undefined && d.to > d.from ? position(text, d.to) : { line: d.line, column: d.col + 1 };
-  return {
-    line: d.line,
-    column: d.col,
-    endLine: end.line,
-    endColumn: end.column,
-    message: d.message,
-    severity: d.severity,
-    file: d.file,
-  };
+  return asmToProgramDiagnostic(d, text);
 }
 
 type Goal = { kind: 'run' } | { kind: 'line'; from: number | undefined };
 
 export class RvHost implements RvApi {
   private level: Level | null = null;
-  private link: LinkResult | null = null;
+  private program: Program | null = null;
   private m: Machine | null = null;
   private setup: RunSetup = {};
+  /** "Debug this test": the test whose setup, input and expectations the machine uses. */
+  private debug: RiscvDebugSetup | null = null;
+  private stopAtMain = false;
+  /** The debugged test's verdict once the program ended (cleared when it runs again). */
+  private verdict: RiscvCaseResult | undefined;
+  /** How often each line of the player's file ran, for the verdict (replayed when it ended). */
+  private hits: { line: number; count: number }[] | undefined;
+  /** The debugged test's step limit was reported (running on past it is allowed). */
+  private budgetReported = false;
+  /** Framebuffer hash at the last stop (hashing 64,000 bytes per frame while running is wasteful). */
+  private fbSha: string | undefined;
   private listener: ((s: RvSnapshot) => void) | null = null;
   private bpLines: number[] = [];
   private bpAddrs = new Set<number>();
@@ -106,30 +118,52 @@ export class RvHost implements RvApi {
   }
 
   /**
-   * Assemble + link, then build a fresh machine. The machine gets the level's
-   * RAM size and the first 'riscv' test's setup (registers and memory pokes,
-   * not input) so the debugger starts where test 1 starts. The level's device
-   * list only affects which panels the UI shows; the machine has the full map.
+   * Build the program (assembly, or C compiled with libc) and a fresh machine.
+   * The machine gets the level's RAM size and the first 'riscv' test's setup
+   * (registers, memory pokes and disk sectors, not input) so the debugger
+   * starts where test 1 starts. The level's device list only affects which
+   * panels the UI shows (and whether there is a disk); the machine has the
+   * full map. Diagnostics, lines and breakpoints are in the player's file:
+   * `main.c` lines for C levels.
+   *
+   * With `opts.test` ("Debug this test") the machine gets that test's setup,
+   * input (UART and keyboard) and disk, every snapshot carries the test's
+   * expectations against the machine (`RvSnapshot.test`), and the verdict is
+   * judged as the checker would when the program ends. `opts.stopAtMain`
+   * (C levels) runs the startup code and stops at `main`. Reset keeps both.
    */
-  rvLoad(source: string, level: Level): RvLoadResult {
+  rvLoad(source: string, level: Level, opts: RvLoadOptions = {}): RvLoadResult {
     this.stopTimer();
     this.level = level;
-    const texts = new Map<string, string>([[MAIN_FILE, source], ...(level.code?.library ?? []).map((f) => [f.name, f.text] as [string, string])]);
-    const link = buildProgram(source, level);
-    const diagnostics = link.diagnostics.map((d) => toSourceDiagnostic(d, texts.get(d.file)));
-    const first = level.tests.find((t) => t.kind === 'riscv');
-    this.setup = first?.kind === 'riscv' ? (first.setup ?? {}) : {};
-    this.link = link.ok ? link : null;
+    const program = buildProgram(source, level);
+    const diagnostics: SourceDiagnostic[] = program.diagnostics.map((d) => ({ ...d }));
+    this.debug = opts.test !== undefined ? (riscvDebugSetup(level, opts.test) ?? null) : null;
+    this.stopAtMain = !!opts.stopAtMain;
+    if (this.debug) this.setup = this.debug.setup;
+    else {
+      const first = level.tests.find((t) => t.kind === 'riscv');
+      this.setup = first?.kind === 'riscv' ? (first.setup ?? {}) : {};
+    }
+    this.program = program.ok ? program : null;
     this.m = null;
-    let ok = link.ok;
-    if (link.ok) {
+    let ok = program.ok;
+    if (program.ok) {
       try {
+        if (this.debug) checkExpectRegs(this.debug.test.expect);
         this.resetMachine();
       } catch (e) {
         if (!(e instanceof SetupError)) throw e;
         ok = false;
-        this.link = null;
-        diagnostics.push({ line: 1, column: 1, endLine: 1, endColumn: 1, message: e.message, severity: 'error', file: MAIN_FILE });
+        this.program = null;
+        diagnostics.push({
+          line: 1,
+          column: 1,
+          endLine: 1,
+          endColumn: 1,
+          message: e.message,
+          severity: 'error',
+          file: program.mainFile,
+        });
       }
     }
     if (!this.m) this.clearRunState();
@@ -138,31 +172,25 @@ export class RvHost implements RvApi {
     return {
       ok,
       diagnostics,
-      symbols: link.ok ? link.symbols.filter((s) => s.kind === 'label').map((s) => ({ name: s.name, addr: s.address })) : [],
-      entry: link.entry,
+      symbols: program.ok ? program.symbols.map((s) => ({ ...s })) : [],
+      entry: program.entry,
+      ...(this.debug ? { test: { index: this.debug.index, name: this.debug.name } } : {}),
     };
   }
 
   rvReset(): void {
     this.stopTimer();
-    if (this.link && this.level) this.resetMachine();
+    if (this.program && this.level) this.resetMachine();
     this.emit(true);
   }
 
   rvSetBreakpoints(lines: number[]): void {
     this.bpLines = [...lines];
     this.bpAddrs.clear();
-    const link = this.link;
+    const link = this.program;
     if (!link) return;
-    for (const line of lines) {
-      // Lines that hold no code (comments, labels) break on the next line with code.
-      const at = link.sourceMap
-        .filter((e) => e.file === MAIN_FILE && e.kind === 'code' && e.line >= line)
-        .sort((a, b) => a.line - b.line || a.address - b.address)[0];
-      if (!at) continue;
-      for (const e of link.sourceMap)
-        if (e.file === MAIN_FILE && e.kind === 'code' && e.line === at.line) this.bpAddrs.add(e.address >>> 0);
-    }
+    // Lines that hold no code (comments, labels, blank) break on the next line with code.
+    for (const line of lines) for (const a of link.breakpointAddresses(line)) this.bpAddrs.add(a);
   }
 
   rvRun(): void {
@@ -171,9 +199,9 @@ export class RvHost implements RvApi {
 
   rvStepLine(): void {
     const m = this.m;
-    if (!m || !this.link) return;
-    const e = lineForAddress(this.link.sourceMap, m.hart.pc);
-    this.start({ kind: 'line', from: e?.file === MAIN_FILE ? e.line : undefined });
+    if (!m || !this.program) return;
+    const e = this.program.locate(m.hart.pc);
+    this.start({ kind: 'line', from: e?.file === this.program.mainFile ? e.line : undefined });
   }
 
   rvPause(): void {
@@ -191,11 +219,13 @@ export class RvHost implements RvApi {
     this.goal = null;
     this.resumeOnInput = false;
     this.reason = undefined;
+    this.verdict = undefined;
+    this.hits = undefined;
     this.skipEbreak();
     const count = Math.max(0, Math.min(Math.floor(n), MAX_SYNC_STEPS));
     const ev = this.bpAddrs.size ? this.single(count, null, true) : this.bulk(count);
     if (ev !== 'continue' && ev !== 'done') this.onStop(ev);
-    else this.halt('step');
+    else if (!this.overBudget()) this.halt('step');
     this.emit(true);
   }
 
@@ -251,11 +281,17 @@ export class RvHost implements RvApi {
     this.decoder = new TextDecoder();
     this.fbDirty = false;
     this.fbVersion++;
+    this.verdict = undefined;
+    this.hits = undefined;
+    this.budgetReported = false;
+    this.fbSha = undefined;
   }
 
   private resetMachine(): void {
     this.clearRunState();
-    const m = createMachine(this.link!, this.level!, this.setup, { onUartTx: (b) => this.uartPending.push(b) });
+    const m = createMachine(this.program!, this.level!, this.setup, {
+      onUartTx: (b) => this.uartPending.push(b),
+    });
     // Cheap framebuffer change detection: flag any guest write to pixels or palette.
     for (const dev of [m.fbPixels, m.fbControl]) {
       const write = dev.write.bind(dev);
@@ -265,12 +301,31 @@ export class RvHost implements RvApi {
       };
     }
     this.m = m;
+    if (this.debug) applyInput(m, this.debug.input);
+    if (this.stopAtMain) this.runToMain();
+  }
+
+  /** C levels: run the startup code (crt0) up to the first instruction of `main`, then pause there. */
+  private runToMain(): void {
+    const m = this.m!;
+    const program = this.program!;
+    if (program.language !== 'c') return;
+    const main = program.symbols.find((s) => s.name === 'main');
+    if (!main || m.hart.pc === main.addr) return;
+    for (let i = 0; i < MAX_TO_MAIN; i++) {
+      const r = runMachine(m, 1);
+      if (r.stop) return this.onStop(r.stop);
+      if (r.reason === 'wfi') return this.onStop('wfi');
+      if (m.hart.pc >>> 0 === main.addr >>> 0) return this.halt('step');
+    }
   }
 
   private start(goal: Goal): void {
     if (!this.m || this.finished) return;
     this.goal = goal;
     this.reason = undefined;
+    this.verdict = undefined;
+    this.hits = undefined;
     this.resumeOnInput = false;
     this.skipEbreak();
     this.skipBreakpoint = true;
@@ -301,8 +356,11 @@ export class RvHost implements RvApi {
     if (ev === 'wfi') {
       this.halt('wfi');
       this.resumeOnInput = wasRunning;
+      // The test's input is queued before the first instruction: waiting with nothing pending fails it.
+      this.judge({ ended: 'wfi' });
       return;
     }
+    this.judge({ stop: ev });
     if (ev.kind === 'ebreak') {
       this.atEbreak = true;
       return this.halt('ebreak');
@@ -312,8 +370,34 @@ export class RvHost implements RvApi {
       this.exitCode = ev.code;
       return this.halt('exit');
     }
-    this.trap = { cause: ev.cause, tval: ev.tval, message: trapMessage(this.m!, this.link!, ev) };
+    this.trap = {
+      cause: ev.cause,
+      tval: ev.tval,
+      message: trapMessage(this.m!, this.program!, ev),
+    };
     this.halt('trap');
+  }
+
+  /** The debugged test's verdict for how the run ended (the checker's judgement on this machine). */
+  private judge(run: { stop?: StopEvent; ended?: RunEnd }): void {
+    if (!this.debug || !this.m || !this.program) return;
+    this.fbSha = undefined;
+    this.verdict = judgeRiscv(this.program, this.m, this.debug.test, { ...run, maxSteps: this.debug.maxSteps });
+    const steps = this.m.hart.cycles;
+    this.hits = steps <= LINE_HITS_MAX_STEPS ? lineHits(this.program, this.level!, this.setup, this.debug.input, steps) : undefined;
+  }
+
+  /**
+   * Past the debugged test's step limit the test would fail: pause once with
+   * that verdict (the player may run on). Returns true when it paused.
+   */
+  private overBudget(): boolean {
+    const d = this.debug;
+    if (!d || this.budgetReported || !this.m || this.m.hart.cycles < d.maxSteps) return false;
+    this.budgetReported = true;
+    this.halt('budget');
+    this.judge({ ended: 'steps' });
+    return true;
   }
 
   /**
@@ -321,6 +405,9 @@ export class RvHost implements RvApi {
    * the steps ran out, or what stopped the machine.
    */
   private bulk(count: number): StopEvent | 'wfi' | 'continue' {
+    // Stop exactly at the debugged test's step limit, as the checker does.
+    const d = this.debug;
+    if (d && !this.budgetReported) count = Math.max(1, Math.min(count, d.maxSteps - this.m!.hart.cycles));
     const r = runMachine(this.m!, count);
     if (r.stop) return r.stop;
     if (r.reason === 'wfi') return 'wfi';
@@ -332,17 +419,21 @@ export class RvHost implements RvApi {
    * and the step-line goal after each. `skipFirst` ignores a breakpoint on
    * the first instruction (resuming from it).
    */
-  private single(count: number, goal: Goal | null, skipFirst: boolean): StopEvent | 'wfi' | 'breakpoint' | 'step' | 'continue' | 'done' {
+  private single(
+    count: number,
+    goal: Goal | null,
+    skipFirst: boolean,
+  ): StopEvent | 'wfi' | 'breakpoint' | 'step' | 'continue' | 'done' {
     const m = this.m!;
-    const link = this.link!;
+    const link = this.program!;
     for (let i = 0; i < count; i++) {
       if (!(skipFirst && i === 0) && this.bpAddrs.has(m.hart.pc)) return 'breakpoint';
       const r = runMachine(m, 1);
       if (r.stop) return r.stop;
       if (r.reason === 'wfi') return 'wfi';
       if (goal?.kind === 'line') {
-        const e = lineForAddress(link.sourceMap, m.hart.pc);
-        if (e && e.file === MAIN_FILE && e.line !== goal.from) return 'step';
+        const e = link.locate(m.hart.pc);
+        if (e && e.file === link.mainFile && e.line !== goal.from) return 'step';
       }
     }
     return 'done';
@@ -361,9 +452,13 @@ export class RvHost implements RvApi {
         ev = this.single(SINGLE_BATCH, goal, this.skipBreakpoint);
       }
       this.skipBreakpoint = false;
-    } while ((ev === 'continue' || ev === 'done') && this.now() - start < SLICE_MS);
+    } while ((ev === 'continue' || ev === 'done') && this.now() - start < SLICE_MS && !this.atBudget());
     if (ev !== 'continue' && ev !== 'done') {
       this.onStop(ev);
+      this.emit(true);
+      return;
+    }
+    if (this.overBudget()) {
       this.emit(true);
       return;
     }
@@ -390,13 +485,49 @@ export class RvHost implements RvApi {
       this.fbDirty = false;
       this.fbVersion++;
     }
-    return { state: this.state(), uart: this.uartText, fbVersion: this.fbVersion };
+    const test = this.testView();
+    return { state: this.state(), uart: this.uartText, fbVersion: this.fbVersion, ...(test ? { test } : {}) };
+  }
+
+  private atBudget(): boolean {
+    const d = this.debug;
+    return !!d && !this.budgetReported && !!this.m && this.m.hart.cycles >= d.maxSteps;
+  }
+
+  /** The debugged test against the machine now. */
+  private testView(): RvTestView | undefined {
+    const d = this.debug;
+    if (!d) return undefined;
+    const view: RvTestView = { index: d.index, name: d.name, setup: d.setup, maxSteps: d.maxSteps, checks: [], ...(d.input ? { input: d.input } : {}) };
+    const m = this.m;
+    if (m) {
+      const r = machineReadout(m, this.exitCode ?? null);
+      const running = this.goal !== null;
+      const fb = r.framebufferSha256;
+      r.framebufferSha256 = () => (running ? (this.fbSha ?? '') : (this.fbSha ??= fb()));
+      try {
+        view.checks = riscvChecks(d.test.expect, r).map(clipCheck);
+      } catch (e) {
+        if (!(e instanceof SetupError)) throw e;
+      }
+    }
+    if (this.verdict) view.verdict = this.verdict;
+    if (this.verdict && this.hits) view.lineHits = this.hits;
+    return view;
   }
 
   private state(): RvState {
     const m = this.m;
     const running = this.goal !== null;
-    if (!m) return { pc: 0, regs: new Array<number>(32).fill(0), mode: 'M', instret: 0, running: false, csrs: {} };
+    if (!m)
+      return {
+        pc: 0,
+        regs: new Array<number>(32).fill(0),
+        mode: 'M',
+        instret: 0,
+        running: false,
+        csrs: {},
+      };
     const h = m.hart;
     const st: RvState = {
       pc: h.pc,
@@ -422,7 +553,7 @@ export class RvHost implements RvApi {
         stvec: h.stvec >>> 0,
       },
     };
-    const e = this.link ? lineForAddress(this.link.sourceMap, h.pc) : undefined;
+    const e = this.program?.locate(h.pc);
     if (e) {
       st.line = e.line;
       st.file = e.file;

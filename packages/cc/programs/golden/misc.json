@@ -1,0 +1,5 @@
+{
+ "sourceSha256": "7f7c1623a61c5c8c8e027f707b7bac890a5295abf03ef75f66a895bc78fb1304",
+ "uart": "offsetof = 816\nsizeof s = 24\nalignof = 88\nlist = 21\narr3 = 16\nenum = 56\ninline = 42\nvol = 7\nbeta\nrec = 3628800\nfib = 6765\nack = 9\neven = 11\nstmt expr = 25\ntypeof = 9\nn = 50\nabcdefAA\nstrlen = 7\ncopy me\nshadow = 3\nbool = 5\nbool2 = 1\n",
+ "exitCode": 120
+}

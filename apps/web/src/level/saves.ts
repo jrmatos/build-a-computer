@@ -51,13 +51,14 @@ export function makeSave(level: Level, board: Board, chips: ChipMap = {}, now = 
 
 /** The source a code level opens with: the save's, else the level's starter. Empty for board levels. */
 export function sourceFor(level: Level, save?: Pick<Save, 'source'> | null): string {
+  if (level.mode === 'js') return save?.source ?? level.js?.starter ?? '';
   if (level.mode !== 'code') return save?.source ?? '';
   return save?.source ?? level.code?.starter ?? '';
 }
 
-/** Source to store in a save: code levels only, so board saves stay unchanged. */
+/** Source to store in a save: code and js levels only, so board saves stay unchanged. */
 export function sourceToSave(level: Level, source: string): string | undefined {
-  return level.mode === 'code' ? source : undefined;
+  return level.mode === 'code' || level.mode === 'js' ? source : undefined;
 }
 
 /** Progress from storage, or null if it is unreadable or from a newer version. */

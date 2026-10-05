@@ -2,10 +2,11 @@ import { create } from 'zustand';
 import type { Level } from '@build-a-computer/schema';
 
 /** Bottom dock tabs, Turing Complete style. Board levels and code levels show different sets. */
-export const DOCK_TABS = ['waveform', 'diagnostics', 'memory', 'program', 'registers', 'console', 'screen', 'stack'] as const;
+export const DOCK_TABS = ['waveform', 'diagnostics', 'memory', 'program', 'registers', 'console', 'screen', 'stack', 'debug'] as const;
 export type DockTab = (typeof DOCK_TABS)[number];
 
-export const BOARD_TABS: readonly DockTab[] = ['waveform', 'diagnostics', 'memory', 'program'];
+/** 'debug' is the case debugger (level/debug): one test case replayed on the board. */
+export const BOARD_TABS: readonly DockTab[] = ['waveform', 'diagnostics', 'memory', 'program', 'debug'];
 
 /** Tabs for the level: registers, memory and call stack always; console and screen by device. */
 export function tabsFor(level: Level | null): readonly DockTab[] {

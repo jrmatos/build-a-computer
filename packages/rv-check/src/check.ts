@@ -1,29 +1,40 @@
 /**
- * RV-07: run one 'riscv' test. Assemble + link the player's source with the
- * level's library files, run it on the RV32 machine until it stops, and
+ * RV-07: run one 'riscv' test. Build the player's source (assembly or C) with
+ * the level's library files (and libc for C levels), run it on the RV32 machine until it stops, and
  * compare registers, memory, UART output, exit code and framebuffer.
  */
 
-import { sha256 } from '@build-a-computer/det';
 import type { Machine } from '@build-a-computer/rv32';
 import type { Level, TestSpec } from '@build-a-computer/schema';
 import type { CaseResult } from '@build-a-computer/sim-logic';
+import { type Program, buildProgram } from './build';
+import {
+  type RvCheck,
+  applyInput,
+  checkExpectRegs,
+  checkProblem,
+  clipCheck,
+  machineReadout,
+  riscvChecks,
+} from './diff';
 import {
   type StopEvent,
   SetupError,
-  buildProgram,
   createMachine,
   formatDiag,
-  hex32,
-  parseHex,
   regIndex,
   runMachine,
-  toHex,
   trapMessage,
   where,
 } from './machine';
 
 export type RiscvTest = Extract<TestSpec, { kind: 'riscv' }>;
+
+/** A 'riscv' case result with the expected-vs-actual details of every check. */
+export interface RiscvCaseResult extends CaseResult {
+  /** Every expectation with its value at the end of the run (UART cut around the first difference). Absent when the program did not build or set up. */
+  checks?: RvCheck[];
+}
 
 export interface RiscvCheckOptions {
   /** Wall-clock budget in ms; time comes from `now` (no clock APIs in this package). */
@@ -38,43 +49,27 @@ const MAX_ERRORS = 5;
 
 const fmt = (n: number): string => n.toLocaleString('en-US');
 
-/** "4294967295 (-1)" for values with the top bit set, else "55". */
-const showReg = (v: number): string => (v >= 0x80000000 ? `${v} (${v | 0})` : String(v));
-
-/** Quote a string for a message, starting near `from` and cut at `max` characters. */
-function snippet(s: string, from: number, max = 40): string {
-  const start = from > 20 ? from - 10 : 0;
-  let t = s.slice(start, start + max);
-  if (start + max < s.length) t += '…';
-  return (start > 0 ? '…' : '') + JSON.stringify(t);
-}
-
-function firstDiff(a: string, b: string): number {
-  const n = Math.min(a.length, b.length);
-  for (let i = 0; i < n; i++) if (a[i] !== b[i]) return i;
-  return n;
-}
-
 /**
  * Run one 'riscv' test and yield ONE CaseResult (kind 'riscv'). `expected` and
  * `actual` hold the checked registers (actual as unsigned decimal strings) and
  * 'exit code'; UART, memory and framebuffer problems are explained in
- * `message`. `summary` says how many instructions ran and how it ended.
+ * `message`, and `checks` has every expectation with its actual value.
+ * `summary` says how many instructions ran and how it ended.
  */
 export function* runRiscvTest(
   source: string,
   test: RiscvTest,
   level: Level,
   opts: RiscvCheckOptions = {},
-): Generator<CaseResult> {
+): Generator<RiscvCaseResult> {
   yield checkRiscv(source, test, level, opts);
 }
 
-function checkRiscv(source: string, test: RiscvTest, level: Level, opts: RiscvCheckOptions): CaseResult {
-  const expect = test.expect;
-  const expected: Record<string, number> = { ...(expect.regs ?? {}) };
-  if (expect.exitCode !== undefined) expected['exit code'] = expect.exitCode;
-  const base: CaseResult = {
+/** The case result before the program ran: inputs and expected values. */
+function baseCase(test: RiscvTest): RiscvCaseResult {
+  const expected: Record<string, number> = { ...(test.expect.regs ?? {}) };
+  if (test.expect.exitCode !== undefined) expected['exit code'] = test.expect.exitCode;
+  return {
     index: 0,
     pass: false,
     kind: 'riscv',
@@ -82,32 +77,46 @@ function checkRiscv(source: string, test: RiscvTest, level: Level, opts: RiscvCh
     expected,
     actual: {},
   };
-  const fail = (message: string, extra: Partial<CaseResult> = {}): CaseResult => ({ ...base, ...extra, pass: false, message });
+}
+
+function checkRiscv(
+  source: string,
+  test: RiscvTest,
+  level: Level,
+  opts: RiscvCheckOptions,
+): RiscvCaseResult {
+  const base = baseCase(test);
+  const fail = (message: string, extra: Partial<CaseResult> = {}): RiscvCaseResult => ({
+    ...base,
+    ...extra,
+    pass: false,
+    message,
+  });
 
   const link = buildProgram(source, level);
+  const isC = link.language === 'c';
   if (!link.ok) {
     const errs = link.diagnostics.filter((d) => d.severity === 'error');
     const list = errs.slice(0, MAX_ERRORS).map(formatDiag).join('\n');
     const more = errs.length > MAX_ERRORS ? `\n…and ${errs.length - MAX_ERRORS} more.` : '';
     const n = errs.length;
-    return fail(`The program does not assemble (${n} error${n === 1 ? '' : 's'}):\n${list}${more}`, {
-      summary: 'Not run: assembly errors.',
-    });
+    return fail(
+      `The program does not ${isC ? 'compile' : 'assemble'} (${n} error${n === 1 ? '' : 's'}):\n${list}${more}`,
+      {
+        summary: `Not run: ${isC ? 'compile' : 'assembly'} errors.`,
+      },
+    );
   }
 
   let m: Machine;
   try {
     m = createMachine(link, level, test.setup ?? {});
-    for (const name of Object.keys(expect.regs ?? {}))
-      if (regIndex(name) === undefined) throw new SetupError(`The test checks an unknown register "${name}".`);
+    checkExpectRegs(test.expect);
   } catch (e) {
     if (e instanceof SetupError) return fail(e.message, { summary: 'Not run.' });
     throw e;
   }
-  if (test.input) {
-    m.uart.receive(test.input);
-    for (const b of new TextEncoder().encode(test.input)) m.keyboard.press(b);
-  }
+  applyInput(m, test.input);
 
   // Run until the program stops, the step budget ends (E-SIM-10), it waits
   // forever (E-CPU-11) or the wall-clock budget ends.
@@ -116,7 +125,7 @@ function checkRiscv(source: string, test: RiscvTest, level: Level, opts: RiscvCh
   const t0 = now?.() ?? 0;
   let steps = 0;
   let stop: StopEvent | undefined;
-  let ended: 'steps' | 'wfi' | 'time' | undefined;
+  let ended: RunEnd | undefined;
   for (;;) {
     const n = Math.min(CHUNK, maxSteps - steps);
     if (n <= 0) {
@@ -138,9 +147,31 @@ function checkRiscv(source: string, test: RiscvTest, level: Level, opts: RiscvCh
       break;
     }
   }
+  return judgeRiscv(link, m, test, { ...(stop ? { stop } : {}), ...(ended ? { ended } : {}), maxSteps });
+}
 
+/** How a run ended without a stop event: step budget, waiting forever, wall-clock budget. */
+export type RunEnd = 'steps' | 'wfi' | 'time';
+
+/**
+ * Judge a machine after a run, as the test does: the stop event (or how the
+ * run ended) and every expectation. The checker calls it at the end of a
+ * test; the debugger calls it when a debugged test's program stops.
+ */
+export function judgeRiscv(
+  link: Program,
+  m: Machine,
+  test: RiscvTest,
+  run: { stop?: StopEvent; ended?: RunEnd; maxSteps?: number },
+): RiscvCaseResult {
+  const base = baseCase(test);
+  const expect = test.expect;
+  const isC = link.language === 'c';
+  const { stop, ended } = run;
+  const maxSteps = run.maxSteps ?? test.maxSteps ?? 5_000_000;
   const ran = m.hart.instret;
   const pc = m.hart.pc;
+  const checks = riscvChecks(expect, machineReadout(m, stop?.kind === 'exit' ? stop.code : null));
   const actual: Record<string, string> = {};
   const actualNum: Record<string, number | null> = {};
   for (const name of Object.keys(expect.regs ?? {})) {
@@ -163,67 +194,45 @@ function checkRiscv(source: string, test: RiscvTest, level: Level, opts: RiscvCh
           : ended === 'wfi'
             ? `waiting for an interrupt at ${where(link, pc - 4)}`
             : `still running at ${where(link, pc)}`;
-  const result = { ...base, actual, actualNum, halted, cycle: ran, summary: `Ran ${fmt(ran)} instructions; ${how}.` };
+  const result: RiscvCaseResult = {
+    ...base,
+    actual,
+    actualNum,
+    halted,
+    cycle: ran,
+    summary: `Ran ${fmt(ran)} instructions; ${how}.`,
+    checks: checks.map(clipCheck),
+  };
 
   // Problems that stop the run come first.
   if (stop?.kind === 'trap') return { ...result, message: trapMessage(m, link, stop) };
+  const hint = isC
+    ? 'Return from main (or call exit) where it should end, and check your loops.'
+    : 'Add an exit (li a7, 93 then ecall) or an ebreak where it should end.';
   if (ended === 'steps')
     return {
       ...result,
-      message: `The program never stopped: it ran ${fmt(maxSteps)} steps and was still going at ${where(link, pc)}. Add an exit (li a7, 93 then ecall) or an ebreak where it should end.`,
+      message: `The program never stopped: it ran ${fmt(maxSteps)} steps and was still going at ${where(link, pc)}. ${hint}`,
     };
   if (ended === 'time')
     return {
       ...result,
-      message: `The program ran out of time after ${fmt(ran)} instructions (still going at ${where(link, pc)}). Add an exit (li a7, 93 then ecall) or an ebreak where it should end.`,
+      message: `The program ran out of time after ${fmt(ran)} instructions (still going at ${where(link, pc)}). ${hint}`,
     };
   if (ended === 'wfi')
     return {
       ...result,
       message: `The program is waiting (wfi) at ${where(link, pc - 4)} for an interrupt that never comes.`,
     };
+  if (!stop)
+    return { ...result, message: `The program has not stopped yet (at ${where(link, pc)}).` };
 
-  const problems: string[] = [];
-  for (const [name, want] of Object.entries(expect.regs ?? {})) {
-    const got = actualNum[name]!;
-    if (got !== want >>> 0) problems.push(`${name} should be ${showReg(want >>> 0)} but is ${showReg(got!)}.`);
-  }
-  if (expect.exitCode !== undefined) {
-    if (stop?.kind !== 'exit')
-      problems.push(`The program should exit with code ${expect.exitCode} (li a7, 93 then ecall), but it stopped at ebreak.`);
-    else if (stop.code !== expect.exitCode >>> 0)
-      problems.push(`Exit code should be ${showReg(expect.exitCode >>> 0)} but is ${showReg(stop.code)}.`);
-  }
-  for (const want of expect.memory ?? []) {
-    const bytes = parseHex(want.hex);
-    let got: Uint8Array;
-    try {
-      got = m.readBytes(want.addr, bytes.length);
-    } catch {
-      problems.push(`The test reads memory at ${hex32(want.addr)}, which is not memory.`);
-      continue;
-    }
-    let i = 0;
-    while (i < bytes.length && bytes[i] === got[i]) i++;
-    if (i < bytes.length) {
-      const from = i & ~3;
-      const span = (b: Uint8Array): string => toHex(b.subarray(from, from + 8)) + (from + 8 < b.length ? ' …' : '');
-      problems.push(`Memory at ${hex32(want.addr + from)} should be ${span(bytes)} but is ${span(got)}.`);
-    }
-  }
-  if (expect.uart !== undefined) {
-    const got = m.uart.output;
-    if (got !== expect.uart) {
-      const i = firstDiff(got, expect.uart);
-      problems.push(`UART output is wrong: expected ${snippet(expect.uart, i)}, got ${snippet(got, i)}.`);
-    }
-  }
-  if (expect.framebufferSha256 !== undefined) {
-    if (sha256(m.fbPixels.bytes) !== expect.framebufferSha256)
-      problems.push('The picture on the framebuffer is not the expected one.');
-  }
-
+  const stopped = stop.kind === 'exit' ? 'exit' : 'ebreak';
+  const problems = checks
+    .map((c) => checkProblem(c, { isC, stopped }))
+    .filter((p): p is string => p !== null);
   if (problems.length === 0) return { ...result, pass: true };
-  const more = problems.length > 1 ? `\n(+${problems.length - 1} more: ${problems.slice(1).join(' ')})` : '';
+  const more =
+    problems.length > 1 ? `\n(+${problems.length - 1} more: ${problems.slice(1).join(' ')})` : '';
   return { ...result, message: problems[0]! + more };
 }

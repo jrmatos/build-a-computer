@@ -103,6 +103,7 @@ export const level: Record<string, string> = {
 
   // Persistence
   'level.unknown': 'There is no level called “{id}”.',
+  'level.loadFailed': '“{title}” could not be loaded. Check your connection and try again.',
   'level.locked': '“{title}” is locked. Finish the levels before it first.',
   'level.save.newer': 'This board was saved by a newer version of Build a Computer. Reload to update; it will not be overwritten.',
   'level.save.invalid': 'Your saved board could not be read. A copy was kept and the level starts fresh.',

@@ -9,8 +9,8 @@ export function WelcomeHint() {
   // Level starter parts sit mid-board, so then only a compact hint strip shows at the bottom.
   const compact = useEditor((s) => s.board.parts.length > 0);
   const readOnly = useEditor((s) => s.readOnly);
-  // Code levels (Phase 6+) have no board to welcome the player to.
-  const code = useEditor((s) => s.level?.mode === 'code');
+  // Code levels (Phase 6+) and Track 2 js levels have no board to welcome the player to.
+  const code = useEditor((s) => s.level?.mode === 'code' || s.level?.mode === 'js');
   const hidden = building || readOnly || code;
   const keys = [...paletteKeys(useEditor((s) => s.level)).values()];
   const range = keys.length > 1 ? `${keys[0]}–${keys[keys.length - 1]}` : keys.length ? String(keys[0]) : '';

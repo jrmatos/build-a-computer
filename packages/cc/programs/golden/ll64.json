@@ -1,0 +1,5 @@
+{
+ "sourceSha256": "ed0bdd0d4acae9c139c6dbba85d5f370c92b4136abc45cd7e570a841a0109ab5",
+ "uart": "hash = 354714919 0x15248527\ngl = 0xfffffee08e04fb35\ngu = 0xfedcba9876543210\narr = 0x0000000000000001\narr = 0xffffffffffffffff\narr = 0x7fffffffffffffff\narr = 0x8000000000000000\nconv = 0xfffffffffffffffb\nconv = 0x00000000fffffff0\nconv = 0xfffffffffffffffd\nconv = 0x00000000000000c8\nconv = 0xfffffffffffffed4\nconv = 0x000000000000fde8\nca = 0x0000000000000000\nca = 0x00000000ffffffef\nca = 0x0000000000000015\nca = 0x0000019000000000\nca = 0xffffffffffffffb5\nca = 0x000001000000fde8\npre = 0x000000000000000b\npost = 0x000000000000000b\nnow = 0x000000000000000c\ndec = 0x000000000000000b\nmixed = 21\nseven = 0x000000100000001c\nll to char = -1\nbool = 1\nternary = -5\n",
+ "exitCode": 39
+}

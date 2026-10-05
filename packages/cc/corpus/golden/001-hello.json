@@ -1,0 +1,10 @@
+{
+  "source": "001-hello.c",
+  "sourceSha256": "602d7cc435720907921bd22d740de3c92ea72029cf83bfc9e26ade42cfe03aa2",
+  "group": "free",
+  "tool": "riscv64-unknown-elf-gcc (14.2.0+19) 14.2.0; -march=rv32im -mabi=ilp32 -std=c99 -ffreestanding -nostdlib -O0 and -O2 agree; image is -O2",
+  "uart": "Hello, world!\nfrom the corpus\nanswer = 42\n",
+  "exitCode": 42,
+  "steps": 188,
+  "image": "lwAAAOeAAAGTCNAFcwAAALcHAIATAQH/k4cHFRMHgAS3BgAQk4cXACOA5gADxwcA4xoH/rcHAICThwcWEwdgBrcGABCThxcAI4DmAAPHBwDjGgf+twcAgJOHRxcTBxAGtwYAEJOHFwAjgOYAA8cHAOMaB/63BwCAk4fHFxMHAAK3BgAQk4cXACOA5gADxwcA4xoH/pMHIAMjAvEAkwdAAyOA9gADR0EAkwegABMFoAIjgOYAI4D2ABMBAQFngAAAYwAGAjMGxQCTBwUAA8cFAJOHFwCThRUAo4/n/uMY9v5ngAAAY2K1AmMCBgQTBvb/s4fFAAPHBwCzB8UAI4DnAOMWBv5ngAAA4w4G/jMGxQCTBwUAA8cFAJOHFwCThRUAo4/n/uOYx/5ngAAAZ4AAAJP19Q8zB8UAkwcFAGMIBgCThxcAo4+3/uMc9/5ngAAASGVsbG8sIHdvcmxkIQoAAGZyb20gdGhlIGNvcnB1cwoAAAAAYW5zd2VyAAAgPSAA"
+}

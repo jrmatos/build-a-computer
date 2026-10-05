@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { levelById } from '@build-a-computer/content';
+import { levelById } from '@build-a-computer/content/full';
 import { memoryStorage } from './db';
 import type { Board, ChipDef, ChipMap } from '@build-a-computer/schema';
 import { adoptSaveChips, decodeProgress, decodeSave, makeSave, sourceFor, sourceToSave } from './saves';

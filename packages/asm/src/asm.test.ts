@@ -295,3 +295,19 @@ describe('disassembler (ASM-02)', () => {
     );
   });
 });
+
+describe('empty sections with labels', () => {
+  it('a label in an empty .bss of the last file sits after every other section (libc _end)', () => {
+    const r = build(
+      [
+        { name: 'a.s', text: '.text\nnop\n.data\n.word 1\n.bss\nbuf: .space 8' },
+        { name: 'end.s', text: '.bss\n.globl _end\n_end:' },
+      ],
+      { base: 0x80000000 },
+    );
+    expect(r.ok).toBe(true);
+    const end = r.symbols.find((s) => s.name === '_end');
+    expect(end?.address).toBe(r.end);
+    expect(r.end).toBeGreaterThan(0x80000000);
+  });
+});

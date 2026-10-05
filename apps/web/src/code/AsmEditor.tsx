@@ -1,7 +1,7 @@
 /**
- * One CodeMirror view for one file of a code level. The player's main.s is
- * editable and synced with store.source and store.breakpoints; level library
- * files are read-only. Both show store.codeDiagnostics for their file and the
+ * One CodeMirror view for one file of a code level. The player's file (main.s,
+ * or main.c on C levels) is editable and synced with store.source and
+ * store.breakpoints; level library files and the libc reference are read-only. Both show store.codeDiagnostics for their file and the
  * line the RISC-V machine stopped on (store.rv.state.line).
  */
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete';
@@ -23,12 +23,15 @@ import { useEditor, type EditorState as StoreState } from '../editor/store';
 import { t } from '../i18n';
 import { runLevelTests } from '../level/runTests';
 import { asmCompletions, asmLanguage } from './asmLanguage';
+import { cCompletions, cLanguage } from './cLanguage';
 import { MAIN_FILE, toCmDiagnostics } from './diagnostics';
 import { breakpointGutter, breakpointLines, codeTheme, pcLineField, setBreakpointsEffect, setPcLineEffect, toggleLine } from './extensions';
 
 // ---------------------------------------------------------------- open views (for the debugger)
 
 const views = new Map<string, EditorView>();
+/** The player's file name in the open level (main.s or main.c). */
+let currentMain = MAIN_FILE;
 const revealListeners = new Set<(file: string) => void>();
 
 /**
@@ -36,7 +39,7 @@ const revealListeners = new Set<(file: string) => void>();
  * cursor there. Returns false when that file is not open. For the debugger
  * (call stack, symbols, "go to pc").
  */
-export function revealLine(line: number, file: string = MAIN_FILE, focus = false): boolean {
+export function revealLine(line: number, file: string = currentMain, focus = false): boolean {
   revealListeners.forEach((fn) => fn(file));
   const view = views.get(file);
   if (!view) return false;
@@ -49,12 +52,12 @@ export function revealLine(line: number, file: string = MAIN_FILE, focus = false
 
 /** Put keyboard focus in the player's editor. */
 export function focusCodeEditor(): void {
-  views.get(MAIN_FILE)?.focus();
+  views.get(currentMain)?.focus();
 }
 
 /** The player's editor view, when a code level is open (tests and the debugger). */
 export function mainCodeView(): EditorView | null {
-  return views.get(MAIN_FILE) ?? null;
+  return views.get(currentMain) ?? null;
 }
 
 /** Called with the file name whenever revealLine targets a file (the workspace switches tabs). */
@@ -65,16 +68,22 @@ export function onReveal(fn: (file: string) => void): () => void {
 
 // ---------------------------------------------------------------- helpers
 
-/** The line to mark as stopped-at in `file`, or null (running, no machine, other file). */
-export function pcLineFor(s: Pick<StoreState, 'rv'>, file: string): number | null {
+/**
+ * The line to mark as stopped-at in `file`, or null (running, no machine,
+ * other file). A state without a file is in the player's file `mainFile`.
+ */
+export function pcLineFor(s: Pick<StoreState, 'rv'>, file: string, mainFile: string = MAIN_FILE): number | null {
   const st = s.rv?.state;
   if (!st || st.running || !st.line) return null;
-  return (st.file ?? MAIN_FILE) === file ? st.line : null;
+  return (st.file ?? mainFile) === file ? st.line : null;
 }
 
 const sameLines = (a: readonly number[], b: readonly number[]) => a.length === b.length && a.every((v, i) => v === b[i]);
 
-function baseExtensions(): Extension[] {
+/** Source language of a view. */
+export type CodeLang = 'asm' | 'c';
+
+function baseExtensions(lang: CodeLang): Extension[] {
   return [
     highlightSpecialChars(),
     drawSelection(),
@@ -85,11 +94,10 @@ function baseExtensions(): Extension[] {
     search({ top: false }),
     lintGutter(),
     pcLineField,
-    asmLanguage(),
+    ...(lang === 'c' ? [cLanguage(), EditorState.tabSize.of(4)] : [asmLanguage(), EditorState.tabSize.of(8)]),
     indentUnit.of('    '),
-    EditorState.tabSize.of(8),
     codeTheme,
-    EditorView.contentAttributes.of({ 'aria-label': t('code.editorLabel'), spellcheck: 'false', autocorrect: 'off', autocapitalize: 'off' }),
+    EditorView.contentAttributes.of({ 'aria-label': t(lang === 'c' ? 'code.editorLabelC' : 'code.editorLabel'), spellcheck: 'false', autocorrect: 'off', autocapitalize: 'off' }),
   ];
 }
 
@@ -106,22 +114,32 @@ const runTestsKey = keymap.of([
 
 interface AsmEditorProps {
   file: string;
-  /** Text for read-only library files; main.s reads store.source. */
+  /** Source language (default assembly). */
+  lang?: CodeLang;
+  /** The player's file name for this level; a pc state without a file points here. */
+  mainFile?: string;
+  /** Text for read-only library files; the player's file reads store.source. */
   text?: string;
   readOnly?: boolean;
   hidden?: boolean;
-  /** Library texts, so their labels complete in main.s. */
+  /** Library texts, so their labels (assembly) or identifiers (C) complete in the player's file. */
   libraryTexts?: readonly string[];
+  /** C only: headers on the include path (libc plus level .h files) for completion. */
+  headers?: Readonly<Record<string, string>>;
   onCursor?: (line: number, col: number) => void;
 }
 
-export function AsmEditor({ file, text, readOnly = false, hidden = false, libraryTexts = [], onCursor }: AsmEditorProps) {
+const NO_HEADERS: Readonly<Record<string, string>> = {};
+
+export function AsmEditor({ file, lang = 'asm', mainFile = MAIN_FILE, text, readOnly = false, hidden = false, libraryTexts = [], headers = NO_HEADERS, onCursor }: AsmEditorProps) {
   const host = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const libs = useRef(libraryTexts);
+  const hdrs = useRef(headers);
   const cursorCb = useRef(onCursor);
   useEffect(() => {
     libs.current = libraryTexts;
+    hdrs.current = headers;
     cursorCb.current = onCursor;
   });
 
@@ -140,7 +158,7 @@ export function AsmEditor({ file, text, readOnly = false, hidden = false, librar
     };
 
     const extensions: Extension[] = [
-      ...baseExtensions(),
+      ...baseExtensions(lang),
       runTestsKey,
       EditorView.updateListener.of((u) => {
         if (u.selectionSet || u.docChanged) {
@@ -166,7 +184,10 @@ export function AsmEditor({ file, text, readOnly = false, hidden = false, librar
       extensions.push(
         history(),
         closeBrackets(),
-        autocompletion({ override: [asmCompletions(() => libs.current)], icons: false }),
+        autocompletion({
+          override: [lang === 'c' ? cCompletions(() => ({ headers: hdrs.current, others: libs.current })) : asmCompletions(() => libs.current)],
+          icons: false,
+        }),
         breakpointGutter(toggle),
         editable.of(EditorState.readOnly.of(store.readOnly)),
         keymap.of([...closeBracketsKeymap, ...completionKeymap, indentWithTab, ...searchKeymap, ...historyKeymap, ...lintKeymap, ...defaultKeymap]),
@@ -182,6 +203,7 @@ export function AsmEditor({ file, text, readOnly = false, hidden = false, librar
     const view = new EditorView({ parent: el, state: EditorState.create({ doc: synced, extensions }) });
     viewRef.current = view;
     views.set(file, view);
+    if (isMain) currentMain = file;
 
     const applyStore = (s: StoreState, prev: StoreState | null) => {
       const effects = [];
@@ -193,13 +215,13 @@ export function AsmEditor({ file, text, readOnly = false, hidden = false, librar
       }
       // Rebuilt after a full replace too, or every breakpoint would collapse onto line 1.
       if (isMain && (specs.changes || !sameLines(s.breakpoints, breakpointLines(view.state)))) effects.push(setBreakpointsEffect.of(s.breakpoints));
-      const pc = pcLineFor(s, file);
+      const pc = pcLineFor(s, file, mainFile);
       const prevPc = view.state.field(pcLineField).line;
       if (pc !== prevPc) effects.push(setPcLineEffect.of(pc));
       if (isMain && (!prev || s.readOnly !== prev.readOnly)) effects.push(editable.reconfigure(EditorState.readOnly.of(s.readOnly)));
       if (specs.changes || effects.length) view.dispatch({ ...specs, effects });
       if (!prev || s.codeDiagnostics !== prev.codeDiagnostics || specs.changes) {
-        view.dispatch(setDiagnostics(view.state, toCmDiagnostics(s.codeDiagnostics, view.state.doc, file)));
+        view.dispatch(setDiagnostics(view.state, toCmDiagnostics(s.codeDiagnostics, view.state.doc, file, mainFile)));
       }
       // Execution stopped on a new line: bring it into view.
       if (pc !== null && pc !== prevPc && pc <= view.state.doc.lines) {
@@ -219,7 +241,7 @@ export function AsmEditor({ file, text, readOnly = false, hidden = false, librar
     };
     // The view is created once per file; text for library files never changes while mounted.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [file, readOnly]);
+  }, [file, readOnly, lang, mainFile]);
 
   // A view hidden with display:none needs a fresh measure when shown again.
   useEffect(() => {

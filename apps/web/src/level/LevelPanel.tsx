@@ -13,6 +13,11 @@ import './level.css';
 import { Markdown, inline } from './Markdown';
 import { loadSolution, loadSourceSolution } from './solution';
 import { zoomToFit } from '../editor/camera';
+import { DebugButton } from './debug/DebugButton';
+import { BestLine } from '../community/BestBadge';
+import { nextPackLevel, packOfLevel } from '../community/registry';
+import { emitAchievement } from '../achievements/events';
+import { SuccessUnlocks } from '../achievements/Achievements';
 
 const COLLAPSE_KEY = 'build-a-computer:level-panel-collapsed';
 
@@ -75,6 +80,8 @@ export function LevelPanel() {
 
 function kicker(level: Level): string {
   if (level.track === 'sandbox') return t('level.sandbox.kicker');
+  const pack = packOfLevel(level.id);
+  if (pack) return t('community.map.kicker', { name: pack.name });
   return t('level.kicker', { phase: level.phase, name: phaseName(level.phase), order: level.order });
 }
 
@@ -129,7 +136,14 @@ function LevelBody({ level }: { level: Level }) {
             </p>
           ))}
           {hints < level.hints.length && (
-            <button type="button" className="lv-btn ghost" onClick={() => setHints(hints + 1)}>
+            <button
+              type="button"
+              className="lv-btn ghost"
+              onClick={() => {
+                setHints(hints + 1);
+                emitAchievement({ type: 'hint-shown', levelId: level.id });
+              }}
+            >
               <BulbIcon />
               {t('level.hint.show', { n: hints + 1, total: level.hints.length })}
             </button>
@@ -139,16 +153,19 @@ function LevelBody({ level }: { level: Level }) {
       {level.tests.length > 0 && !inChip && <ShowSolution level={level} />}
 
       <div className="lp-tests">
-        <button
-          type="button"
-          className="lv-btn primary block"
-          disabled={!runnable || running}
-          onClick={() => void runLevelTests()}
-          title={`${t('level.tests.run')} — Ctrl+Enter`}
-        >
-          {running ? <span className="lv-spinner" aria-hidden="true" /> : null}
-          {running ? t('level.tests.running') : t('level.tests.run')}
-        </button>
+        <div className="dbg-run-row">
+          <button
+            type="button"
+            className="lv-btn primary block"
+            disabled={!runnable || running}
+            onClick={() => void runLevelTests()}
+            title={`${t('level.tests.run')} — Ctrl+Enter`}
+          >
+            {running ? <span className="lv-spinner" aria-hidden="true" /> : null}
+            {running ? t('level.tests.running') : t('level.tests.run')}
+          </button>
+          {runnable && <DebugButton level={level} disabled={running} />}
+        </div>
         {inChip && <p className="lp-chip-note">{t('level.tests.inChip')}</p>}
         {runnable && <TestStripSection level={level} run={testRun} />}
       </div>
@@ -159,7 +176,8 @@ function LevelBody({ level }: { level: Level }) {
 }
 
 function SuccessCard({ level }: { level: Level }) {
-  const next = useMemo(() => nextLevel(level, LEVELS), [level]);
+  // Community pack levels continue within their pack (COM-03).
+  const next = useMemo(() => (packOfLevel(level.id) ? nextPackLevel(level.id) : nextLevel(level, LEVELS)), [level]);
   const parts = newlyUnlockedParts(level, next);
   const ref = useRef<HTMLDivElement>(null);
   // Braces matter: newer Chrome returns a Promise from scrollIntoView, and an
@@ -173,6 +191,8 @@ function SuccessCard({ level }: { level: Level }) {
         <CheckIcon size={22} />
       </div>
       <h3>{t('level.success.title')}</h3>
+      <BestLine levelId={level.id} />
+      <SuccessUnlocks levelId={level.id} />
       {level.afterword && <Markdown text={level.afterword} />}
       {parts.length > 0 && (
         <p className="lp-unlocked">
@@ -216,13 +236,15 @@ function ShowSolution({ level }: { level: Level }) {
     setState('loading');
     const { commit, toast } = useEditor.getState();
     try {
-      if (level.mode === 'code') {
+      // Code and Track 2 levels: the solution is source text for the editor.
+      if (level.mode === 'code' || level.mode === 'js') {
         const source = await loadSourceSolution(level);
         if (source === undefined) {
           toast(t('level.solution.none'), 'info');
           return;
         }
         useEditor.getState().set({ source });
+        emitAchievement({ type: 'solution-revealed', levelId: level.id });
         toast(t('level.solution.loadedCode'), 'success');
         return;
       }
@@ -232,6 +254,7 @@ function ShowSolution({ level }: { level: Level }) {
         return;
       }
       commit(() => board, []);
+      emitAchievement({ type: 'solution-revealed', levelId: level.id });
       requestAnimationFrame(() => requestAnimationFrame(() => zoomToFit()));
       toast(t('level.solution.loaded'), 'success');
     } finally {

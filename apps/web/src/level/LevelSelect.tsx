@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { LEVELS, levelById } from '@build-a-computer/content';
+import { LEVELS, levelById, type LevelInfo } from '@build-a-computer/content';
 import type { Level } from '@build-a-computer/schema';
 import { useEditor } from '../editor/store';
 import { t } from '../i18n';
@@ -8,6 +8,9 @@ import { phaseName } from './LevelPanel';
 import { exportProgressFile, getProgress, importProgressFile, openLevel } from './persist';
 import { groupLevels, isOutdated, levelState } from './progress';
 import './level.css';
+import { BestBadge } from '../community/BestBadge';
+import { TrophyChip } from '../achievements/Achievements';
+import { communityLevelById, removePack, useCommunity } from '../community/registry';
 
 /** Modal level map (LVL-06): levels grouped by track and phase; locked, open or completed. */
 export function LevelSelect() {
@@ -68,9 +71,12 @@ function LevelMap() {
             <h2 id="lm-title">{t('level.map.title')}</h2>
             <p className="lp-muted">{t('level.map.progress', { done, total })}</p>
           </div>
-          <button type="button" className="lv-icon-btn" onClick={close} aria-label={t('level.map.close')} title={t('level.map.close')}>
-            <CrossIcon />
-          </button>
+          <div className="lm-head-actions">
+            <TrophyChip onOpen={close} />
+            <button type="button" className="lv-icon-btn" onClick={close} aria-label={t('level.map.close')} title={t('level.map.close')}>
+              <CrossIcon />
+            </button>
+          </div>
         </header>
         <div className="lm-scroll">
           {groups.map((g) => (
@@ -92,6 +98,7 @@ function LevelMap() {
               </div>
             </section>
           ))}
+          <CommunitySection completed={completed} current={current} />
         </div>
         <footer className="lm-foot">
           <span className="lp-muted small">{t('level.map.progressFile')}</span>
@@ -118,16 +125,52 @@ function LevelMap() {
   );
 }
 
+/** Installed community packs (COM-03): one group per pack, progress tracked like built-in levels. */
+function CommunitySection({ completed, current }: { completed: string[]; current: string | undefined }) {
+  const packs = useCommunity((s) => s.packs);
+  if (!packs.length) return null;
+  const progress = getProgress();
+  return (
+    <>
+      {packs.map((p) => (
+        <section key={p.slug} className="lm-group" aria-label={`${t('community.map.title')} · ${p.name}`}>
+          <div className="lm-pack-head">
+            <h3>
+              {t('community.map.title')} · {p.name}
+              {p.author ? <span className="lp-muted small"> · {t('community.map.by', { author: p.author })}</span> : null}
+            </h3>
+            <button
+              type="button"
+              className="lv-btn ghost small"
+              onClick={() => {
+                void removePack(p.slug).then(() => useEditor.getState().toast(t('community.map.removed', { name: p.name }), 'info'));
+              }}
+            >
+              {t('community.map.remove')}
+            </button>
+          </div>
+          {p.description && <p className="lp-muted small">{p.description}</p>}
+          <div className="lm-grid">
+            {p.levels.map((l) => (
+              <LevelCard key={l.id} level={l} state={levelState(l, completed)} current={l.id === current} outdated={isOutdated(progress, l)} />
+            ))}
+          </div>
+        </section>
+      ))}
+    </>
+  );
+}
+
 function groupTitle(track: Level['track'], phase: number): string {
   if (track === 'sandbox') return t('level.map.sandbox');
   return `${t(`level.track.${track}`)} · ${phaseName(phase)}`;
 }
 
-function LevelCard(props: { level: Level; state: 'locked' | 'open' | 'completed'; current: boolean; outdated: boolean }) {
+function LevelCard(props: { level: Pick<LevelInfo, 'id' | 'title' | 'goal' | 'track' | 'order' | 'requires' | 'draft'>; state: 'locked' | 'open' | 'completed'; current: boolean; outdated: boolean }) {
   const { level, state, current, outdated } = props;
   const locked = state === 'locked';
   const missing = level.requires.filter((id) => !useEditor.getState().completed.includes(id));
-  const requires = missing.map((id) => levelById(id)?.title ?? id).join(', ');
+  const requires = missing.map((id) => (levelById(id) ?? communityLevelById(id))?.title ?? id).join(', ');
   const label = `${level.title}. ${
     locked ? t('level.map.lockedRequires', { list: requires }) : state === 'completed' ? t('level.completed') : t('level.map.open')
   }`;
@@ -152,6 +195,7 @@ function LevelCard(props: { level: Level; state: 'locked' | 'open' | 'completed'
       <span className="lm-card-sub">
         {locked ? t('level.map.requires', { list: requires }) : level.track === 'sandbox' ? t('level.map.free') : level.goal}
       </span>
+      {state === 'completed' && <BestBadge levelId={level.id} />}
       <span className="lm-badges">
         {current && <span className="lv-chip accent">{t('level.map.current')}</span>}
         {outdated && <span className="lv-chip">{t('level.map.updated')}</span>}

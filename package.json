@@ -15,11 +15,14 @@
     "lint:fix": "eslint . --fix",
     "typecheck": "turbo run typecheck",
     "check": "turbo run //#lint:eslint typecheck test --continue",
+    "bench:ci": "pnpm --filter @build-a-computer/bench bench:ci",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "docker:dev": "docker compose up web",
     "docker:prod": "docker compose --profile prod up --build web-prod",
-    "docker:down": "docker compose --profile prod down"
+    "docker:down": "docker compose --profile prod down",
+    "cc-diff": "vitest run --root tools/cc-diff",
+    "cc-golden": "node tools/cc-diff/generate.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

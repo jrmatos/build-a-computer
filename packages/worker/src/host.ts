@@ -8,14 +8,45 @@ import {
   flattenBoard,
   loadProgram,
   runTest,
+  Rig,
+  debugPlan,
+  stepCase,
   type CaseResult,
+  type DebugPlan,
+  type DebugTrace,
   type CheckOptions,
+  type EngineOptions,
   type Netlist,
   type SettleResult,
 } from '@build-a-computer/sim-logic';
-import { runRiscvTest } from '@build-a-computer/rv-check';
-import type { BusValue, LoadOptions, LoadResult, RvApi, RvLoadResult, RvSnapshot, SimApi, Snapshot } from './protocol';
-import { RvHost } from './rv-host';
+import type { BusValue, JsApi, JsCallOptions, JsDebugResult, JsRunState, LoadOptions, LoadResult, RvApi, RvLoadOptions, RvLoadResult, RvSnapshot, SimApi, Snapshot } from './protocol';
+import type { RvHost } from './rv-host';
+import type { JsHost, JsHostOptions } from './js-host';
+
+/*
+ * The RISC-V subsystem (rv-host: rv-check, asm, cc, libc, rv32) and the
+ * Track 2 subsystem (js-host: js-check, tensor) load on first use, so a board
+ * level's worker script carries only the logic simulator. Each module is
+ * imported once per worker and shared by every SimHost.
+ */
+type RvModule = typeof import('./rv-host') & { runRiscvTest: typeof import('@build-a-computer/rv-check').runRiscvTest };
+type JsModule = typeof import('./js-host') & { runJsTest: typeof import('@build-a-computer/js-check').runJsTest };
+let rvModule: Promise<RvModule> | null = null;
+let jsModule: Promise<JsModule> | null = null;
+
+/** Load the RISC-V subsystem (code levels). */
+export function loadRvModule(): Promise<RvModule> {
+  rvModule ??= Promise.all([import('./rv-host'), import('@build-a-computer/rv-check')]).then(([host, check]) => ({ ...host, runRiscvTest: check.runRiscvTest }));
+  rvModule.catch(() => (rvModule = null));
+  return rvModule;
+}
+
+/** Load the Track 2 subsystem (js levels). */
+export function loadJsModule(): Promise<JsModule> {
+  jsModule ??= Promise.all([import('./js-host'), import('@build-a-computer/js-check')]).then(([host, check]) => ({ ...host, runJsTest: check.runJsTest }));
+  jsModule.catch(() => (jsModule = null));
+  return jsModule;
+}
 
 /** Longest a run slice may block the worker, in ms (plan: runtime split). */
 const SLICE_MS = 8;
@@ -64,13 +95,29 @@ function makeView(nl: Netlist): View {
   };
 }
 
+/** What debugStart returns: the recorded case and the frame the live board was left at. */
+export type CaseDebugStart = { ok: true; trace: DebugTrace; frame: number; tick: number } | { ok: false; error: string };
+
+/** Case debugger calls (board levels). SimHost implements them; the app reaches them over Comlink. */
+export interface CaseDebugApi {
+  debugStart(level: Level, testIndex: number, caseIndex: number, inputs?: Record<string, number>, board?: Board): CaseDebugStart;
+  debugSeek(frame: number): { frame: number; tick: number } | null;
+  debugEnd(): void;
+}
+
 /**
  * Owns all simulation state. Runs in a Web Worker in the app, and directly in
  * tests. Time comes from injected functions so tests stay deterministic.
  */
-export class SimHost implements SimApi, RvApi {
-  /** The RISC-V debugger for code levels (RvApi delegates here). */
-  readonly rv: RvHost;
+export class SimHost implements SimApi, RvApi, JsApi {
+  /** The RISC-V debugger for code levels (RvApi delegates here), created on the first rvLoad. */
+  private rv: RvHost | null = null;
+  private rvReady: Promise<RvHost> | null = null;
+  private rvListener: ((s: RvSnapshot) => void) | null = null;
+  /** Track 2 JavaScript runs (JsApi delegates here), created on first use. */
+  private js: JsHost | null = null;
+  private jsReady: Promise<JsHost> | null = null;
+  private jsListener: ((s: JsRunState) => void) | null = null;
   private nl: Netlist | null = null;
   private engine: FastEngine | null = null;
   private view: View | null = null;
@@ -92,48 +139,102 @@ export class SimHost implements SimApi, RvApi {
   private histTicks = new Float64Array(HISTORY_TICKS);
   private histLen = 0;
   private histHead = 0;
+  /** Case debugger: the case being replayed on the live engine, and the frame shown. */
+  private dbg: { plan: DebugPlan; nl: Netlist; opts: EngineOptions; frame: number } | null = null;
+  private dbgBusy = false;
 
   constructor(
     private readonly now: () => number = () => performance.now(),
     private readonly schedule: (fn: () => void, ms: number) => ReturnType<typeof setTimeout> = (fn, ms) =>
       setTimeout(fn, ms),
-  ) {
-    this.rv = new RvHost(now, schedule);
+    private readonly jsOptions: JsHostOptions = {},
+  ) {}
+
+  /** The RvHost, loading the RISC-V subsystem on first use. */
+  private rvHost(): Promise<RvHost> {
+    this.rvReady ??= loadRvModule().then(({ RvHost }) => {
+      const rv = new RvHost(this.now, this.schedule);
+      if (this.rvListener) rv.rvSubscribe(this.rvListener);
+      return (this.rv = rv);
+    });
+    this.rvReady.catch(() => (this.rvReady = null));
+    return this.rvReady;
+  }
+
+  /** Run `fn` on the RvHost now, or in order once it is loading; nothing to do before the first rvLoad. */
+  private withRv(fn: (rv: RvHost) => void): void {
+    if (this.rv) fn(this.rv);
+    else if (this.rvReady) void this.rvReady.then(fn, () => undefined);
+  }
+
+  /** The JsHost, loading the Track 2 subsystem on first use. */
+  private jsHost(): Promise<JsHost> {
+    this.jsReady ??= loadJsModule().then(({ JsHost }) => {
+      const js = new JsHost(this.jsOptions, this.now, this.schedule);
+      if (this.jsListener) js.jsSubscribe(this.jsListener);
+      return (this.js = js);
+    });
+    this.jsReady.catch(() => (this.jsReady = null));
+    return this.jsReady;
+  }
+
+  // JsApi: Track 2 levels, handled by JsHost.
+  async jsCall(
+    source: string,
+    level: Level,
+    entry: string,
+    args: unknown[],
+    opts?: JsCallOptions,
+  ): Promise<{ ok: boolean; result?: unknown; error?: { message: string; line?: number } }> {
+    return (await this.jsHost()).jsCall(source, level, entry, args, opts);
+  }
+  async jsDebugCall(source: string, level: Level, testIndex: number): Promise<JsDebugResult | null> {
+    return (await this.jsHost()).jsDebugCall(source, level, testIndex);
+  }
+  jsStop(): void {
+    if (this.js) this.js.jsStop();
+    else if (this.jsReady) void this.jsReady.then((js) => js.jsStop(), () => undefined);
+  }
+  jsSubscribe(onState: (s: JsRunState) => void): void {
+    this.jsListener = onState;
+    this.js?.jsSubscribe(onState);
   }
 
   // RvApi: code levels (Phase 6+), handled by RvHost.
-  rvLoad(source: string, level: Level): RvLoadResult {
-    return this.rv.rvLoad(source, level);
+  async rvLoad(source: string, level: Level, opts?: RvLoadOptions): Promise<RvLoadResult> {
+    return (this.rv ?? (await this.rvHost())).rvLoad(source, level, opts);
   }
   rvRun(): void {
-    this.rv.rvRun();
+    this.withRv((rv) => rv.rvRun());
   }
   rvPause(): void {
-    this.rv.rvPause();
+    this.withRv((rv) => rv.rvPause());
   }
   rvStep(n: number): void {
-    this.rv.rvStep(n);
+    this.withRv((rv) => rv.rvStep(n));
   }
   rvStepLine(): void {
-    this.rv.rvStepLine();
+    this.withRv((rv) => rv.rvStepLine());
   }
   rvReset(): void {
-    this.rv.rvReset();
+    this.withRv((rv) => rv.rvReset());
   }
   rvSetBreakpoints(lines: number[]): void {
-    this.rv.rvSetBreakpoints(lines);
+    this.withRv((rv) => rv.rvSetBreakpoints(lines));
   }
   rvInput(text: string): void {
-    this.rv.rvInput(text);
+    this.withRv((rv) => rv.rvInput(text));
   }
   rvMemory(addr: number, length: number): Uint8Array {
-    return this.rv.rvMemory(addr, length);
+    // Before the first rvLoad there is no machine: zeros, as RvHost returns without one.
+    return this.rv?.rvMemory(addr, length) ?? new Uint8Array(Math.max(0, Math.min(Math.floor(length), 1 << 20)));
   }
   rvFramebuffer(): { pixels: Uint8Array; palette: Uint32Array } | null {
-    return this.rv.rvFramebuffer();
+    return this.rv?.rvFramebuffer() ?? null;
   }
   rvSubscribe(onSnapshot: (s: RvSnapshot) => void): void {
-    this.rv.rvSubscribe(onSnapshot);
+    this.rvListener = onSnapshot;
+    this.rv?.rvSubscribe(onSnapshot);
   }
 
   subscribe(onSnapshot: (s: Snapshot) => void): void {
@@ -209,6 +310,72 @@ export class SimHost implements SimApi, RvApi {
       if (net === undefined) continue;
       this.tracks.set(id, { net, w: nl.netWidth[net]!, v: new Uint32Array(HISTORY_TICKS), x: new Uint32Array(HISTORY_TICKS) });
     }
+    // While a case is being debugged, replay it so the new lanes show the whole case.
+    if (this.dbg && !this.dbgBusy && this.dbg.nl === nl) this.debugSeek(this.dbg.frame);
+  }
+
+  /**
+   * Case debugger: load one test case onto the live board. Compiles `board`
+   * (or the last loaded one; program tests get the program in their ROM),
+   * records the whole case on a scratch engine, then replays it on the live
+   * engine up to the case's checkpoint, so the canvas, probes, memory and
+   * waveform panels all show the case. Runs with the level's power-on mode
+   * and the checkers' seed. The next `load` returns to the normal board.
+   */
+  debugStart(level: Level, testIndex: number, caseIndex: number, inputs?: Record<string, number>, board?: Board): CaseDebugStart {
+    const test = level.tests[testIndex];
+    if (!test) return { ok: false, error: 'This test does not exist.' };
+    const plan = debugPlan(test, caseIndex, inputs);
+    if ('error' in plan) return { ok: false, error: plan.error };
+    let flat: Board | null;
+    let nl: Netlist;
+    try {
+      flat = board ? flattenBoard(board, this.chips).board : this.flatBoard;
+      if (!flat) return { ok: false, error: 'There is no board loaded.' };
+      if (test.kind === 'program') flat = loadProgram(flat, test);
+      nl = compile(flat);
+      assertRunnable(nl);
+    } catch (e) {
+      if (e instanceof CompileError || e instanceof ChipCycleError) return { ok: false, error: e.message };
+      throw e;
+    }
+    this.pause();
+    const opts: EngineOptions = { ...(level.power ? { powerOnState: level.power } : {}), seed: 1 };
+    const { trace } = stepCase(new Rig(nl, { ...opts, createEngine: (n, o) => new FastEngine(n, o) }), plan);
+    this.dbg = { plan, nl, opts, frame: 0 };
+    const focus = trace.checks[Math.min(trace.focus, trace.checks.length - 1)];
+    const at = this.debugSeek(focus?.frame ?? Math.max(0, trace.frames.length - 1))!;
+    return { ok: true, trace, frame: at.frame, tick: at.tick };
+  }
+
+  /** Case debugger: show frame `frame` of the case (replayed from power on). */
+  debugSeek(frame: number): { frame: number; tick: number } | null {
+    const d = this.dbg;
+    if (!d) return null;
+    this.dbgBusy = true;
+    try {
+      this.pause();
+      this.wantPower = true;
+      const made: { engine?: FastEngine } = {};
+      const rig = new Rig(d.nl, { ...d.opts, createEngine: (n, o) => (made.engine = new FastEngine(n, o)) });
+      this.nl = d.nl;
+      this.engine = made.engine!;
+      this.view = makeView(d.nl);
+      this.last = null;
+      this.watch(this.watched);
+      const r = stepCase(rig, d.plan, { until: Math.max(0, frame), record: false, tick: () => this.tickOnce() });
+      d.frame = Math.max(0, r.frame);
+      this.last = r.last;
+      this.emit(true);
+      return { frame: d.frame, tick: this.engine.ticks };
+    } finally {
+      this.dbgBusy = false;
+    }
+  }
+
+  /** Case debugger: stop replaying (the app reloads the board afterwards). */
+  debugEnd(): void {
+    this.dbg = null;
   }
 
   history(): { ticks: number[]; values: Record<string, BusValue[]> } {
@@ -314,6 +481,7 @@ export class SimHost implements SimApi, RvApi {
     source?: string,
   ): Promise<{ passed: number; total: number }> {
     if (level.mode === 'code') return this.runCodeTests(level, onCase, source ?? '', budgetMs);
+    if (level.mode === 'js') return this.runJsTests(level, onCase, source ?? '');
     // Without a board, fall back to the last loaded one (already flattened).
     if (board) {
       try {
@@ -379,6 +547,7 @@ export class SimHost implements SimApi, RvApi {
         results.push({ index: 0, pass: false, inputs: {}, expected: {}, actual: {}, kind: t.kind, message: `A code level cannot run a '${t.kind}' test.` });
       } else {
         try {
+          const { runRiscvTest } = await loadRvModule();
           for (const r of runRiscvTest(source, t, level, { now: this.now, budgetMs })) results.push(r);
         } catch (e) {
           results.push({ index: 0, pass: false, inputs: {}, expected: {}, actual: {}, kind: t.kind, message: `The emulator failed while testing: ${e instanceof Error ? e.message : String(e)}` });
@@ -389,6 +558,34 @@ export class SimHost implements SimApi, RvApi {
         if (r.pass) passed++;
         await onCase({ ...r, test: ti });
       }
+    }
+    return { passed, total };
+  }
+
+  /** Track 2: each 'js' test runs the player's main.js in a fresh sandbox (its own timeoutMs). */
+  private async runJsTests(
+    level: Level,
+    onCase: (r: CaseResult) => void | Promise<void>,
+    source: string,
+  ): Promise<{ passed: number; total: number }> {
+    let passed = 0;
+    let total = 0;
+    const { runner, datasets } = this.js?.options ?? this.jsOptions;
+    for (const [ti, t] of level.tests.entries()) {
+      let r: CaseResult;
+      if (t.kind !== 'js') {
+        r = { index: 0, pass: false, inputs: {}, expected: {}, actual: {}, kind: t.kind, message: `A JavaScript level cannot run a '${t.kind}' test.` };
+      } else {
+        try {
+          const { runJsTest } = await loadJsModule();
+          r = await runJsTest(source, t, level, { ...(runner ? { runner } : {}), ...(datasets ? { datasets } : {}) });
+        } catch (e) {
+          r = { index: 0, pass: false, inputs: {}, expected: {}, actual: {}, kind: t.kind, message: `The JavaScript checker failed: ${e instanceof Error ? e.message : String(e)}` };
+        }
+      }
+      total++;
+      if (r.pass) passed++;
+      await onCase({ ...r, test: ti });
     }
     return { passed, total };
   }
