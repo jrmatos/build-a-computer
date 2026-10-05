@@ -8,6 +8,11 @@ import { expect, test, type Page } from '@playwright/test';
 import { drawWire, openLevel } from './helpers';
 
 async function expectNoSeriousViolations(page: Page, include: string): Promise<void> {
+  // Contrast is measured on rendered pixels: a dialog still fading in reads as
+  // near-invisible text. Let every running animation/transition settle first.
+  await page.waitForFunction(() =>
+    document.getAnimations().every((a) => a.playState !== 'running' || a.effect?.getComputedTiming().iterations === Infinity),
+  );
   const results = await new AxeBuilder({ page })
     .include(include)
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
@@ -25,7 +30,9 @@ async function expectNoSeriousViolations(page: Page, include: string): Promise<v
 for (const theme of ['dark', 'light'] as const) {
   test.describe(`${theme} theme`, () => {
     test.beforeEach(async ({ page }) => {
-      await page.emulateMedia({ colorScheme: theme });
+      // Reduced motion makes dialogs appear without fades (the app honours it), so
+      // axe never samples a half-transparent frame on slow CI runners.
+      await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
       await openLevel(page, 'wires-and-lamps');
       // The app keeps its own theme setting; switch it from the menu when needed.
       const current = await page.evaluate(() => document.documentElement.dataset.theme);
