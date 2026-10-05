@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import type { Board, Part, PartProps, PartType, Wire } from '@ground-up/schema';
+import type { Board, Part, PartProps, PartType, Wire } from '@build-a-computer/schema';
 import { CompileError, LIMITS, compile } from './compile';
 import { ReferenceEngine, type Engine, type EngineOptions } from './engine';
 import { FastEngine } from './fast-engine';

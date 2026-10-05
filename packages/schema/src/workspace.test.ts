@@ -9,6 +9,10 @@ import {
   WORKSPACE_LIMITS,
   WORKSPACE_VERSION,
   WorkspaceSettings,
+  normalizeKind,
+  Save,
+  migrateSave,
+  Progress,
 } from './index';
 import { z } from 'zod';
 
@@ -18,7 +22,7 @@ const board = {
 };
 
 const save = {
-  kind: 'ground-up/save',
+  kind: 'build-a-computer/save',
   version: 2,
   chips: {},
   levelId: 'not-gate',
@@ -36,11 +40,11 @@ const chip = {
 };
 
 const workspace = {
-  kind: 'ground-up/workspace',
+  kind: 'build-a-computer/workspace',
   version: 1,
   exportedAt: '2026-10-05T09:00:00.000Z',
   appVersion: 'test',
-  progress: { kind: 'ground-up/progress', version: 1, levels: { 'not-gate': { status: 'completed', levelVersion: 1 } } },
+  progress: { kind: 'build-a-computer/progress', version: 1, levels: { 'not-gate': { status: 'completed', levelVersion: 1 } } },
   saves: { 'not-gate': save },
   chips: { half: chip },
   settings: { theme: 'light', showGrid: true },
@@ -136,7 +140,7 @@ describe('import detection', () => {
 
 describe('E-DATA-03 hostile workspace imports', () => {
   it('E-DATA-03: strips prototype keys from workspaces', () => {
-    const text = JSON.stringify(workspace).replace('{"kind":"ground-up/workspace"', '{"__proto__":{"polluted":true},"kind":"ground-up/workspace"');
+    const text = JSON.stringify(workspace).replace('{"kind":"build-a-computer/workspace"', '{"__proto__":{"polluted":true},"kind":"build-a-computer/workspace"');
     const out = parseImportFile(text);
     expect(out.kind).toBe('workspace');
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
@@ -156,5 +160,49 @@ describe('E-DATA-03 hostile workspace imports', () => {
   });
   it('E-DATA-03: rejects malformed JSON', () => {
     expect(() => parseImportFile('{nope')).toThrow(ImportError);
+  });
+});
+
+describe('legacy ground-up kinds load', () => {
+  const legacySave = { ...save, kind: 'ground-up/save' };
+  const legacyWorkspace = {
+    ...workspace,
+    kind: 'ground-up/workspace',
+    progress: { ...workspace.progress, kind: 'ground-up/progress' },
+    saves: { 'not-gate': legacySave },
+  };
+
+  it('normalizeKind maps only the legacy prefix', () => {
+    expect(normalizeKind('ground-up/save')).toBe('build-a-computer/save');
+    expect(normalizeKind('build-a-computer/save')).toBe('build-a-computer/save');
+    expect(normalizeKind('other/save')).toBe('other/save');
+    expect(normalizeKind(undefined)).toBeUndefined();
+  });
+
+  it('a legacy save parses, migrates and is rewritten with the new kind', () => {
+    expect(Save.parse(legacySave).kind).toBe('build-a-computer/save');
+    const v1 = { ...legacySave, version: 1, chips: undefined };
+    expect(migrateSave(v1).kind).toBe('build-a-computer/save');
+    const imported = parseImportFile(JSON.stringify(legacySave));
+    expect(imported.kind === 'save' && imported.save.kind).toBe('build-a-computer/save');
+  });
+
+  it('a legacy workspace (with legacy progress and saves inside) imports with new kinds', () => {
+    const imported = parseImportFile(JSON.stringify(legacyWorkspace));
+    expect(imported.kind).toBe('workspace');
+    if (imported.kind !== 'workspace') return;
+    expect(imported.workspace.kind).toBe('build-a-computer/workspace');
+    expect(imported.workspace.progress.kind).toBe('build-a-computer/progress');
+    expect(imported.workspace.saves['not-gate']?.kind).toBe('build-a-computer/save');
+    expect(imported.workspace).toEqual(Workspace.parse(workspace));
+  });
+
+  it('legacy progress parses', () => {
+    expect(Progress.parse({ kind: 'ground-up/progress', version: 1, levels: {} }).kind).toBe('build-a-computer/progress');
+  });
+
+  it('still rejects unknown kinds', () => {
+    expect(() => parseImportFile(JSON.stringify({ ...legacySave, kind: 'someone-else/save' }))).toThrow(ImportError);
+    expect(() => Save.parse({ ...save, kind: 'ground-up/workspace' })).toThrow();
   });
 });

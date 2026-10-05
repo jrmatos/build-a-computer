@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Board, Part } from '@ground-up/schema';
-import type { Snapshot } from '@ground-up/worker';
+import type { Board, Part } from '@build-a-computer/schema';
+import type { Snapshot } from '@build-a-computer/worker';
 
 // The Toy-8 helpers are written in parallel; pin their behavior for these tests.
-vi.mock('@ground-up/content', () => ({
+vi.mock('@build-a-computer/content', () => ({
   assembleLine: (line: string, labels?: Record<string, number>) => {
     const m = /^LDI R(\d), (\d+)$/i.exec(line.trim());
     if (m) return [0x10 + Number(m[1]), Number(m[2])];

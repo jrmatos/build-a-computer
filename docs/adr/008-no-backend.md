@@ -29,7 +29,7 @@ and send to a friend without an account.
 
 ## Decision
 
-Ground Up v1 has **no backend and no database**. It is a static site.
+Build a Computer v1 has **no backend and no database**. It is a static site.
 
 - **Autosave**: the board, progress and settings are saved to IndexedDB (Dexie)
   as the player works. If IndexedDB is missing or full, the app runs in memory

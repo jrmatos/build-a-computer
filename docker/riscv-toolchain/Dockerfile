@@ -1,6 +1,6 @@
 # Builds the official riscv-tests (rv32ui, rv32um, rv32mi, plus rv32ua/rv32si
 # and the Sv32 "v" variants
-# as extras) for the ground-up emulator, with the standard "p" environment.
+# as extras) for the build-a-computer emulator, with the standard "p" environment.
 #
 # The standard env links at 0x8000_0000, which is the start of our RAM, and
 # reports results through the `tohost` symbol (1 = pass, (n << 1) | 1 = fail
@@ -9,8 +9,8 @@
 # riscv-tests and riscv-test-env are BSD-3-Clause (see LICENSE in each repo);
 # the binaries are build artifacts and are never committed.
 #
-#   docker build -t ground-up/riscv-toolchain docker/riscv-toolchain
-#   docker run --rm -v "$PWD/out:/out" ground-up/riscv-toolchain
+#   docker build -t build-a-computer/riscv-toolchain docker/riscv-toolchain
+#   docker run --rm -v "$PWD/out:/out" build-a-computer/riscv-toolchain
 FROM debian:trixie-slim
 
 RUN apt-get update \

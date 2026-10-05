@@ -1,4 +1,4 @@
-import type { TestSpec } from '@ground-up/schema';
+import type { TestSpec } from '@build-a-computer/schema';
 import type { CompiledPart, Netlist } from '../compile';
 import { ReferenceEngine, type EngineOptions, type SettleResult } from '../engine';
 import { V1, fromValue, mask, type Signal, type Value } from '../values';

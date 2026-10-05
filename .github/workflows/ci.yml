@@ -58,4 +58,4 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - run: docker build --target prod -t ground-up-web:ci .
+      - run: docker build --target prod -t build-a-computer-web:ci .

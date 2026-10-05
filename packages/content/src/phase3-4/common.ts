@@ -1,4 +1,4 @@
-import type { PartType, SequenceStep } from '@ground-up/schema';
+import type { PartType, SequenceStep } from '@build-a-computer/schema';
 import { grow } from '../define';
 import { P2_ALL } from '../phase0-2';
 

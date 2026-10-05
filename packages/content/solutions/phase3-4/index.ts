@@ -1,4 +1,4 @@
-import type { Board, Level } from '@ground-up/schema';
+import type { Board, Level } from '@build-a-computer/schema';
 import { BoardBuilder, type Pin } from '../../src/phase3-4/builder';
 import { toy8Cpu, toy8Datapath } from './toy8-cpu';
 

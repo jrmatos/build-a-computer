@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { Level, type Board, type TestSpec } from '@ground-up/schema';
-import { compile, loadProgram, runTest } from '@ground-up/sim-logic';
+import { Level, type Board, type TestSpec } from '@build-a-computer/schema';
+import { compile, loadProgram, runTest } from '@build-a-computer/sim-logic';
 import { pendingReason } from '../../solutions/harness';
 import { phase3_4Solution } from '../../solutions/phase3-4';
 import { toy8CpuBoard } from '../../solutions/phase3-4/toy8-cpu';

@@ -39,7 +39,7 @@ Node 24 (`.nvmrc`), pnpm 10 via corepack (`corepack enable`).
 | `pnpm typecheck`                                    | `tsc` per package                                       |
 | `pnpm test`                                         | Vitest per package                                      |
 | `pnpm build`                                        | Build every package; `apps/web` → `apps/web/dist`       |
-| `pnpm --filter @ground-up/sim-logic test`           | One package only                                        |
+| `pnpm --filter @build-a-computer/sim-logic test`           | One package only                                        |
 | `pnpm format`                                       | Prettier                                                |
 | `docker compose up web`                             | Dev server in Docker (hot reload), port 5173            |
 | `docker compose --profile prod up --build web-prod` | nginx production build, port 8080                       |
@@ -72,7 +72,7 @@ PKCE in the browser) and needs its own ADR plus a CSP review.
 `performance`, `Date.now`, `new Date()`, `Math.random`, and imports of `react`,
 `node:*` and I/O modules. Test files may import `node:*`. When you add `rv32`,
 `asm`, `cc` or `tensor`, they are already covered by the glob. Randomness comes
-from the seeded PRNG in `@ground-up/det`; 32-bit math uses `Math.imul`, `>>> 0`
+from the seeded PRNG in `@build-a-computer/det`; 32-bit math uses `Math.imul`, `>>> 0`
 and `| 0`.
 
 ## Tests

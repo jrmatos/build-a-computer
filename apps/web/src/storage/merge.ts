@@ -10,8 +10,8 @@
  *   default. Nothing is dropped silently: a local board replaced by the file's is
  *   kept as a backup record.
  */
-import { mergeProgress, type ChipDef, type ChipMap, type Progress, type Save, type Workspace } from '@ground-up/schema';
-import { closure } from '@ground-up/sim-logic';
+import { mergeProgress, type ChipDef, type ChipMap, type Progress, type Save, type Workspace } from '@build-a-computer/schema';
+import { closure } from '@build-a-computer/sim-logic';
 import { mergeChips, remapBoardChips, stableStringify } from '../ui/chips/logic';
 import { completedIds } from '../level/progress';
 

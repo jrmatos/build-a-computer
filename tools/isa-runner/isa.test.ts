@@ -1,6 +1,6 @@
 /**
  * ISA compliance: every riscv-tests binary in $ISA_OUT must pass.
- * Run with `pnpm --filter @ground-up/rv32 isa` (builds the binaries in Docker).
+ * Run with `pnpm --filter @build-a-computer/rv32 isa` (builds the binaries in Docker).
  */
 import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';

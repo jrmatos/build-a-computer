@@ -1,4 +1,4 @@
-import type { Level, PartType } from '@ground-up/schema';
+import type { Level, PartType } from '@build-a-computer/schema';
 import { column, defineLevel, grow, lamp, sw, truthTable } from '../define';
 import { model } from './models';
 import { P0_IO } from './phase0';

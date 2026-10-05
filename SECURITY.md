@@ -15,7 +15,7 @@ in the release notes unless you ask us not to.
 
 ## Threat model
 
-Ground Up v1 is a static site with no backend, no database and no accounts
+Build a Computer v1 is a static site with no backend, no database and no accounts
 ([ADR-008](docs/adr/008-no-backend.md)). We hold no player data: boards and
 progress live in the player's browser (IndexedDB) and in files the player saves
 and opens. So the risks are on the client:

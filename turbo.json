@@ -3,7 +3,7 @@
   "globalDependencies": ["tsconfig.base.json"],
   "tasks": {
     "build": { "dependsOn": ["^build"], "outputs": [] },
-    "@ground-up/web#build": { "dependsOn": ["^build"], "outputs": ["dist/**"] },
+    "@build-a-computer/web#build": { "dependsOn": ["^build"], "outputs": ["dist/**"] },
     "typecheck": { "dependsOn": ["^typecheck"], "outputs": [] },
     "test": { "dependsOn": ["^typecheck"], "outputs": [] },
     "//#lint:eslint": {

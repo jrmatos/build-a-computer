@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Board, ChipDef, ChipMap, Part } from '@ground-up/schema';
+import type { Board, ChipDef, ChipMap, Part } from '@build-a-computer/schema';
 import {
   copyName,
   mergeChips,

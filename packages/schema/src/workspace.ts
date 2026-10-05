@@ -1,12 +1,13 @@
 import { z } from 'zod';
 import { ChipMap } from './chip';
+import { normalizeKind, SAVE_KIND, WORKSPACE_KIND } from './kinds';
 import { Progress } from './progress';
 import { IMPORT_LIMITS, ImportError, parseUntrustedJson, WORKSPACE_LIMITS } from './safe-parse';
 import { migrateSave, NewerVersionError, Save } from './save';
 
 /**
  * A whole workspace in one file: progress, every level's board and the custom
- * chip library. v1 of Ground Up has no backend (owner decision 2026-10-05):
+ * chip library. v1 of Build a Computer has no backend (owner decision 2026-10-05):
  * this file is how a player keeps, moves and backs up their work.
  *
  * Size limit: 20 MB (WORKSPACE_LIMITS), against 5 MB for a single-board save.
@@ -22,7 +23,8 @@ export type WorkspaceSettings = z.infer<typeof WorkspaceSettings>;
 
 export const WorkspaceV1 = z
   .object({
-    kind: z.literal('ground-up/workspace'),
+    /** Legacy 'ground-up/workspace' is accepted and normalized. */
+    kind: z.preprocess(normalizeKind, z.literal(WORKSPACE_KIND)),
     version: z.literal(1),
     exportedAt: z.string().datetime(),
     appVersion: z.string().max(64).optional(),
@@ -58,7 +60,8 @@ export function migrateWorkspace(
   const { migrations = WORKSPACE_MIGRATIONS, latest = WORKSPACE_VERSION, schema = Workspace } = opts;
   if (typeof input !== 'object' || input === null || Array.isArray(input)) throw new TypeError('Workspace must be an object');
   let data = structuredClone(input) as Raw;
-  if (data.kind !== 'ground-up/workspace') throw new TypeError('Not a Ground Up workspace file');
+  data.kind = normalizeKind(data.kind);
+  if (data.kind !== WORKSPACE_KIND) throw new TypeError('Not a Build a Computer workspace file');
   const version = typeof data.version === 'number' ? data.version : NaN;
   if (!Number.isInteger(version) || version < 1) throw new TypeError('Workspace has no valid version');
   if (version > latest) throw new NewerVersionError(version, latest);
@@ -86,11 +89,11 @@ export type ImportedFile = { kind: 'save'; save: Save } | { kind: 'workspace'; w
  */
 export function parseImportFile(text: string): ImportedFile {
   const data = parseUntrustedJson(text, WORKSPACE_LIMITS);
-  const kind = (data as { kind?: unknown } | null)?.kind;
-  if (kind === 'ground-up/workspace') return { kind: 'workspace', workspace: migrateWorkspace(data) };
-  if (kind === 'ground-up/save') {
+  const kind = normalizeKind((data as { kind?: unknown } | null)?.kind);
+  if (kind === WORKSPACE_KIND) return { kind: 'workspace', workspace: migrateWorkspace(data) };
+  if (kind === SAVE_KIND) {
     if (new TextEncoder().encode(text).length > IMPORT_LIMITS.maxBytes) throw new ImportError('File is larger than 5 MB.');
     return { kind: 'save', save: migrateSave(data) };
   }
-  throw new ImportError('This is not a Ground Up save or workspace file.');
+  throw new ImportError('This is not a Build a Computer save or workspace file.');
 }

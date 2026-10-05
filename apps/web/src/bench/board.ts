@@ -1,6 +1,6 @@
 /** Synthetic boards and snapshots for the EDIT-01 renderer benchmark. */
-import type { Board, ChipDef, ChipMap, Part, PartType, Wire } from '@ground-up/schema';
-import type { Snapshot } from '@ground-up/worker';
+import type { Board, ChipDef, ChipMap, Part, PartType, Wire } from '@build-a-computer/schema';
+import type { Snapshot } from '@build-a-computer/worker';
 
 const GATES: PartType[] = ['nand', 'and', 'or', 'nor', 'xor', 'xnor', 'not', 'dff'];
 

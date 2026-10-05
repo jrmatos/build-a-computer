@@ -103,15 +103,15 @@ export const level: Record<string, string> = {
   // Persistence
   'level.unknown': 'There is no level called “{id}”.',
   'level.locked': '“{title}” is locked. Finish the levels before it first.',
-  'level.save.newer': 'This board was saved by a newer version of Ground Up. Reload to update; it will not be overwritten.',
+  'level.save.newer': 'This board was saved by a newer version of Build a Computer. Reload to update; it will not be overwritten.',
   'level.save.invalid': 'Your saved board could not be read. A copy was kept and the level starts fresh.',
-  'level.progress.newer': 'Your progress was saved by a newer version of Ground Up. Reload to update.',
+  'level.progress.newer': 'Your progress was saved by a newer version of Build a Computer. Reload to update.',
   'level.progress.invalid': 'Your saved progress could not be read.',
   'level.import.done': 'Progress imported: {count} new levels completed.',
   'level.import.too-large': 'That file is too large (over 5 MB).',
   'level.import.not-json': 'That file is not valid JSON.',
   'level.import.too-deep': 'That file is nested too deeply.',
-  'level.import.invalid': 'That file is not a Ground Up progress file.',
+  'level.import.invalid': 'That file is not a Build a Computer progress file.',
 
   // Banners
   'level.banner.elsewhere': 'This level is open in another tab. This tab is read-only.',

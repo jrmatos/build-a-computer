@@ -1,6 +1,6 @@
-# Ground Up
+# Build a Computer
 
-Build a computer from the ground up, in your browser. Ground Up is a free,
+Build a computer from scratch, in your browser. Build a Computer is a free,
 open-source game that teaches computer science by construction: start with a
 NAND gate, wire up logic, arithmetic and memory, build a CPU, then write the
 assembler programs, C code and operating system that run on it. It is aimed at
@@ -73,8 +73,8 @@ fallback to `index.html` and the headers from
 build on nginx with the headers already set:
 
 ```sh
-docker build --target prod -t ground-up-web .
-docker run -p 8080:80 ground-up-web     # http://localhost:8080, health check at /healthz
+docker build --target prod -t build-a-computer-web .
+docker run -p 8080:80 build-a-computer-web     # http://localhost:8080, health check at /healthz
 ```
 
 ## Scripts
@@ -90,7 +90,7 @@ docker run -p 8080:80 ground-up-web     # http://localhost:8080, health check at
 | `pnpm format`                                     | Prettier                                               |
 | `pnpm docker:dev` / `docker:prod` / `docker:down` | Compose shortcuts                                      |
 
-Run one package with `pnpm --filter @ground-up/<name> <script>`.
+Run one package with `pnpm --filter @build-a-computer/<name> <script>`.
 
 ## Repo layout
 

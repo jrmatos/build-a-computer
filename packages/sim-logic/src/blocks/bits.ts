@@ -1,4 +1,4 @@
-import type { Part } from '@ground-up/schema';
+import type { Part } from '@build-a-computer/schema';
 import { PART_INFO } from '../parts-spec';
 import { allX, mask, sig, type Signal } from '../values';
 

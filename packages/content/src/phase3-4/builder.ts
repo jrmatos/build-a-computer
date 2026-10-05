@@ -1,4 +1,4 @@
-import type { Board, Part, PartProps, PartType, Wire } from '@ground-up/schema';
+import type { Board, Part, PartProps, PartType, Wire } from '@build-a-computer/schema';
 
 /** A pin reference written `partId.pin`. */
 export type Pin = string;

@@ -1,4 +1,4 @@
-import type { Level, Part, SequenceStep, TestSpec, TruthRow } from '@ground-up/schema';
+import type { Level, Part, SequenceStep, TestSpec, TruthRow } from '@build-a-computer/schema';
 import { defineLevel, lamp, sw } from '../define';
 import { Toy8, assemble, assembleLine, toHex } from '../toy8';
 import { AFTER_PHASE3, check, cycle } from './common';

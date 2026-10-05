@@ -1,5 +1,5 @@
-import type { Board, PinRef } from '@ground-up/schema';
-import type { BusValue, Snapshot } from '@ground-up/worker';
+import type { Board, PinRef } from '@build-a-computer/schema';
+import type { BusValue, Snapshot } from '@build-a-computer/worker';
 import type { ProbeTarget } from '../editor/interaction';
 import { geomOf } from '../editor/parts';
 import { useEditor } from '../editor/store';

@@ -1,5 +1,5 @@
 {
-  "name": "@ground-up/rv32",
+  "name": "@build-a-computer/rv32",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -14,7 +14,7 @@
     "isa": "sh ../../tools/isa-runner/isa.sh"
   },
   "dependencies": {
-    "@ground-up/det": "workspace:*"
+    "@build-a-computer/det": "workspace:*"
   },
   "devDependencies": {
     "fast-check": "^4.10.2"

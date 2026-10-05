@@ -1,4 +1,4 @@
-import type { BusValue } from '@ground-up/worker';
+import type { BusValue } from '@build-a-computer/worker';
 import { useEditor } from '../../editor/store';
 import { sim } from '../../sim/client';
 import { HISTORY_TICKS, type History } from './waveform';

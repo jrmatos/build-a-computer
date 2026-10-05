@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { Board, Part, TestSpec } from '@ground-up/schema';
+import type { Board, Part, TestSpec } from '@build-a-computer/schema';
 import { compile, type Netlist } from '../compile';
 import { ReferenceEngine, type EngineOptions, type SettleResult } from '../engine';
 import { FastEngine } from '../fast-engine';

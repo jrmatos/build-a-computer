@@ -3,7 +3,7 @@
  * `props.data` text and words, nibble-by-nibble typing, paste, and .bin/.hex
  * import and export.
  */
-import { parseRomData, type RomParseError } from '@ground-up/sim-logic';
+import { parseRomData, type RomParseError } from '@build-a-computer/sim-logic';
 import { hexDigits, maskOf, toHex } from './numberFormat';
 
 export const COLUMNS = 16;

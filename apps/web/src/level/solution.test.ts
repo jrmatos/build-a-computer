@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { LEVELS, levelById } from '@ground-up/content';
-import { referenceSolution } from '@ground-up/content/solutions';
-import { compile, loadProgram, runTest } from '@ground-up/sim-logic';
+import { LEVELS, levelById } from '@build-a-computer/content';
+import { referenceSolution } from '@build-a-computer/content/solutions';
+import { compile, loadProgram, runTest } from '@build-a-computer/sim-logic';
 import { partRect, rectsIntersect } from '../editor/geometry';
 import { layoutSolution } from './solution';
 

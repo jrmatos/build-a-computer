@@ -1,5 +1,5 @@
 {
-  "name": "ground-up",
+  "name": "build-a-computer",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.33.0",
@@ -7,7 +7,7 @@
     "node": ">=24"
   },
   "scripts": {
-    "dev": "pnpm --filter @ground-up/web dev",
+    "dev": "pnpm --filter @build-a-computer/web dev",
     "build": "turbo run build",
     "test": "turbo run test",
     "lint": "turbo run //#lint:eslint",

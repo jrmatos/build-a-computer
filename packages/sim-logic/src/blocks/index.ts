@@ -1,4 +1,4 @@
-import type { PartType } from '@ground-up/schema';
+import type { PartType } from '@build-a-computer/schema';
 import type { BlockModel } from './types';
 import { adderModel, aluModel, decoderModel, muxModel } from './arith';
 import { counterModel, ramModel, registerModel, romModel } from './memory';

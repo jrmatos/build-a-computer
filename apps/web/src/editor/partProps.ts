@@ -2,9 +2,9 @@
  * Pure logic behind the properties panel: validating per-type props and
  * applying a change to one or more parts, dropping wires whose pins vanished.
  */
-import type { Board, ChipMap, Part, PartProps, PartType, Wire } from '@ground-up/schema';
-import { MAX_WIDTH } from '@ground-up/schema';
-import { PART_INFO, pinsOf } from '@ground-up/sim-logic';
+import type { Board, ChipMap, Part, PartProps, PartType, Wire } from '@build-a-computer/schema';
+import { MAX_WIDTH } from '@build-a-computer/schema';
+import { PART_INFO, pinsOf } from '@build-a-computer/sim-logic';
 
 export type EditableProp = keyof PartProps;
 

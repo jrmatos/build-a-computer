@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import type { Part, PartProps } from '@ground-up/schema';
-import { PART_INFO } from '@ground-up/sim-logic';
+import type { Part, PartProps } from '@build-a-computer/schema';
+import { PART_INFO } from '@build-a-computer/sim-logic';
 import { applyProps, describeWire, LARGE_ADDR_WIDTH, memorySize, numProp, PROP_LIMITS, validateProps } from '../editor/partProps';
 import { deleteSelection, duplicateSelection, flipSelection, rotateSelection, setPartLabel } from '../editor/actions';
 import { useEditor } from '../editor/store';

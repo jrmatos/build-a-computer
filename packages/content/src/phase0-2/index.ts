@@ -1,4 +1,4 @@
-import type { Level } from '@ground-up/schema';
+import type { Level } from '@build-a-computer/schema';
 import { PHASE0 } from './phase0';
 import { PHASE1 } from './phase1';
 import { PHASE2 } from './phase2';

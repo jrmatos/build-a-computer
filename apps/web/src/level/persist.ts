@@ -4,8 +4,8 @@
  * memory with a banner (E-DATA-02); newer saves are refused and never
  * overwritten (E-DATA-04); old saves migrate forward (E-DATA-05).
  */
-import { LEVELS, levelById } from '@ground-up/content';
-import { mergeProgress, type Board, type Level, type Progress, type Save } from '@ground-up/schema';
+import { LEVELS, levelById } from '@build-a-computer/content';
+import { mergeProgress, type Board, type Level, type Progress, type Save } from '@build-a-computer/schema';
 import { zoomToFit } from '../editor/camera';
 import { exitChip, rootBoard, setChips, startChipLibrary } from '../editor/chips';
 import { pruneChipWires } from '../ui/chips/logic';
@@ -19,7 +19,7 @@ import { adoptSaveChips, decodeProgress, decodeSave, makeSave } from './saves';
 import { useLevelUi } from './ui';
 
 const AUTOSAVE_MS = 1000;
-const LAST_LEVEL_KEY = 'ground-up:last-level';
+const LAST_LEVEL_KEY = 'build-a-computer:last-level';
 const SANDBOX = 'sandbox';
 
 let storage: Storage = memoryStorage();
@@ -109,7 +109,7 @@ export async function markCompleted(level: Level): Promise<void> {
 export const getProgress = (): Progress => progress;
 
 export function exportProgressFile(): void {
-  downloadJson(`ground-up-progress-${new Date().toISOString().slice(0, 10)}.json`, exportProgress(progress));
+  downloadJson(`build-a-computer-progress-${new Date().toISOString().slice(0, 10)}.json`, exportProgress(progress));
 }
 
 /** Merge an imported progress file (LVL-06, E-DATA-03). Returns false and toasts on a bad file. */
@@ -132,7 +132,7 @@ export async function importProgressFile(file: File): Promise<boolean> {
 export function exportBoardFile(): void {
   const { level, chips } = editor();
   if (!level) return;
-  downloadJson(`ground-up-${level.id}.json`, JSON.stringify(makeSave(level, rootBoard(), chips), null, 2));
+  downloadJson(`build-a-computer-${level.id}.json`, JSON.stringify(makeSave(level, rootBoard(), chips), null, 2));
 }
 
 // ---------------------------------------------------------------- whole workspace (STO-01)
@@ -394,7 +394,7 @@ export async function startPersistence(): Promise<void> {
     if (id && id !== currentId) void openLevel(id);
   });
   if (typeof BroadcastChannel !== 'undefined') {
-    channel = new BroadcastChannel('ground-up');
+    channel = new BroadcastChannel('build-a-computer');
     channel.onmessage = (e: MessageEvent<{ type?: string; id?: string }>) => {
       if (e.data?.type === 'flush' && e.data.id === currentId) void flushSave();
     };

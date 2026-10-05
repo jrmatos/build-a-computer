@@ -6,7 +6,7 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import type { Level } from '@ground-up/schema';
+import type { Level } from '@build-a-computer/schema';
 import type { TestRun } from '../editor/store';
 import { t } from '../i18n';
 import { loadCaseInputs } from './runTests';
@@ -30,10 +30,10 @@ const ROW_H = 24;
 const HEAD_H = 20;
 const PROGRAM_W = 112;
 const OVERSCAN = 6;
-const RADIX_KEY = 'ground-up:strip-radix';
-const OPEN_KEY = 'ground-up:strip-open';
-const FLOAT_KEY = 'ground-up:strip-float';
-const FLOAT_W_KEY = 'ground-up:strip-float-width';
+const RADIX_KEY = 'build-a-computer:strip-radix';
+const OPEN_KEY = 'build-a-computer:strip-open';
+const FLOAT_KEY = 'build-a-computer:strip-float';
+const FLOAT_W_KEY = 'build-a-computer:strip-float-width';
 
 function readPref(key: string, fallback: string): string {
   try {

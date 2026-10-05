@@ -8,3 +8,6 @@ coverage
 !.env.example
 test-results
 playwright-report
+
+# pnpm content store created by the Docker dev container inside the bind mount
+.pnpm-store

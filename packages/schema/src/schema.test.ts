@@ -11,7 +11,7 @@ import {
 } from './index';
 
 const save = {
-  kind: 'ground-up/save',
+  kind: 'build-a-computer/save',
   version: 2,
   chips: {},
   levelId: 'sandbox',
@@ -73,8 +73,8 @@ describe('E-DATA-04 / E-DATA-05 migrations', () => {
 
 describe('E-PLAT-01 progress merge', () => {
   it('never moves backward', () => {
-    const a: Progress = { kind: 'ground-up/progress', version: 1, levels: { x: { status: 'completed', levelVersion: 1 } } };
-    const b: Progress = { kind: 'ground-up/progress', version: 1, levels: { x: { status: 'open', levelVersion: 1 }, y: { status: 'open', levelVersion: 1 } } };
+    const a: Progress = { kind: 'build-a-computer/progress', version: 1, levels: { x: { status: 'completed', levelVersion: 1 } } };
+    const b: Progress = { kind: 'build-a-computer/progress', version: 1, levels: { x: { status: 'open', levelVersion: 1 }, y: { status: 'open', levelVersion: 1 } } };
     const m = mergeProgress(a, b);
     expect(m.levels.x?.status).toBe('completed');
     expect(m.levels.y?.status).toBe('open');

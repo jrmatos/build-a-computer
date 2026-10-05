@@ -1,5 +1,5 @@
-import type { Board, Part } from '@ground-up/schema';
-import type { Snapshot } from '@ground-up/worker';
+import type { Board, Part } from '@build-a-computer/schema';
+import type { Snapshot } from '@build-a-computer/worker';
 import { t } from '../../i18n';
 import { partKind } from './names';
 

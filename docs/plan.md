@@ -1,12 +1,12 @@
-<!-- Snapshot of the Claude Doc "Ground Up — Platform Implementation Plan" (rev 39, 2026-10-05). The doc is the source of truth: https://claude.ai/artifact/SHKETuSK6EnuuL993dDKWi -->
+<!-- Snapshot of the Claude Doc "Build a Computer — Platform Implementation Plan" (rev 39, 2026-10-05). The doc is the source of truth: https://claude.ai/artifact/SHKETuSK6EnuuL993dDKWi -->
 
-# Ground Up — Platform Implementation Plan
+# Build a Computer — Platform Implementation Plan
 
 ·
 
 ## Summary and scope
 
-Ground Up (working title) is a browser platform where people learn computer science by building each layer themselves, with automatic checks at every step. Track 1 runs from one NAND gate to a RISC-V computer booting the player's own C operating system. Track 2 runs from one neuron to a small transformer language model trained in the browser.
+Build a Computer is a browser platform where people learn computer science by building each layer themselves, with automatic checks at every step. Track 1 runs from one NAND gate to a RISC-V computer booting the player's own C operating system. Track 2 runs from one neuron to a small transformer language model trained in the browser.
 
 It is built for programmers who are new to hardware, launches in English, and is free and open source.
 
@@ -447,7 +447,7 @@ Players own their data: the game autosaves in the browser and saves into files t
 
 ### Workspace file
 
-- `ground-up/workspace` version 1 holds progress, every level's save, the chip library and settings, validated by zod with forward migrations (E-DATA-04, E-DATA-05).
+- `build-a-computer/workspace` version 1 holds progress, every level's save, the chip library and settings, validated by zod with forward migrations (E-DATA-04, E-DATA-05).
 - Import accepts one level's save or a whole workspace and shows a summary first. Progress merges by best status; a level whose save differs asks Keep mine or Use file.
 - Imports over 20 MB, nested deeper than 64 levels, or with prototype keys are rejected (E-DATA-03).
 
@@ -848,7 +848,7 @@ Five questions are settled, and each open one has a default, so agents are never
 
 | Question | Default if unanswered | Affects |
 | --- | --- | --- |
-| Final name? | Ground Up as the working title; repo named `ground-up` | Branding, domain, repo |
+| Final name? | Build a Computer (renamed from "Ground Up" on 2026-10-05); repo named `build-a-computer` | Branding, domain, repo |
 | Which licenses? | Public repo from M3; code under MIT, content under CC BY-SA 4.0 | Repo, contributions |
 | Should reference solutions be hidden? | Public in packages/content/solutions, never bundled or linked from the game; move them to a private repo if spoilers become a problem | Content, CI |
 | 32-bit or 64-bit RISC-V? | RV32: simpler to build and teach. xv6-riscv is 64-bit, so it is a reference, not a binary we run | M7, M9, M11 |

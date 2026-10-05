@@ -1,4 +1,4 @@
-import type { Level, Part, PartType } from '@ground-up/schema';
+import type { Level, Part, PartType } from '@build-a-computer/schema';
 import { defineLevel, grow, lamp, sw } from '../define';
 import { AFTER_PHASE2, PHASE2_LAST_ID, check, cycle, ticks } from './common';
 

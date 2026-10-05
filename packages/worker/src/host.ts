@@ -1,4 +1,4 @@
-import type { Board, ChipMap, Level } from '@ground-up/schema';
+import type { Board, ChipMap, Level } from '@build-a-computer/schema';
 import {
   ChipCycleError,
   CompileError,
@@ -12,7 +12,7 @@ import {
   type CheckOptions,
   type Netlist,
   type SettleResult,
-} from '@ground-up/sim-logic';
+} from '@build-a-computer/sim-logic';
 import type { BusValue, LoadOptions, LoadResult, SimApi, Snapshot } from './protocol';
 
 /** Longest a run slice may block the worker, in ms (plan: runtime split). */

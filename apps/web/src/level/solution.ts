@@ -1,5 +1,5 @@
-import type { Board, Level, Part } from '@ground-up/schema';
-import { pinsOf } from '@ground-up/sim-logic';
+import type { Board, Level, Part } from '@build-a-computer/schema';
+import { pinsOf } from '@build-a-computer/sim-logic';
 import { geomOf } from '../editor/parts';
 import { partRect } from '../editor/geometry';
 
@@ -11,7 +11,7 @@ import { partRect } from '../editor/geometry';
  */
 export async function loadSolution(level: Level): Promise<Board | undefined> {
   // Its own chunk: solutions never ship in the first-level bundle.
-  const { referenceSolution } = await import('@ground-up/content/solutions');
+  const { referenceSolution } = await import('@build-a-computer/content/solutions');
   const board = referenceSolution(level);
   return board ? layoutSolution(board) : undefined;
 }

@@ -1,4 +1,4 @@
-import type { Board, Part } from '@ground-up/schema';
+import type { Board, Part } from '@build-a-computer/schema';
 import { t } from '../../i18n';
 
 /** Display name of a part type; falls back to the type in capitals while a key is missing. */

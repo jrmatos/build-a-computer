@@ -1,16 +1,20 @@
 /**
- * Chip library storage: a separate IndexedDB database ('ground-up-chips') so the
+ * Chip library storage: a separate IndexedDB database ('build-a-computer-chips') so the
  * level save database keeps its schema. Records are validated on read; bad ones
  * are skipped (and logged) instead of breaking startup. Falls back to memory.
  */
 import Dexie, { type Table } from 'dexie';
-import { ChipDef, type Board, type ChipMap } from '@ground-up/schema';
+import { ChipDef, type Board, type ChipMap } from '@build-a-computer/schema';
+import { LEVEL_DB } from '../../level/db';
+
+/** Chip library database. Pre-rename data is copied in by storage/legacy-migration.ts. */
+export const CHIP_DB = { name: 'build-a-computer-chips', version: 1, stores: { chips: '' } } as const;
 
 class ChipDb extends Dexie {
   chips!: Table<unknown, string>;
   constructor() {
-    super('ground-up-chips');
-    this.version(1).stores({ chips: '' });
+    super(CHIP_DB.name);
+    this.version(CHIP_DB.version).stores(CHIP_DB.stores);
   }
 }
 
@@ -19,9 +23,8 @@ class SavesDb extends Dexie {
   saves!: Table<unknown, string>;
   progress!: Table<unknown, string>;
   constructor() {
-    super('ground-up');
-    // Must match level/db.ts.
-    this.version(1).stores({ saves: '', progress: '' });
+    super(LEVEL_DB.name);
+    this.version(LEVEL_DB.version).stores(LEVEL_DB.stores);
   }
 }
 

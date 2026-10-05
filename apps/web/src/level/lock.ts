@@ -1,6 +1,6 @@
 /**
  * Two-tab lock (E-DATA-01) on the Web Locks API. One tab holds
- * `ground-up:level:<id>`; another tab opening the same level is read-only
+ * `build-a-computer:level:<id>`; another tab opening the same level is read-only
  * until it takes the lock over. Without navigator.locks every tab can edit.
  */
 
@@ -13,7 +13,7 @@ let held: Held | null = null;
 
 export const locksSupported = (): boolean => typeof navigator !== 'undefined' && 'locks' in navigator && !!navigator.locks;
 
-export const lockName = (levelId: string): string => `ground-up:level:${levelId}`;
+export const lockName = (levelId: string): string => `build-a-computer:level:${levelId}`;
 
 /**
  * Try to take the lock. Resolves true when held (or locks are unsupported).

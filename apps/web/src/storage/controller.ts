@@ -8,7 +8,7 @@
  * device; the file is a copy the player owns. A failing file never blocks or
  * loses in-browser saves (E-PLAT-02).
  */
-import { levelById } from '@ground-up/content';
+import { levelById } from '@build-a-computer/content';
 import {
   NewerVersionError,
   parseImportFile,
@@ -16,7 +16,7 @@ import {
   type ImportedFile,
   type Save,
   type Workspace,
-} from '@ground-up/schema';
+} from '@build-a-computer/schema';
 import { rootBoard, setChips } from '../editor/chips';
 import { useEditor } from '../editor/store';
 import { t } from '../i18n';
@@ -53,7 +53,7 @@ const sync = new FileSync({
 let remembered: FileHandleLike | null = null;
 
 const today = () => new Date().toISOString().slice(0, 10);
-export const workspaceFileName = (d = today()) => `ground-up-workspace-${d}.json`;
+export const workspaceFileName = (d = today()) => `build-a-computer-workspace-${d}.json`;
 
 // ---------------------------------------------------------------- workspace
 
@@ -61,7 +61,7 @@ export async function buildWorkspace(): Promise<Workspace> {
   const { progress, saves } = await workspaceData();
   const { chips, theme, showGrid } = editor();
   return {
-    kind: 'ground-up/workspace',
+    kind: 'build-a-computer/workspace',
     version: WORKSPACE_VERSION,
     exportedAt: new Date().toISOString(),
     ...(APP_VERSION ? { appVersion: APP_VERSION } : {}),
@@ -89,7 +89,7 @@ export async function exportAll(): Promise<void> {
 export function exportBoard(): void {
   const { chips, level } = editor();
   const save: Save = makeSave(level ?? levelById('sandbox')!, rootBoard(), chips);
-  const name = `ground-up-${save.levelId}.json`;
+  const name = `build-a-computer-${save.levelId}.json`;
   void download.save(JSON.stringify(save, null, 2), name);
   toast('storage.boardExported', 'success', { file: name });
 }

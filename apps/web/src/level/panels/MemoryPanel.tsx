@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import type { Part } from '@ground-up/schema';
-import { disassemble } from '@ground-up/content';
+import type { Part } from '@build-a-computer/schema';
+import { disassemble } from '@build-a-computer/content';
 import { useEditor } from '../../editor/store';
 import { t } from '../../i18n';
 import { capacityOf, changedCells, contentsOf, findCpu, memoryParts, partValue, widthOf, type CpuParts } from './memory';

@@ -1,10 +1,12 @@
 import { z } from 'zod';
+import { normalizeKind, PROGRESS_KIND } from './kinds';
 
 export const LevelStatus = z.enum(['locked', 'open', 'completed']);
 export type LevelStatus = z.infer<typeof LevelStatus>;
 
 export const Progress = z.object({
-  kind: z.literal('ground-up/progress'),
+  /** Legacy 'ground-up/progress' is accepted and normalized. */
+  kind: z.preprocess(normalizeKind, z.literal(PROGRESS_KIND)),
   version: z.literal(1),
   levels: z.record(
     z.string(),

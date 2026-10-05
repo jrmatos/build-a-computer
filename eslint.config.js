@@ -49,7 +49,7 @@ export default tseslint.config(
       'no-restricted-properties': [
         'error',
         { object: 'Date', property: 'now', message: 'Simulation must be deterministic.' },
-        { object: 'Math', property: 'random', message: 'Use the seeded PRNG from @ground-up/det.' },
+        { object: 'Math', property: 'random', message: 'Use the seeded PRNG from @build-a-computer/det.' },
       ],
       'no-restricted-syntax': [
         'error',

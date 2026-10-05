@@ -1,4 +1,4 @@
-import type { Board, Level } from '@ground-up/schema';
+import type { Board, Level } from '@build-a-computer/schema';
 import { solutionFor as phase0to2 } from './phase0-2/index';
 import { phase3_4Solution } from './phase3-4/index';
 

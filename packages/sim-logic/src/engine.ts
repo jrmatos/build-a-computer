@@ -1,4 +1,4 @@
-import { Prng } from '@ground-up/det';
+import { Prng } from '@build-a-computer/det';
 import { assertRunnable, type CompiledPart, type Netlist } from './compile';
 import { gateSignal } from './library';
 import { V0, V1, VX, allX, mask, type Signal, type Value } from './values';

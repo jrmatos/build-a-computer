@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { RomParseError } from '@ground-up/sim-logic';
+import type { RomParseError } from '@build-a-computer/sim-logic';
 import { numProp } from '../editor/partProps';
 import { updatePart } from '../editor/ops';
 import { useEditor } from '../editor/store';

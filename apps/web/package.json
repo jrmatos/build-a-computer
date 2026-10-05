@@ -1,5 +1,5 @@
 {
-  "name": "@ground-up/web",
+  "name": "@build-a-computer/web",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -11,16 +11,16 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@ground-up/content": "workspace:*",
-    "@ground-up/schema": "workspace:*",
-    "@ground-up/sim-logic": "workspace:*",
-    "@ground-up/worker": "workspace:*",
+    "@build-a-computer/content": "workspace:*",
+    "@build-a-computer/schema": "workspace:*",
+    "@build-a-computer/sim-logic": "workspace:*",
+    "@build-a-computer/worker": "workspace:*",
     "comlink": "^4.4.2",
     "dexie": "^4.4.6",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "zustand": "^5.0.15",
-    "@ground-up/det": "workspace:*"
+    "@build-a-computer/det": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",

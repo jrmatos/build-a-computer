@@ -1,4 +1,4 @@
-import type { TestSpec } from '@ground-up/schema';
+import type { TestSpec } from '@build-a-computer/schema';
 import type { Netlist } from '../compile';
 import { Budget, Rig, UNSTABLE_MESSAGE, failCase, type CaseResult, type CheckOptions } from './common';
 

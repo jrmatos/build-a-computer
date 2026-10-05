@@ -1,4 +1,4 @@
-import type { Level, PartType } from '@ground-up/schema';
+import type { Level, PartType } from '@build-a-computer/schema';
 import { PART_ORDER } from './parts';
 
 export interface PaletteShortcut {

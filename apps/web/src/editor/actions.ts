@@ -2,7 +2,7 @@
  * Editor actions shared by keyboard shortcuts, the context menu, the
  * properties panel and the toolbar. Each one is a single undoable step.
  */
-import type { PartType } from '@ground-up/schema';
+import { CLIPBOARD_KIND, normalizeKind, type PartType } from '@build-a-computer/schema';
 import { t } from '../i18n';
 import { screenToWorld, viewport } from './camera';
 import { copyIds, deleteIds, duplicateIds, flipIds, pasteClip, rotateIds, updatePart, type Clip } from './ops';
@@ -55,8 +55,9 @@ export function cutSelection(): Clip | null {
   return c;
 }
 
+/** Accepts the legacy 'ground-up/clipboard' kind too (copied before the rename). */
 export function isClip(v: unknown): v is Clip {
-  return typeof v === 'object' && v !== null && (v as Clip).kind === 'ground-up/clipboard';
+  return typeof v === 'object' && v !== null && normalizeKind((v as { kind?: unknown }).kind) === CLIPBOARD_KIND;
 }
 
 /** Paste at a world point, or at the viewport center. Drops parts the level does not allow. */

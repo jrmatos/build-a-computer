@@ -6,7 +6,7 @@
  * `OP_ILLEGAL` and keep their raw bits for the trap value and the debugger.
  */
 
-import { signExtend } from '@ground-up/det';
+import { signExtend } from '@build-a-computer/det';
 import * as O from './ops';
 import { OP_SPECS, type OpSpec } from './ops';
 

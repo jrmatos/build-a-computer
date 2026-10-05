@@ -4,7 +4,7 @@
  * differs (E-PLAT-01). Nothing changes until the player confirms.
  */
 import { useState } from 'react';
-import { levelById } from '@ground-up/content';
+import { levelById } from '@build-a-computer/content';
 import { t } from '../i18n';
 import { Dialog } from '../ui/Dialog';
 import { completedIds } from '../level/progress';

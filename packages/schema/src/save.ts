@@ -1,11 +1,13 @@
 import { z } from 'zod';
 import { Board } from './board';
 import { ChipMap } from './chip';
+import { normalizeKind, SAVE_KIND } from './kinds';
 
 export const SAVE_VERSION = 2;
 
 export const SaveV1 = z.object({
-  kind: z.literal('ground-up/save'),
+  /** Legacy 'ground-up/save' is accepted and normalized; the current kind is always written. */
+  kind: z.preprocess(normalizeKind, z.literal(SAVE_KIND)),
   version: z.literal(1),
   levelId: z.string().min(1).max(64),
   levelVersion: z.number().int().min(1),
@@ -33,7 +35,7 @@ export class NewerVersionError extends Error {
     readonly found: number,
     readonly supported: number,
   ) {
-    super(`This file was written by a newer version of Ground Up (format ${found}). Reload the app to update.`);
+    super(`This file was written by a newer version of Build a Computer (format ${found}). Reload the app to update.`);
     this.name = 'NewerVersionError';
   }
 }

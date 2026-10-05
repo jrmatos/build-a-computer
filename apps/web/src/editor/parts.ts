@@ -1,5 +1,5 @@
-import type { ChipMap, Part, PartType } from '@ground-up/schema';
-import { pinsOf, type PinSpec } from '@ground-up/sim-logic';
+import type { ChipMap, Part, PartType } from '@build-a-computer/schema';
+import { pinsOf, type PinSpec } from '@build-a-computer/sim-logic';
 
 /** Geometry in grid cells, relative to the part origin. Pins sit on grid points. */
 export interface PinGeom {

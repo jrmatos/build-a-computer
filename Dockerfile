@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Ground Up: one Dockerfile, three targets.
+# Build a Computer: one Dockerfile, three targets.
 #   dev   - Vite dev server with hot reload (compose service `web`)
 #   build - installs and builds apps/web with Turbo
 #   prod  - nginx:alpine serving the static site (compose service `web-prod`)
@@ -32,7 +32,7 @@ RUN mkdir -p /app/node_modules /app/apps/web/node_modules \
  && chown -R node:node /app /pnpm
 USER node
 EXPOSE 5173
-CMD ["sh", "-c", "pnpm install --frozen-lockfile && exec pnpm --filter @ground-up/web exec vite --host 0.0.0.0 --port 5173 --strictPort"]
+CMD ["sh", "-c", "pnpm install --frozen-lockfile && exec pnpm --filter @build-a-computer/web exec vite --host 0.0.0.0 --port 5173 --strictPort"]
 
 # --- build: install from the lockfile, then build the web app and its deps.
 FROM base AS build
@@ -42,7 +42,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
 COPY . .
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     pnpm install --frozen-lockfile --offline --store-dir /pnpm/store
-RUN pnpm exec turbo run build --filter=@ground-up/web...
+RUN pnpm exec turbo run build --filter=@build-a-computer/web...
 
 # --- prod: static files behind nginx. No COEP header (ADR-002, E-PLAT-06).
 FROM ${NGINX_IMAGE} AS prod

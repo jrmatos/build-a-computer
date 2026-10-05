@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { ChipUsage } from '@ground-up/sim-logic';
+import type { ChipUsage } from '@build-a-computer/sim-logic';
 import { chipUsages, deleteChip, recolorChip, renameChip } from '../../editor/chips';
 import { useEditor } from '../../editor/store';
 import { t } from '../../i18n';

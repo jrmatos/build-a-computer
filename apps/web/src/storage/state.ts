@@ -1,5 +1,5 @@
 /** UI state for files and the workspace: the status indicator and the import preview. */
-import type { Workspace } from '@ground-up/schema';
+import type { Workspace } from '@build-a-computer/schema';
 import { create } from 'zustand';
 import type { SyncState } from './autosave';
 import type { WorkspaceMerge } from './merge';

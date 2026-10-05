@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { Prng } from '@ground-up/det';
-import type { Level, TestSpec } from '@ground-up/schema';
+import { Prng } from '@build-a-computer/det';
+import type { Level, TestSpec } from '@build-a-computer/schema';
 import {
   actualValue,
   assignResults,

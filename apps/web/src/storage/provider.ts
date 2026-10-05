@@ -101,8 +101,8 @@ export interface FilePickers {
   showSaveFilePicker?(o: { types: PickerType[]; suggestedName?: string; id?: string }): Promise<FileHandleLike>;
 }
 
-const JSON_TYPES: PickerType[] = [{ description: 'Ground Up workspace', accept: { 'application/json': ['.json'] } }];
-const PICKER_ID = 'ground-up-workspace';
+const JSON_TYPES: PickerType[] = [{ description: 'Build a Computer workspace', accept: { 'application/json': ['.json'] } }];
+const PICKER_ID = 'build-a-computer-workspace';
 
 export const hasFileSystemAccess = (w: FilePickers | undefined = globalThis as FilePickers): boolean =>
   typeof w?.showSaveFilePicker === 'function' && typeof w.showOpenFilePicker === 'function';
@@ -199,7 +199,7 @@ export class LocalFileProvider implements StorageProvider {
 
   async save(text: string, name?: string): Promise<void> {
     if (name !== undefined || !this.handle) {
-      const handle = await this.pickSave(name ?? 'ground-up-workspace.json');
+      const handle = await this.pickSave(name ?? 'build-a-computer-workspace.json');
       if (!handle) throw new StorageError('cancelled');
       this.connect(handle);
     }
@@ -277,7 +277,7 @@ export class DownloadProvider implements StorageProvider {
     });
   }
 
-  save(text: string, name = 'ground-up-workspace.json'): Promise<void> {
+  save(text: string, name = 'build-a-computer-workspace.json'): Promise<void> {
     downloadJson(name, text);
     return Promise.resolve();
   }

@@ -6,7 +6,7 @@
  * tool lock), Turing Complete for the content (drag from a pin to wire, click
  * a switch to flip it, everything snaps to the grid).
  */
-import type { Board, Part, PartType, PinRef } from '@ground-up/schema';
+import type { Board, Part, PartType, PinRef } from '@build-a-computer/schema';
 import { panBy, scaleOf, screenToWorld, zoomBy } from './camera';
 import { normRect, pinPos, routeWire, type Pt } from './geometry';
 import { SpatialIndex, type Hit } from './hit';

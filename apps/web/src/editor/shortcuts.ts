@@ -2,7 +2,7 @@
  * Global keyboard shortcuts and clipboard events, Excalidraw style.
  * Installed by the Canvas; ignored while typing in a field.
  */
-import { Board, parseUntrustedJson } from '@ground-up/schema';
+import { Board, parseUntrustedJson } from '@build-a-computer/schema';
 import { t } from '../i18n';
 import {
   copySelection,
@@ -203,7 +203,7 @@ export function parseClip(text: string): Clip | null {
     const v = parseUntrustedJson(text);
     if (!isClip(v)) return null;
     const b = Board.safeParse({ parts: v.parts, wires: v.wires });
-    return b.success ? { kind: 'ground-up/clipboard', parts: b.data.parts, wires: b.data.wires } : null;
+    return b.success ? { kind: 'build-a-computer/clipboard', parts: b.data.parts, wires: b.data.wires } : null;
   } catch {
     return null;
   }

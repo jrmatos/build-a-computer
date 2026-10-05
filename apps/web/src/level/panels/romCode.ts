@@ -1,4 +1,4 @@
-import { assembleLine, disassemble } from '@ground-up/content';
+import { assembleLine, disassemble } from '@build-a-computer/content';
 import { t } from '../../i18n';
 
 /** How the machine-code editor reads each line (TOY-02). */

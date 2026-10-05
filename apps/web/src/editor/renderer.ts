@@ -18,8 +18,8 @@
  *  4. Text (captions, labels) in screen space, only when zoomed in enough.
  *  5. Overlays: hover, selection, previews, flashes and diagnostics.
  */
-import type { Part, PartType } from '@ground-up/schema';
-import type { BusValue, Snapshot } from '@ground-up/worker';
+import type { Part, PartType } from '@build-a-computer/schema';
+import type { BusValue, Snapshot } from '@build-a-computer/worker';
 import type { Pt, Rect } from './geometry';
 import type { SpatialIndex } from './hit';
 import { inkOn, mix, PALETTES, type Palette } from './palette';

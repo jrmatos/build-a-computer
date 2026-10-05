@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { LEVELS, levelById } from '@ground-up/content';
-import type { Level } from '@ground-up/schema';
+import { LEVELS, levelById } from '@build-a-computer/content';
+import type { Level } from '@build-a-computer/schema';
 import { useEditor } from '../editor/store';
 import { t } from '../i18n';
 import { CheckIcon, CrossIcon, LockIcon } from './icons';

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Board, Part, PartType, Wire } from '@ground-up/schema';
+import type { Board, Part, PartType, Wire } from '@build-a-computer/schema';
 import { CompileError, LIMITS, ReferenceEngine, V0, V1, VX, compile, runTruthTable } from './index';
 
 /** Tiny board builder for tests. */

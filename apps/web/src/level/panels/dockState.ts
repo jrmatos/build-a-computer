@@ -6,7 +6,7 @@ export type DockTab = (typeof DOCK_TABS)[number];
 
 export const MIN_HEIGHT = 140;
 export const MAX_HEIGHT = 640;
-const STORAGE_KEY = 'ground-up:dock';
+const STORAGE_KEY = 'build-a-computer:dock';
 
 interface Persisted {
   open: boolean;

@@ -1,4 +1,4 @@
-import type { Part } from '@ground-up/schema';
+import type { Part } from '@build-a-computer/schema';
 import { allX, mask, sig, type Signal } from '../values';
 import type { BlockModel } from './types';
 import { bit, input, numProp, randomWord } from './bits';

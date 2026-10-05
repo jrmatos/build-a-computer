@@ -1,4 +1,4 @@
-import type { Board, Part, PartType, PinRef, Rotation, Wire } from '@ground-up/schema';
+import type { Board, Part, PartType, PinRef, Rotation, Wire } from '@build-a-computer/schema';
 import { boardBounds, partPins, partRect, unionRect } from './geometry';
 
 let counter = 0;
@@ -105,7 +105,7 @@ export function updatePart(board: Board, id: string, patch: Partial<Part>): Boar
 }
 
 export interface Clip {
-  kind: 'ground-up/clipboard';
+  kind: 'build-a-computer/clipboard';
   parts: Part[];
   wires: Wire[];
 }
@@ -115,7 +115,7 @@ export function copyIds(board: Board, ids: Set<string>): Clip {
   const parts = board.parts.filter((p) => ids.has(p.id)).map(({ locked: _locked, ...p }) => p);
   const keep = new Set(parts.map((p) => p.id));
   const wires = board.wires.filter((w) => keep.has(w.from.part) && keep.has(w.to.part));
-  return { kind: 'ground-up/clipboard', parts, wires };
+  return { kind: 'build-a-computer/clipboard', parts, wires };
 }
 
 /**

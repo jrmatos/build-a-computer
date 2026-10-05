@@ -2,7 +2,7 @@
  * SIM-12: settle time of a flattened 32-bit ripple-carry adder (288 NAND gates).
  * Budget (docs/plan.md, Performance budgets): 1 ms or less per settle on the
  * fast engine; the test fails if the mean is over budget.
- * Run with `pnpm --filter @ground-up/sim-logic bench`.
+ * Run with `pnpm --filter @build-a-computer/sim-logic bench`.
  * Set BENCH_OUT=path.json to also write the numbers as JSON (for posting on a PR).
  * Lives outside packages/sim-logic/src because it reads the wall clock.
  */

@@ -1,4 +1,4 @@
-import type { Board, Part, PinRef, Wire } from '@ground-up/schema';
+import type { Board, Part, PinRef, Wire } from '@build-a-computer/schema';
 import { geomOf, type PinGeom } from './parts';
 
 export type Pt = { x: number; y: number };

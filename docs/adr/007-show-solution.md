@@ -14,7 +14,7 @@ the answer, because hints alone did not get them unstuck.
 - The level panel has a **Show solution** button under the hints. It asks for confirmation, then
   replaces the board with the level's reference solution as one undo step (Ctrl+Z restores the
   player's attempt).
-- Solutions load lazily from `@ground-up/content/solutions` into their own chunk, so the
+- Solutions load lazily from `@build-a-computer/content/solutions` into their own chunk, so the
   first-level bundle (400 KB budget) does not grow and nothing is fetched until a player asks.
 - The game lays the solution out before showing it (`apps/web/src/level/solution.ts`): columns by
   logic depth between the level's inputs and outputs, wires routed automatically. A test checks

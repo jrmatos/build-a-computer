@@ -1,4 +1,4 @@
-import type { ChipDef, ChipMap, Part, PartType } from '@ground-up/schema';
+import type { ChipDef, ChipMap, Part, PartType } from '@build-a-computer/schema';
 
 /**
  * Pin contract shared by the engine, the chip flattener and the editor.

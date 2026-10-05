@@ -1,5 +1,5 @@
 import type { DragEvent, ReactNode } from 'react';
-import type { PartType } from '@ground-up/schema';
+import type { PartType } from '@build-a-computer/schema';
 import { useEditor, type Tool } from '../editor/store';
 import { t } from '../i18n';
 import { IconHand, IconLibrary, IconLock, IconMore, IconPointer, IconUnlock, IconWire, PartSymbol } from './icons';

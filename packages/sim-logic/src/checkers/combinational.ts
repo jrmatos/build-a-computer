@@ -1,5 +1,5 @@
-import { Prng } from '@ground-up/det';
-import type { TestSpec } from '@ground-up/schema';
+import { Prng } from '@build-a-computer/det';
+import type { TestSpec } from '@build-a-computer/schema';
 import type { Netlist } from '../compile';
 import { REFERENCES } from '../blocks/references';
 import { mask } from '../values';

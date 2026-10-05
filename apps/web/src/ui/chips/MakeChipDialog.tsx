@@ -1,6 +1,6 @@
 import { useMemo, useState, type DragEvent } from 'react';
-import type { Board, ChipDef, Part } from '@ground-up/schema';
-import { validatePorts } from '@ground-up/sim-logic';
+import type { Board, ChipDef, Part } from '@build-a-computer/schema';
+import { validatePorts } from '@build-a-computer/sim-logic';
 import { makeChip } from '../../editor/chips';
 import { useEditor } from '../../editor/store';
 import { t } from '../../i18n';
@@ -206,7 +206,7 @@ interface PortListProps {
   dupNames: Set<string>;
 }
 
-const DRAG_MIME = 'application/x-ground-up-port';
+const DRAG_MIME = 'application/x-build-a-computer-port';
 
 /** Reorderable port rows: drag, or the up/down buttons from the keyboard. */
 function PortList({ title, ids, onChange, partById, labels, setLabel, dupNames }: PortListProps) {

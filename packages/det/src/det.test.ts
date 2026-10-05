@@ -56,7 +56,7 @@ describe('canonicalJson', () => {
 
 describe('sha256', () => {
   it('matches node crypto', () => {
-    for (const s of ['', 'abc', 'x'.repeat(1000), 'ground up ✓']) {
+    for (const s of ['', 'abc', 'x'.repeat(1000), 'build a computer ✓']) {
       expect(sha256(s)).toBe(createHash('sha256').update(s).digest('hex'));
     }
   });

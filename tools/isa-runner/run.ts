@@ -1,6 +1,6 @@
 /**
  * Runs riscv-tests flat binaries (built by docker/riscv-toolchain) in the
- * @ground-up/rv32 emulator. A test passes when it writes 1 to `tohost`;
+ * @build-a-computer/rv32 emulator. A test passes when it writes 1 to `tohost`;
  * (n << 1) | 1 means test case n failed.
  */
 import { readFileSync } from 'node:fs';

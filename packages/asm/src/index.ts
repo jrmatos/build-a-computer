@@ -1,5 +1,5 @@
 /**
- * @ground-up/asm: RV32IMA assembler, flat-image linker and disassembler.
+ * @build-a-computer/asm: RV32IMA assembler, flat-image linker and disassembler.
  *
  * - `assemble(source)` -> relocatable object + diagnostics (ASM-01)
  * - `link(objects)` / `build(source)` -> flat image, symbols, source map (ASM-02)

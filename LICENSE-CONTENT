@@ -1,4 +1,4 @@
-Ground Up curriculum content license
+Build a Computer curriculum content license
 ====================================
 
 Code in this repository is licensed under the MIT License (see LICENSE).
@@ -15,7 +15,7 @@ TypeScript source that loads, validates or compiles the content
 (packages/content/src/**/*.ts) is code and stays under MIT.
 
 You may share and adapt the content for any purpose, including commercially,
-as long as you give appropriate credit ("Ground Up contributors"), link to the
+as long as you give appropriate credit ("Build a Computer contributors"), link to the
 license, indicate if changes were made, and distribute your contributions under
 the same license.
 

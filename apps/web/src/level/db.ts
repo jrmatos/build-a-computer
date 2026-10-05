@@ -16,19 +16,22 @@ export interface Storage {
 
 const PROGRESS_KEY = 'progress';
 
-class GroundUpDb extends Dexie {
+/** Level saves database. Pre-rename data is copied in by storage/legacy-migration.ts. */
+export const LEVEL_DB = { name: 'build-a-computer', version: 1, stores: { saves: '', progress: '' } } as const;
+
+class BuildAComputerDb extends Dexie {
   saves!: Table<unknown, string>;
   progress!: Table<unknown, string>;
   constructor() {
-    super('ground-up');
+    super(LEVEL_DB.name);
     // Out-of-line keys: saves by level id, progress under a single key.
-    this.version(1).stores({ saves: '', progress: '' });
+    this.version(LEVEL_DB.version).stores(LEVEL_DB.stores);
   }
 }
 
 export async function openIndexedDb(timeoutMs = 3000): Promise<Storage> {
   if (typeof indexedDB === 'undefined') throw new Error('IndexedDB is not available');
-  const db = new GroundUpDb();
+  const db = new BuildAComputerDb();
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     await Promise.race([

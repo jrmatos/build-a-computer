@@ -1,5 +1,5 @@
 {
-  "name": "@ground-up/content",
+  "name": "@build-a-computer/content",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -13,9 +13,9 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@ground-up/schema": "workspace:*"
+    "@build-a-computer/schema": "workspace:*"
   },
   "devDependencies": {
-    "@ground-up/sim-logic": "workspace:*"
+    "@build-a-computer/sim-logic": "workspace:*"
   }
 }

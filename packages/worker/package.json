@@ -1,5 +1,5 @@
 {
-  "name": "@ground-up/worker",
+  "name": "@build-a-computer/worker",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -12,11 +12,11 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@ground-up/schema": "workspace:*",
-    "@ground-up/sim-logic": "workspace:*",
+    "@build-a-computer/schema": "workspace:*",
+    "@build-a-computer/sim-logic": "workspace:*",
     "comlink": "^4.4.2"
   },
   "devDependencies": {
-    "@ground-up/content": "workspace:*"
+    "@build-a-computer/content": "workspace:*"
   }
 }

@@ -1,6 +1,6 @@
-# Contributing to Ground Up
+# Contributing to Build a Computer
 
-Thanks for helping. Ground Up is built task by task from
+Thanks for helping. Build a Computer is built task by task from
 [`docs/plan.md`](docs/plan.md); humans and AI agents follow the same rules in
 [`AGENTS.md`](AGENTS.md).
 

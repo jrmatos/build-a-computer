@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { LEVELS } from '@ground-up/content';
-import type { Level } from '@ground-up/schema';
+import { LEVELS } from '@build-a-computer/content';
+import type { Level } from '@build-a-computer/schema';
 import { useEditor } from '../editor/store';
 import { t } from '../i18n';
 import { BulbIcon, CheckIcon, ChevronIcon, MapIcon } from './icons';
@@ -14,7 +14,7 @@ import { Markdown, inline } from './Markdown';
 import { loadSolution } from './solution';
 import { zoomToFit } from '../editor/camera';
 
-const COLLAPSE_KEY = 'ground-up:level-panel-collapsed';
+const COLLAPSE_KEY = 'build-a-computer:level-panel-collapsed';
 
 function readCollapsed(): boolean {
   try {

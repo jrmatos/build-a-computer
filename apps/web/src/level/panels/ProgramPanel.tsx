@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import type { Part } from '@ground-up/schema';
+import type { Part } from '@build-a-computer/schema';
 import { useEditor } from '../../editor/store';
 import { t } from '../../i18n';
 import { capacityOf, widthOf } from './memory';

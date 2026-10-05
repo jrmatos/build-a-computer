@@ -1,4 +1,4 @@
-import type { Board, Part, PartType } from '@ground-up/schema';
+import type { Board, Part, PartType } from '@build-a-computer/schema';
 import type { BlockModel } from './blocks/types';
 import { GATE_OPS, blockOf, kindOf, type PartBehavior, type PartKind } from './library';
 import { PART_INFO, pinsOf, widthOf } from './parts-spec';

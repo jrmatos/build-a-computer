@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { PART_TYPES, type Board, type ChipDef, type Part, type Rotation } from '@ground-up/schema';
+import { PART_TYPES, type Board, type ChipDef, type Part, type Rotation } from '@build-a-computer/schema';
 import { describe, expect, it } from 'vitest';
 import { toWorld } from './geometry';
 import { mix, PALETTES } from './palette';

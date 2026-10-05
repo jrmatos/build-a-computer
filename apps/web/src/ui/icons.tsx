@@ -3,7 +3,7 @@
  * (aria-hidden); the button that holds an icon carries the label.
  */
 import type { ReactNode, SVGProps } from 'react';
-import type { PartType } from '@ground-up/schema';
+import type { PartType } from '@build-a-computer/schema';
 
 type IconProps = SVGProps<SVGSVGElement> & { size?: number };
 

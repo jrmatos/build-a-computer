@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { levelById } from '@ground-up/content';
-import type { Board } from '@ground-up/schema';
+import { levelById } from '@build-a-computer/content';
+import type { Board } from '@build-a-computer/schema';
 import { HISTORY_TICKS, SimHost } from './host';
 
 const notBoard: Board = {

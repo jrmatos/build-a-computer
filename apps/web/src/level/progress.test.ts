@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { LEVELS, levelById } from '@ground-up/content';
-import type { Level } from '@ground-up/schema';
+import { LEVELS, levelById } from '@build-a-computer/content';
+import type { Level } from '@build-a-computer/schema';
 import {
   completedIds,
   emptyProgress,
@@ -69,7 +69,7 @@ describe('progress', () => {
     expect(completedIds(p)).toEqual(['meet-nand']);
     p = importProgress(
       p,
-      JSON.stringify({ kind: 'ground-up/progress', version: 1, levels: { 'meet-nand': { status: 'open', levelVersion: 1 } } }),
+      JSON.stringify({ kind: 'build-a-computer/progress', version: 1, levels: { 'meet-nand': { status: 'open', levelVersion: 1 } } }),
     );
     expect(p.levels['meet-nand']?.status).toBe('completed');
   });

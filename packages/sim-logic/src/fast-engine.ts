@@ -1,4 +1,4 @@
-import { Prng } from '@ground-up/det';
+import { Prng } from '@build-a-computer/det';
 import { assertRunnable, type CompiledPart, type Netlist } from './compile';
 import { idle, stateKey, type Engine, type EngineOptions, type InternalState, type SettleResult } from './engine';
 import { gate, type VX2 } from './library';

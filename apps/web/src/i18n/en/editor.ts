@@ -3,7 +3,7 @@ export const editor: Record<string, string> = {
   'canvas.labelPlaceholder': 'Label',
   'canvas.labelAria': 'Part label',
   'canvas.notAllowed': '{part} is not available in this level.',
-  'canvas.pasteInvalid': 'The clipboard does not hold Ground Up parts.',
+  'canvas.pasteInvalid': 'The clipboard does not hold Build a Computer parts.',
   'canvas.chipRecursive': '“{chip}” cannot go inside itself.',
 
   // Properties panel: per-type props

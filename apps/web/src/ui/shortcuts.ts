@@ -1,5 +1,5 @@
 /** Shortcut labels shown in the UI chrome. Key handling itself lives in the editor. */
-import type { Level, PartType } from '@ground-up/schema';
+import type { Level, PartType } from '@build-a-computer/schema';
 import { PART_ORDER } from '../editor/parts';
 import { isPartAllowed, paletteShortcuts } from '../editor/tools';
 
@@ -27,4 +27,4 @@ export function paletteKeys(level: Level | null): Map<PartType, number> {
 export { isPartAllowed };
 
 /** Mime type for dragging a part from the toolbar or library to the canvas. */
-export const PART_DRAG_MIME = 'application/x-ground-up-part';
+export const PART_DRAG_MIME = 'application/x-build-a-computer-part';

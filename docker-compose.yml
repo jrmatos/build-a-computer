@@ -1,14 +1,14 @@
 # docker compose up web                      -> dev server, http://localhost:5173
 # docker compose --profile prod up web-prod  -> nginx build, http://localhost:8080
 # No database or API service: v1 is a static site (ADR-008).
-name: ground-up
+name: build-a-computer
 
 services:
   web:
     build:
       context: .
       target: dev
-    image: ground-up-dev
+    image: build-a-computer-dev
     ports:
       - '5173:5173'
     environment:
@@ -31,7 +31,7 @@ services:
     build:
       context: .
       target: prod
-    image: ground-up-web
+    image: build-a-computer-web
     ports:
       - '${WEB_PROD_PORT:-8080}:80'
     restart: unless-stopped

@@ -1,5 +1,5 @@
-import type { Board, ChipMap, Level } from '@ground-up/schema';
-import type { CaseResult, Diagnostic } from '@ground-up/sim-logic';
+import type { Board, ChipMap, Level } from '@build-a-computer/schema';
+import type { CaseResult, Diagnostic } from '@build-a-computer/sim-logic';
 
 /** A snapshot of the running simulation, posted to the UI at most 60 times a second. */
 export interface Snapshot {

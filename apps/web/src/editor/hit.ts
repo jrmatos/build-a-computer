@@ -1,4 +1,4 @@
-import type { Board, Part, PinRef } from '@ground-up/schema';
+import type { Board, Part, PinRef } from '@build-a-computer/schema';
 import { distToSegment, partPins, partRect, rectContains, rectsIntersect, wirePath, type Pt, type Rect } from './geometry';
 
 const CELL = 8;

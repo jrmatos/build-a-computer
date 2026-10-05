@@ -38,19 +38,19 @@ importers:
 
   apps/web:
     dependencies:
-      '@ground-up/content':
+      '@build-a-computer/content':
         specifier: workspace:*
         version: link:../../packages/content
-      '@ground-up/det':
+      '@build-a-computer/det':
         specifier: workspace:*
         version: link:../../packages/det
-      '@ground-up/schema':
+      '@build-a-computer/schema':
         specifier: workspace:*
         version: link:../../packages/schema
-      '@ground-up/sim-logic':
+      '@build-a-computer/sim-logic':
         specifier: workspace:*
         version: link:../../packages/sim-logic
-      '@ground-up/worker':
+      '@build-a-computer/worker':
         specifier: workspace:*
         version: link:../../packages/worker
       comlink:
@@ -90,11 +90,11 @@ importers:
 
   packages/content:
     dependencies:
-      '@ground-up/schema':
+      '@build-a-computer/schema':
         specifier: workspace:*
         version: link:../schema
     devDependencies:
-      '@ground-up/sim-logic':
+      '@build-a-computer/sim-logic':
         specifier: workspace:*
         version: link:../sim-logic
 
@@ -102,7 +102,7 @@ importers:
 
   packages/rv32:
     dependencies:
-      '@ground-up/det':
+      '@build-a-computer/det':
         specifier: workspace:*
         version: link:../det
     devDependencies:
@@ -118,10 +118,10 @@ importers:
 
   packages/sim-logic:
     dependencies:
-      '@ground-up/det':
+      '@build-a-computer/det':
         specifier: workspace:*
         version: link:../det
-      '@ground-up/schema':
+      '@build-a-computer/schema':
         specifier: workspace:*
         version: link:../schema
     devDependencies:
@@ -131,17 +131,17 @@ importers:
 
   packages/worker:
     dependencies:
-      '@ground-up/schema':
+      '@build-a-computer/schema':
         specifier: workspace:*
         version: link:../schema
-      '@ground-up/sim-logic':
+      '@build-a-computer/sim-logic':
         specifier: workspace:*
         version: link:../sim-logic
       comlink:
         specifier: ^4.4.2
         version: 4.4.2
     devDependencies:
-      '@ground-up/content':
+      '@build-a-computer/content':
         specifier: workspace:*
         version: link:../content
 

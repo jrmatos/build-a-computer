@@ -1,4 +1,4 @@
-import type { Board } from '@ground-up/schema';
+import type { Board } from '@build-a-computer/schema';
 import { BoardBuilder, type Pin } from '../../src/phase3-4/builder';
 
 /**

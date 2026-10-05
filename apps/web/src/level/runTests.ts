@@ -1,5 +1,5 @@
-import type { CaseResult } from '@ground-up/sim-logic';
-import type { Level } from '@ground-up/schema';
+import type { CaseResult } from '@build-a-computer/sim-logic';
+import type { Level } from '@build-a-computer/schema';
 import { useEditor } from '../editor/store';
 import { sim } from '../sim/client';
 import { t } from '../i18n';

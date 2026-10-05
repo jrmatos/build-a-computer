@@ -23,4 +23,4 @@ finished:
     j    finished
     .section .rodata
 hello:
-    .asciz "Hello from Ground Up\r\n"
+    .asciz "Hello from the board\r\n"

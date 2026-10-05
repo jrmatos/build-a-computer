@@ -4,10 +4,10 @@
  * on columns, and how a value is drawn (leaf, number pill, unknown, empty).
  * No DOM, no worker: everything here is unit tested.
  */
-import { Prng } from '@ground-up/det';
-import type { CaseResult } from '@ground-up/sim-logic';
-import { REFERENCES, REFERENCE_SIGNATURES } from '@ground-up/sim-logic';
-import type { Level, TestSpec } from '@ground-up/schema';
+import { Prng } from '@build-a-computer/det';
+import type { CaseResult } from '@build-a-computer/sim-logic';
+import { REFERENCES, REFERENCE_SIGNATURES } from '@build-a-computer/sim-logic';
+import type { Level, TestSpec } from '@build-a-computer/schema';
 
 export type TestKind = TestSpec['kind'];
 type Values = Record<string, number>;

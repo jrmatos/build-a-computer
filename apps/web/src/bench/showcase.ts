@@ -1,6 +1,6 @@
 /** A board with one of every part (and every display state) for visual review of the renderer. */
-import type { Board, Part, Wire } from '@ground-up/schema';
-import type { Snapshot } from '@ground-up/worker';
+import type { Board, Part, Wire } from '@build-a-computer/schema';
+import type { Snapshot } from '@build-a-computer/worker';
 
 type P = Omit<Part, 'rot' | 'flip'> & Partial<Pick<Part, 'rot' | 'flip'>>;
 

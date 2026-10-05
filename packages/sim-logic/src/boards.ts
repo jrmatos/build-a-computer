@@ -1,4 +1,4 @@
-import type { Board, Part, PartType, Wire } from '@ground-up/schema';
+import type { Board, Part, PartType, Wire } from '@build-a-computer/schema';
 
 /** Small board builder for tests and benchmarks. Pins are written `part.pin`. */
 export function boardBuilder() {

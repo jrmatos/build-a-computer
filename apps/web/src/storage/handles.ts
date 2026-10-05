@@ -1,6 +1,6 @@
 /**
  * The last connected file handle, kept in its own IndexedDB database
- * ('ground-up-files') so the next visit can offer "Reconnect to <name>".
+ * ('build-a-computer-files') so the next visit can offer "Reconnect to <name>".
  * File handles are structured-cloneable; permission is not kept with them and
  * must be asked again with a click.
  */
@@ -16,11 +16,14 @@ export interface HandleRecord {
 
 const KEY = 'last';
 
+/** File handle database. Pre-rename data is copied in by legacy-migration.ts. */
+export const FILES_DB = { name: 'build-a-computer-files', version: 1, stores: { handles: '' } } as const;
+
 class FilesDb extends Dexie {
   handles!: Table<HandleRecord, string>;
   constructor() {
-    super('ground-up-files');
-    this.version(1).stores({ handles: '' });
+    super(FILES_DB.name);
+    this.version(FILES_DB.version).stores(FILES_DB.stores);
   }
 }
 

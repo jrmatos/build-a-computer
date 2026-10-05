@@ -1,5 +1,5 @@
 /** Test fixtures for flatten/chips/swap tests: NAND-built chips. Not exported from the package. */
-import type { Board, ChipDef, ChipMap, Part, PartType, Wire } from '@ground-up/schema';
+import type { Board, ChipDef, ChipMap, Part, PartType, Wire } from '@build-a-computer/schema';
 
 export function board() {
   const parts: Part[] = [];

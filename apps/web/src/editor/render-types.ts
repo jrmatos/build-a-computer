@@ -1,5 +1,5 @@
-import type { Board, PartType } from '@ground-up/schema';
-import type { Snapshot } from '@ground-up/worker';
+import type { Board, PartType } from '@build-a-computer/schema';
+import type { Snapshot } from '@build-a-computer/worker';
 import type { Pt, Rect } from './geometry';
 import type { SpatialIndex } from './hit';
 import type { Camera, Theme } from './store';

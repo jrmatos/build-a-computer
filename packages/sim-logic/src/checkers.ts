@@ -1,4 +1,4 @@
-import type { TestSpec } from '@ground-up/schema';
+import type { TestSpec } from '@build-a-computer/schema';
 import type { Netlist } from './compile';
 import { failCase, type CaseResult, type CheckOptions } from './checkers/common';
 import { runExhaustive, runRandom, runTruthTable } from './checkers/combinational';

@@ -1,4 +1,4 @@
-import type { PartType } from '@ground-up/schema';
+import type { PartType } from '@build-a-computer/schema';
 import { BLOCKS } from './blocks/index';
 import type { BlockModel } from './blocks/types';
 import { mask, type Signal } from './values';

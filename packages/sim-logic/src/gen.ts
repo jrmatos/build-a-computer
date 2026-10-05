@@ -4,7 +4,7 @@
  * run uses a fixed seed, so the suite is deterministic.
  */
 import fc from 'fast-check';
-import type { Board, Part, PartProps, PartType, Wire } from '@ground-up/schema';
+import type { Board, Part, PartProps, PartType, Wire } from '@build-a-computer/schema';
 import { BLOCKS } from './blocks/index';
 import { compile, type Netlist } from './compile';
 import { ReferenceEngine, type EngineOptions, type SettleResult } from './engine';

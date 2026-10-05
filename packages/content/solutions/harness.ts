@@ -1,6 +1,6 @@
-import type { Board, Level, PartType } from '@ground-up/schema';
-import { BLOCKS, REFERENCES, ReferenceEngine, compile, loadProgram, runTest } from '@ground-up/sim-logic';
-import type { TestSpec } from '@ground-up/schema';
+import type { Board, Level, PartType } from '@build-a-computer/schema';
+import { BLOCKS, REFERENCES, ReferenceEngine, compile, loadProgram, runTest } from '@build-a-computer/sim-logic';
+import type { TestSpec } from '@build-a-computer/schema';
 
 /**
  * Test-only helpers for content checks. Multi-bit nets, block models and the

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import { PART_TYPES, type Board, type ChipMap, type Level, type PartType } from '@ground-up/schema';
-import type { CaseResult, Diagnostic } from '@ground-up/sim-logic';
-import type { Snapshot } from '@ground-up/worker';
+import { PART_TYPES, type Board, type ChipMap, type Level, type PartType } from '@build-a-computer/schema';
+import type { CaseResult, Diagnostic } from '@build-a-computer/sim-logic';
+import type { Snapshot } from '@build-a-computer/worker';
 
 /** Grid cell size in CSS pixels at 100% zoom. */
 export const GRID = 20;

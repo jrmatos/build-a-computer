@@ -2,11 +2,11 @@
  * Pure progress and unlock logic (LVL-01, LVL-06). No storage, no DOM: this is
  * what the tests exercise.
  */
-import { mergeProgress, Progress, type Level, type PartType } from '@ground-up/schema';
+import { mergeProgress, Progress, type Level, type PartType } from '@build-a-computer/schema';
 
 export type LevelState = 'locked' | 'open' | 'completed';
 
-export const emptyProgress = (): Progress => ({ kind: 'ground-up/progress', version: 1, levels: {} });
+export const emptyProgress = (): Progress => ({ kind: 'build-a-computer/progress', version: 1, levels: {} });
 
 /** A level opens once every level it requires is completed. The sandbox is always open. */
 export function isUnlocked(level: Level, completed: ReadonlySet<string> | readonly string[]): boolean {
@@ -31,7 +31,7 @@ export function completedIds(p: Progress): string[] {
 /** Record a completion. Never moves a level backward (mergeProgress semantics). */
 export function withCompleted(p: Progress, level: Level, now = new Date()): Progress {
   const entry = { status: 'completed' as const, levelVersion: level.version, completedAt: now.toISOString() };
-  return mergeProgress(p, { kind: 'ground-up/progress', version: 1, levels: { [level.id]: entry } });
+  return mergeProgress(p, { kind: 'build-a-computer/progress', version: 1, levels: { [level.id]: entry } });
 }
 
 /** E-DATA-06: completed on an older version of the level. Stays completed; shows a badge. */

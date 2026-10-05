@@ -1,5 +1,5 @@
-import { Prng } from '@ground-up/det';
-import type { Part, PartProps, PartType } from '@ground-up/schema';
+import { Prng } from '@build-a-computer/det';
+import type { Part, PartProps, PartType } from '@build-a-computer/schema';
 import { describe, expect, it } from 'vitest';
 import { inputsOf, outputsOf, PART_INFO } from '../parts-spec';
 import { allX, sig, type Signal } from '../values';

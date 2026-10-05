@@ -1,5 +1,5 @@
-import type { Board, Part } from '@ground-up/schema';
-import type { BusValue, Snapshot } from '@ground-up/worker';
+import type { Board, Part } from '@build-a-computer/schema';
+import type { BusValue, Snapshot } from '@build-a-computer/worker';
 import { dataToBytes } from './romCode';
 
 export const MEMORY_TYPES = new Set(['ram', 'rom', 'register', 'counter']);

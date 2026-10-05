@@ -8,7 +8,7 @@
 
 ## Context
 
-Ground Up is a browser game where players build a computer from NAND gates up
+Build a Computer is a browser game where players build a computer from NAND gates up
 to an OS. It needs a deterministic simulator that runs the same in a browser
 worker, in Node tests and in a server verifier; a fast 2D editor; offline play;
 and, from M6, optional accounts. One maintainer plus AI agents do the work, so

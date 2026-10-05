@@ -3,7 +3,7 @@
 /**
  * Regenerates packages/asm/corpus/golden/*.json from GNU binutils.
  *
- *   docker build -t ground-up-asm-golden tools/asm-golden
+ *   docker build -t build-a-computer-asm-golden tools/asm-golden
  *   node tools/asm-golden/generate.mjs
  *
  * Each corpus/*.s is assembled with
@@ -29,9 +29,9 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const corpus = join(here, '../../packages/asm/corpus');
 const goldenDir = join(corpus, 'golden');
-const IMAGE = 'ground-up-asm-golden';
+const IMAGE = 'build-a-computer-asm-golden';
 
-const work = mkdtempSync(join(tmpdir(), 'ground-up-asm-golden-'));
+const work = mkdtempSync(join(tmpdir(), 'build-a-computer-asm-golden-'));
 try {
   const sources = readdirSync(corpus)
     .filter((f) => f.endsWith('.s'))

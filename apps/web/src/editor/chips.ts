@@ -6,8 +6,8 @@
  * Edits inside a chip commit to its ChipDef continuously (version bumped);
  * wires to pins that no longer exist are dropped when leaving the chip.
  */
-import type { Board, ChipDef, ChipMap } from '@ground-up/schema';
-import { levelById } from '@ground-up/content';
+import type { Board, ChipDef, ChipMap } from '@build-a-computer/schema';
+import { levelById } from '@build-a-computer/content';
 import {
   makeChipFromBoard,
   newChipId,
@@ -15,7 +15,7 @@ import {
   usagesOf,
   wouldCreateCycle,
   type ChipUsage,
-} from '@ground-up/sim-logic';
+} from '@build-a-computer/sim-logic';
 import { t } from '../i18n';
 import { loadChips, putChips, savedBoards } from '../ui/chips/db';
 import {

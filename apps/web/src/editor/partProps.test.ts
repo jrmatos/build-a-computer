@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Board, ChipDef, Part } from '@ground-up/schema';
+import type { Board, ChipDef, Part } from '@build-a-computer/schema';
 import { applyProps, canPlaceChip, chipUses, defaultProps, describeWire, memorySize, validateProps } from './partProps';
 
 const part = (id: string, type: Part['type'], props?: Part['props'], extra: Partial<Part> = {}): Part => ({

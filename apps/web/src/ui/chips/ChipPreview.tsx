@@ -1,4 +1,4 @@
-import type { ChipDef, Part } from '@ground-up/schema';
+import type { ChipDef, Part } from '@build-a-computer/schema';
 import { geomOf, getChipRegistry, setChipRegistry, type PartGeom } from '../../editor/parts';
 
 /** Geometry of a chip tile, using the editor's own layout (geomOf) even for a draft definition. */

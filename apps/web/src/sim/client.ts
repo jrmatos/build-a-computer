@@ -1,7 +1,7 @@
 import * as Comlink from 'comlink';
-import type { Board, ChipMap } from '@ground-up/schema';
-import { closure, type CaseResult } from '@ground-up/sim-logic';
-import type { SimApi, Snapshot } from '@ground-up/worker';
+import type { Board, ChipMap } from '@build-a-computer/schema';
+import { closure, type CaseResult } from '@build-a-computer/sim-logic';
+import type { SimApi, Snapshot } from '@build-a-computer/worker';
 import { t } from '../i18n';
 import { useEditor } from '../editor/store';
 

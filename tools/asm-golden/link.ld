@@ -1,4 +1,4 @@
-/* Flat layout used by @ground-up/asm's linker (packages/asm/src/linker.ts). */
+/* Flat layout used by @build-a-computer/asm's linker (packages/asm/src/linker.ts). */
 SECTIONS {
   . = 0x80000000;
   .text   : ALIGN(4) { *(.text .text.*) }

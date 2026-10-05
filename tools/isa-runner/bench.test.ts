@@ -1,6 +1,6 @@
 /**
  * RV-04: interpreter speed. Budget (docs/plan.md): at least 10 million
- * instructions per second. Run with `pnpm --filter @ground-up/rv32 bench`.
+ * instructions per second. Run with `pnpm --filter @build-a-computer/rv32 bench`.
  * Lives outside packages/rv32/src because it reads the wall clock.
  */
 import { expect, it } from 'vitest';

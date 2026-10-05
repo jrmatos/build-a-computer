@@ -1,4 +1,4 @@
-import type { Board, ChipDef, ChipMap, Part, PartProps, PartType, PinRef, Wire } from '@ground-up/schema';
+import type { Board, ChipDef, ChipMap, Part, PartProps, PartType, PinRef, Wire } from '@build-a-computer/schema';
 import { pinsOf, portName, type PinSpec } from './parts-spec';
 
 /** A non-fatal problem found while flattening; the board still loads. */

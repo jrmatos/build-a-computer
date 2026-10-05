@@ -1,4 +1,4 @@
-import type { Part } from '@ground-up/schema';
+import type { Part } from '@build-a-computer/schema';
 import type { Signal } from '../values';
 
 /**

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { Level, type Board, type TestSpec } from '@ground-up/schema';
-import type { CaseResult } from '@ground-up/sim-logic';
+import { Level, type Board, type TestSpec } from '@build-a-computer/schema';
+import type { CaseResult } from '@build-a-computer/sim-logic';
 import { SimHost } from './host';
 
 const p = (id: string, type: Board['parts'][number]['type'], label?: string) => ({ id, type, x: 0, y: 0, rot: 0 as const, flip: false, ...(label ? { label } : {}) });

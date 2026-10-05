@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { Board } from '@ground-up/schema';
-import { compile } from '@ground-up/sim-logic';
-import { Prng } from '@ground-up/det';
+import type { Board } from '@build-a-computer/schema';
+import { compile } from '@build-a-computer/sim-logic';
+import { Prng } from '@build-a-computer/det';
 import { addPart, addWire, copyIds, deleteIds, duplicateIds, moveIds, pasteClip, rotateIds } from './ops';
 import { partPins, routeWire } from './geometry';
 import { SpatialIndex } from './hit';

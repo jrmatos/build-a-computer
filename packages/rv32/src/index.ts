@@ -1,6 +1,6 @@
 /**
- * @ground-up/rv32: deterministic RV32IMA + Zicsr emulator (M/S/U, Sv32)
- * with the Ground Up machine memory map and devices.
+ * @build-a-computer/rv32: deterministic RV32IMA + Zicsr emulator (M/S/U, Sv32)
+ * with the Build a Computer machine memory map and devices.
  */
 
 export * from './ops';

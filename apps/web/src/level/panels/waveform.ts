@@ -1,5 +1,5 @@
-import type { Board } from '@ground-up/schema';
-import type { BusValue } from '@ground-up/worker';
+import type { Board } from '@build-a-computer/schema';
+import type { BusValue } from '@build-a-computer/worker';
 
 /** Ticks kept by the worker; the waveform scrubs over at most this many. */
 export const HISTORY_TICKS = 4096;

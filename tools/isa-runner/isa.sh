@@ -1,14 +1,14 @@
 #!/bin/sh
 # Build the riscv-tests image (cached), copy the binaries into the gitignored
 # tools/isa-runner/dist/riscv-tests folder, then run every test in our emulator.
-# Usage: pnpm --filter @ground-up/rv32 isa [name-filter]
+# Usage: pnpm --filter @build-a-computer/rv32 isa [name-filter]
 set -eu
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 # dist/ is ignored by git, eslint and prettier.
 OUT="$HERE/dist/riscv-tests"
-IMAGE=ground-up/riscv-toolchain
-NAME="ground-up-isa-$$"
+IMAGE=build-a-computer/riscv-toolchain
+NAME="build-a-computer-isa-$$"
 
 if [ -z "${ISA_SKIP_BUILD:-}" ]; then
   docker build -q -t "$IMAGE" "$ROOT/docker/riscv-toolchain" >/dev/null

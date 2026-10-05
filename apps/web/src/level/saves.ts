@@ -2,8 +2,8 @@
  * Pure save handling: validate what storage returns, migrate old formats and
  * refuse newer ones (E-DATA-04, E-DATA-05).
  */
-import { migrateSave, NewerVersionError, Progress, SAVE_VERSION, type Board, type ChipMap, type Level, type Save } from '@ground-up/schema';
-import { closure, findChipCycle } from '@ground-up/sim-logic';
+import { migrateSave, NewerVersionError, Progress, SAVE_VERSION, type Board, type ChipMap, type Level, type Save } from '@build-a-computer/schema';
+import { closure, findChipCycle } from '@build-a-computer/sim-logic';
 import { mergeChips, remapBoardChips } from '../ui/chips/logic';
 
 export type Decoded =
@@ -35,7 +35,7 @@ export function chipCycleMessage(chips: ChipMap, cycle: string[]): string {
 /** A save embeds every chip its board uses, transitively, so it loads anywhere. */
 export function makeSave(level: Level, board: Board, chips: ChipMap = {}, now = new Date()): Save {
   return {
-    kind: 'ground-up/save',
+    kind: 'build-a-computer/save',
     chips: closure(board, chips),
     version: SAVE_VERSION,
     levelId: level.id,

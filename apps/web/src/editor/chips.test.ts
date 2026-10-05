@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { Board, Part } from '@ground-up/schema';
-import { pinsOf } from '@ground-up/sim-logic';
+import type { Board, Part } from '@build-a-computer/schema';
+import { pinsOf } from '@build-a-computer/sim-logic';
 import {
   deleteChip,
   duplicateChip,

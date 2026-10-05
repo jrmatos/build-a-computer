@@ -1,4 +1,4 @@
-import { PART_TYPES, Level, type PartType } from '@ground-up/schema';
+import { PART_TYPES, Level, type PartType } from '@build-a-computer/schema';
 import { PHASE0_2_LEVELS } from './phase0-2';
 import { PHASE3_4_LEVELS } from './phase3-4';
 

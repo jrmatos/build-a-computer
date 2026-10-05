@@ -8,7 +8,7 @@ import { placeChip } from '../../editor/chips';
 import { screenToWorld } from '../../editor/camera';
 import { useEditor } from '../../editor/store';
 
-export const CHIP_DRAG_MIME = 'application/x-ground-up-chip';
+export const CHIP_DRAG_MIME = 'application/x-build-a-computer-chip';
 
 export function startChipDrag(e: ReactDragEvent, chipId: string): void {
   e.dataTransfer.setData(CHIP_DRAG_MIME, chipId);

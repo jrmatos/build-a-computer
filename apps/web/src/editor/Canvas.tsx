@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { NumberInputPopover, openNumberInput } from '../ui/NumberInputPopover';
 import { Probe, type ProbeState } from '../ui/Probe';
-import { PartType } from '@ground-up/schema';
+import { PartType } from '@build-a-computer/schema';
 import { t } from '../i18n';
 import { sim } from '../sim/client';
 import { setPartLabel } from './actions';
@@ -17,9 +17,9 @@ import { isPartAllowed } from './tools';
 import './Canvas.css';
 
 /** MIME type the library sidebar uses when dragging a part onto the board. */
-const PART_MIME = 'application/x-ground-up-part';
+const PART_MIME = 'application/x-build-a-computer-part';
 /** With part type 'chip': the ChipDef id being dragged. */
-const CHIP_MIME = 'application/x-ground-up-chip';
+const CHIP_MIME = 'application/x-build-a-computer-chip';
 /** Hover time before a wire probe appears (plan: Probe). Alt+hover on a pin shows at once. */
 const PROBE_DELAY_MS = 300;
 

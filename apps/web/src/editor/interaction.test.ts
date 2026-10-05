@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Level } from '@ground-up/schema';
+import type { Level } from '@build-a-computer/schema';
 import { partPins } from './geometry';
 import { Interaction, clickActionOf, ghostOrigin, snap, snapDelta, wheelAction, type PointerInput } from './interaction';
 import { addPart, addWire } from './ops';
@@ -117,11 +117,20 @@ describe('pure helpers', () => {
 
   it('only accepts well-formed clipboard JSON', () => {
     expect(parseClip('hello')).toBeNull();
-    expect(parseClip('{"kind":"ground-up/clipboard","parts":[{"id":1}],"wires":[]}')).toBeNull();
+    expect(parseClip('{"kind":"build-a-computer/clipboard","parts":[{"id":1}],"wires":[]}')).toBeNull();
     const ok = parseClip(
-      JSON.stringify({ kind: 'ground-up/clipboard', parts: [{ id: 'p1', type: 'nand', x: 0, y: 0, rot: 0, flip: false }], wires: [] }),
+      JSON.stringify({ kind: 'build-a-computer/clipboard', parts: [{ id: 'p1', type: 'nand', x: 0, y: 0, rot: 0, flip: false }], wires: [] }),
     );
     expect(ok?.parts).toHaveLength(1);
+  });
+
+  it('legacy ground-up kinds load: a pre-rename clipboard paste still parses', () => {
+    const legacy = parseClip(
+      JSON.stringify({ kind: 'ground-up/clipboard', parts: [{ id: 'p1', type: 'nand', x: 0, y: 0, rot: 0, flip: false }], wires: [] }),
+    );
+    expect(legacy?.kind).toBe('build-a-computer/clipboard');
+    expect(legacy?.parts).toHaveLength(1);
+    expect(parseClip(JSON.stringify({ kind: 'other/clipboard', parts: [], wires: [] }))).toBeNull();
   });
 });
 

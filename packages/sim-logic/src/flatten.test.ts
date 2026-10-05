@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { performance } from 'node:perf_hooks';
-import type { Board, ChipMap } from '@ground-up/schema';
+import type { Board, ChipMap } from '@build-a-computer/schema';
 import { ChipCycleError, flattenBoard } from './flatten';
 import { compile } from './compile';
 import { ReferenceEngine } from './engine';

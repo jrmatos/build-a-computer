@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Board, ChipDef, Progress, Save, Workspace } from '@ground-up/schema';
+import type { Board, ChipDef, Progress, Save, Workspace } from '@build-a-computer/schema';
 import { defaultChoices, isNoopMerge, mergeWorkspace, resolveImport, type LocalWorkspace } from './merge';
 
 const nand = (id: string, x = 0): Board['parts'][number] => ({ id, type: 'nand', x, y: 0, rot: 0, flip: false });
@@ -15,7 +15,7 @@ const chip = (id: string, version: number, b: Board = board(nand('c1'))): ChipDe
 });
 
 const save = (levelId: string, b: Board, updatedAt = '2026-10-01T00:00:00.000Z', chips: Save['chips'] = {}): Save => ({
-  kind: 'ground-up/save',
+  kind: 'build-a-computer/save',
   version: 2,
   levelId,
   levelVersion: 1,
@@ -24,10 +24,10 @@ const save = (levelId: string, b: Board, updatedAt = '2026-10-01T00:00:00.000Z',
   chips,
 });
 
-const progress = (levels: Progress['levels']): Progress => ({ kind: 'ground-up/progress', version: 1, levels });
+const progress = (levels: Progress['levels']): Progress => ({ kind: 'build-a-computer/progress', version: 1, levels });
 
 const ws = (p: Partial<Workspace>): Workspace => ({
-  kind: 'ground-up/workspace',
+  kind: 'build-a-computer/workspace',
   version: 1,
   exportedAt: '2026-10-05T00:00:00.000Z',
   progress: progress({}),

@@ -1,4 +1,4 @@
-import { Level, type Part, type PartType, type TestSpec, type TruthRow } from '@ground-up/schema';
+import { Level, type Part, type PartType, type TestSpec, type TruthRow } from '@build-a-computer/schema';
 
 /**
  * Small helpers shared by the level modules (phase0-2, phase3-4, ...).

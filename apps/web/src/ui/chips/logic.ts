@@ -3,8 +3,8 @@
  * chip's board, dropping wires to pins that no longer exist, and merging
  * chips that arrive with a save into the local library.
  */
-import type { Board, ChipDef, ChipMap, Part, Wire } from '@ground-up/schema';
-import { pinsOf } from '@ground-up/sim-logic';
+import type { Board, ChipDef, ChipMap, Part, Wire } from '@build-a-computer/schema';
+import { pinsOf } from '@build-a-computer/sim-logic';
 
 const byPosition = (a: Part, b: Part): number =>
   a.y - b.y || a.x - b.x || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);

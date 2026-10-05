@@ -5,7 +5,7 @@ import { MEMORY_MAP } from './bus';
 import { mulh32, mulhsu32, mulhu32, RAM_BASE } from './cpu';
 import { CAUSE, CSR, MSTATUS } from './csr';
 import { Machine, type MachineOptions } from './machine';
-import { mulh, mulhu } from '@ground-up/det';
+import { mulh, mulhu } from '@build-a-computer/det';
 
 const SEED = 0x5eed_0002;
 const T0 = 5;
@@ -266,7 +266,7 @@ describe('RV-03 M extension', () => {
         }
   });
 
-  it('fast high-multiply helpers agree with @ground-up/det', () => {
+  it('fast high-multiply helpers agree with @build-a-computer/det', () => {
     fc.assert(
       fc.property(
         fc.integer({ min: 0, max: 0xffffffff }),

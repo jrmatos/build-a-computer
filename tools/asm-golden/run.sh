@@ -1,5 +1,5 @@
 #!/bin/sh
-# Runs inside the ground-up-asm-golden container. Reads *.s and link.ld from
+# Runs inside the build-a-computer-asm-golden container. Reads *.s and link.ld from
 # the current directory, writes out/<name>.bin, out/<name>.nm, out/<name>.err.
 set -u
 mkdir -p out

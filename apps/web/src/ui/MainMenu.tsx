@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import type { Board } from '@ground-up/schema';
+import type { Board } from '@build-a-computer/schema';
 import { useEditor } from '../editor/store';
 import {
   disconnectFile,

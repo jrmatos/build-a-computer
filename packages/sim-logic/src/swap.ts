@@ -1,5 +1,5 @@
-import { Prng } from '@ground-up/det';
-import type { Board, ChipDef, ChipMap, Part, PartType, Wire } from '@ground-up/schema';
+import { Prng } from '@build-a-computer/det';
+import type { Board, ChipDef, ChipMap, Part, PartType, Wire } from '@build-a-computer/schema';
 import { compile } from './compile';
 import { ReferenceEngine, type SettleResult } from './engine';
 import { ChipCycleError, flattenBoard, modelPartFor } from './flatten';
