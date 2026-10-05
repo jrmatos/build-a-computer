@@ -1,0 +1,62 @@
+.crash {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: var(--bg);
+  color: var(--text);
+  user-select: text;
+}
+.crash-card {
+  max-width: 640px;
+  width: 100%;
+  padding: 24px;
+  border-radius: var(--radius);
+  border: 1px solid var(--island-border);
+  background: var(--island);
+  box-shadow: var(--island-shadow);
+}
+.crash h1 {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+.crash p {
+  margin: 0 0 12px;
+  color: var(--text-muted);
+}
+.crash-message,
+.crash-stack {
+  margin: 0 0 12px;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--hover);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.crash-message {
+  color: var(--danger);
+}
+.crash-stack {
+  max-height: 280px;
+  overflow: auto;
+}
+.crash-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.crash-actions button {
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--island-border);
+  background: var(--hover);
+  cursor: pointer;
+}
+.crash-actions .crash-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}

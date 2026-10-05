@@ -1,5 +1,10 @@
 export const app: Record<string, string> = {
   'app.name': 'Ground Up',
+  'crash.title': 'Something broke',
+  'crash.body': 'Your board is autosaved, so reloading is safe. If this keeps happening, copy the details and share them.',
+  'crash.reload': 'Reload',
+  'crash.copy': 'Copy details',
+  'crash.details': 'Technical details',
   'part.switch': 'Switch',
   'part.lamp': 'Lamp',
   'part.clock': 'Clock',
