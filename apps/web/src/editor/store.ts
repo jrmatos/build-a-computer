@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { PART_TYPES, type Board, type ChipMap, type Level, type PartType } from '@build-a-computer/schema';
 import type { CaseResult, Diagnostic } from '@build-a-computer/sim-logic';
-import type { RvSnapshot, Snapshot, SourceDiagnostic } from '@build-a-computer/worker';
+import type { JsRunState, RvSnapshot, Snapshot, SourceDiagnostic } from '@build-a-computer/worker';
 
 /** Grid cell size in CSS pixels at 100% zoom. */
 export const GRID = 20;
@@ -79,6 +79,8 @@ export interface EditorState {
   codeDiagnostics: SourceDiagnostic[];
   /** Latest RISC-V machine snapshot from the worker. */
   rv: RvSnapshot | null;
+  /** Track 2: the player's JavaScript run/training state. */
+  js: JsRunState | null;
 
   /** Apply an edit as one undoable step. */
   commit: (fn: (b: Board) => Board, selection?: string[]) => void;
@@ -126,6 +128,7 @@ export const useEditor = create<EditorState>()((set, get) => ({
   breakpoints: [],
   codeDiagnostics: [],
   rv: null,
+  js: null,
 
   commit: (fn, selection) => {
     const { board, past, readOnly } = get();

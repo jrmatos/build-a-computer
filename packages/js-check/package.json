@@ -1,5 +1,5 @@
 {
-  "name": "@build-a-computer/worker",
+  "name": "@build-a-computer/js-check",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -12,15 +12,9 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@build-a-computer/asm": "workspace:*",
-    "@build-a-computer/js-check": "workspace:*",
-    "@build-a-computer/rv-check": "workspace:*",
-    "@build-a-computer/rv32": "workspace:*",
+    "@build-a-computer/det": "workspace:*",
     "@build-a-computer/schema": "workspace:*",
     "@build-a-computer/sim-logic": "workspace:*",
-    "comlink": "^4.4.2"
-  },
-  "devDependencies": {
-    "@build-a-computer/content": "workspace:*"
+    "@build-a-computer/tensor": "workspace:*"
   }
 }

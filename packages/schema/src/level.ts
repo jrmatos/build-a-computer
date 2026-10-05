@@ -94,8 +94,48 @@ export const TestSpec = z.discriminatedUnion('kind', [
     }),
     maxSteps: z.number().int().min(1).max(200_000_000).default(5_000_000),
   }),
+  /**
+   * Track 2 (Neuron to LLM): run the player's JavaScript module in the sandbox
+   * (no network, time limit — ASM-05), call `entry(...args)` and compare.
+   * - expect: deep equality; numbers within `tolerance` (E-ML-02: never exact
+   *   for floats). Tensors compare by shape + values (`{shape, data}` JSON).
+   * - metric: the result must be an object; result[metric.name] within [min, max]
+   *   (training levels: e.g. accuracy >= 0.95, loss <= 0.1).
+   */
+  z.object({
+    kind: z.literal('js'),
+    name: z.string().max(80).optional(),
+    entry: z.string().min(1).max(64),
+    args: z.array(z.unknown()).max(16).default([]),
+    expect: z.unknown().optional(),
+    tolerance: z.number().min(0).max(1).default(1e-6),
+    metric: z.object({ name: z.string().max(40), min: z.number().optional(), max: z.number().optional() }).optional(),
+    /** Seed passed to the sandbox's seeded RNG (Math.random is replaced). */
+    seed: z.number().int().default(1),
+    timeoutMs: z.number().int().min(100).max(600_000).default(10_000),
+  }),
 ]);
 export type TestSpec = z.infer<typeof TestSpec>;
+
+/** Library modules a Track 2 level may unlock for import in the player's code. */
+export const JS_MODULES = ['tensor', 'autograd', 'nn', 'optim', 'data', 'tokenizer', 'plot'] as const;
+export const JsModule = z.enum(JS_MODULES);
+export type JsModule = z.infer<typeof JsModule>;
+
+/** What a Track 2 level gives the player. */
+export const JsSetup = z.object({
+  /** The player's file (main.js): an ES module whose exports the tests call. */
+  starter: z.string().max(100_000).default(''),
+  /** Modules importable as `import { … } from 'tensor'` etc.; grows as levels unlock them. */
+  modules: z.array(JsModule).default([]),
+  /** Datasets the level provides through the 'data' module, by id (see content/datasets). */
+  datasets: z.array(z.string().max(64)).max(8).default([]),
+  /** Read-only helper files shown as tabs and importable by name ('./helpers.js'). */
+  library: z.array(z.object({ name: z.string().max(64), text: z.string().max(200_000) })).max(8).default([]),
+  /** Show the training panel (loss curve, Train/Stop) for levels that train. */
+  training: z.boolean().default(false),
+});
+export type JsSetup = z.infer<typeof JsSetup>;
 
 export const DEVICES = ['uart', 'keyboard', 'timer', 'framebuffer', 'disk'] as const;
 export const Device = z.enum(DEVICES);
@@ -160,10 +200,12 @@ export const Level = z.object({
   resources: z.array(Resource).max(4).default([]),
   /** Volatile state at power on (E-SIM-07). */
   power: z.enum(['zero', 'random']).default('zero'),
-  /** 'board' levels wire parts; 'code' levels write assembly (Phase 6+). */
-  mode: z.enum(['board', 'code']).default('board'),
+  /** 'board' levels wire parts; 'code' levels write assembly or C (Phase 6+); 'js' levels are Track 2. */
+  mode: z.enum(['board', 'code', 'js']).default('board'),
   /** Required when mode is 'code'. */
   code: CodeSetup.optional(),
+  /** Required when mode is 'js'. */
+  js: JsSetup.optional(),
   /** Optional level: may be skipped without blocking later levels. */
   optional: z.boolean().default(false),
   draft: z.boolean().default(false),

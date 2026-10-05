@@ -149,3 +149,34 @@ export interface RvApi {
   rvFramebuffer(): { pixels: Uint8Array; palette: Uint32Array } | null;
   rvSubscribe(onSnapshot: (s: RvSnapshot) => void): void;
 }
+
+/** One training-progress sample for the loss curve (Track 2). */
+export interface MlSample {
+  step: number;
+  /** Any numbers the player's code reports via report({loss, acc, …}). */
+  values: Record<string, number>;
+}
+
+export interface JsRunState {
+  running: boolean;
+  /** console.log output and errors from the player's code (last 64 KiB). */
+  log: string;
+  samples: MlSample[];
+  /** Last error, with the line in main.js when known. */
+  error?: { message: string; line?: number; column?: number };
+  /** Result of the last call, JSON-safe (tensors as {shape, data}). */
+  result?: unknown;
+}
+
+/**
+ * Track 2: run the player's JavaScript in a sandboxed worker (no network,
+ * time limit, seeded Math.random — ASM-05, E-ML-*). Training code calls
+ * report({...}) to stream samples and checkpoint(state) to save progress.
+ */
+export interface JsApi {
+  /** Run `entry(...args)` from the player's module (main.js) with the level's modules and datasets. */
+  jsCall(source: string, level: Level, entry: string, args: unknown[]): Promise<{ ok: boolean; result?: unknown; error?: { message: string; line?: number } }>;
+  /** Stop the running code (terminates its sandbox). */
+  jsStop(): void;
+  jsSubscribe(onState: (s: JsRunState) => void): void;
+}

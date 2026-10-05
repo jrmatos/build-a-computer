@@ -21,6 +21,8 @@ import './App.css';
 
 // Code levels pull in CodeMirror and the assembler: load them only when needed (first-level bundle budget).
 const CodeWorkspace = lazy(() => import('./code/CodeWorkspace').then((m) => ({ default: m.CodeWorkspace })));
+// Track 2 levels (JavaScript + tensors): their own lazy chunk too.
+const JsWorkspace = lazy(() => import('./ml/JsWorkspace').then((m) => ({ default: m.JsWorkspace })));
 
 /**
  * Layout, Excalidraw style: a full-bleed canvas with floating islands.
@@ -30,12 +32,17 @@ const CodeWorkspace = lazy(() => import('./code/CodeWorkspace').then((m) => ({ d
  */
 export function App() {
   // Code levels (Phase 6+) replace the board with the code workspace.
-  const codeMode = useEditor((s) => s.level?.mode === 'code');
+  const mode = useEditor((s) => s.level?.mode ?? 'board');
+  const codeMode = mode === 'code';
   return (
     <div className="app">
       {codeMode ? (
         <Suspense fallback={null}>
           <CodeWorkspace />
+        </Suspense>
+      ) : mode === 'js' ? (
+        <Suspense fallback={null}>
+          <JsWorkspace />
         </Suspense>
       ) : (
         <Canvas />

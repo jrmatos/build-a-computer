@@ -41,12 +41,18 @@ importers:
       '@build-a-computer/asm':
         specifier: workspace:*
         version: link:../../packages/asm
+      '@build-a-computer/cc':
+        specifier: workspace:*
+        version: link:../../packages/cc
       '@build-a-computer/content':
         specifier: workspace:*
         version: link:../../packages/content
       '@build-a-computer/det':
         specifier: workspace:*
         version: link:../../packages/det
+      '@build-a-computer/libc':
+        specifier: workspace:*
+        version: link:../../packages/libc
       '@build-a-computer/schema':
         specifier: workspace:*
         version: link:../../packages/schema
@@ -62,6 +68,9 @@ importers:
       '@codemirror/commands':
         specifier: ^6.11.1
         version: 6.11.1
+      '@codemirror/lang-cpp':
+        specifier: ^6.0.3
+        version: 6.0.3
       '@codemirror/language':
         specifier: ^6.12.4
         version: 6.12.4
@@ -77,6 +86,9 @@ importers:
       '@codemirror/view':
         specifier: ^6.43.13
         version: 6.43.13
+      '@lezer/highlight':
+        specifier: ^1.2.5
+        version: 1.2.5
       comlink:
         specifier: ^4.4.2
         version: 4.4.2
@@ -112,7 +124,14 @@ importers:
         specifier: ^4.10.2
         version: 4.10.2
 
-  packages/cc: {}
+  packages/cc:
+    devDependencies:
+      '@build-a-computer/asm':
+        specifier: workspace:*
+        version: link:../asm
+      '@build-a-computer/rv32':
+        specifier: workspace:*
+        version: link:../rv32
 
   packages/content:
     dependencies:
@@ -134,6 +153,21 @@ importers:
         version: link:../sim-logic
 
   packages/det: {}
+
+  packages/js-check:
+    dependencies:
+      '@build-a-computer/det':
+        specifier: workspace:*
+        version: link:../det
+      '@build-a-computer/schema':
+        specifier: workspace:*
+        version: link:../schema
+      '@build-a-computer/sim-logic':
+        specifier: workspace:*
+        version: link:../sim-logic
+      '@build-a-computer/tensor':
+        specifier: workspace:*
+        version: link:../tensor
 
   packages/libc: {}
 
@@ -193,11 +227,16 @@ importers:
         specifier: ^4.10.2
         version: 4.10.2
 
+  packages/tensor: {}
+
   packages/worker:
     dependencies:
       '@build-a-computer/asm':
         specifier: workspace:*
         version: link:../asm
+      '@build-a-computer/js-check':
+        specifier: workspace:*
+        version: link:../js-check
       '@build-a-computer/rv-check':
         specifier: workspace:*
         version: link:../rv-check
@@ -298,6 +337,9 @@ packages:
 
   '@codemirror/commands@6.11.1':
     resolution: {integrity: sha512-O/4hG3SC1YwcmQ0d2UVNDs+AsaNWd1iHVxbTeEBuqH+6bExAiPK3iS/BvpY6rZGURALv4ZD3sIgcCmRvw3ehBg==}
+
+  '@codemirror/lang-cpp@6.0.3':
+    resolution: {integrity: sha512-URM26M3vunFFn9/sm6rzqrBzDgfWuDixp85uTY49wKudToc2jTHUrKIGGKs+QWND+YLofNNZpxcNGRynFJfvgA==}
 
   '@codemirror/language@6.12.4':
     resolution: {integrity: sha512-1q4PaT+o6PbgpkJt4Q8Fv5XJxTy4FUZ4MWETtyiDw3J0Pyr9E2vqcKL+k9wcvjNTIsauxvE7OfmWj3FRPHQ76A==}
@@ -400,6 +442,9 @@ packages:
 
   '@lezer/common@1.5.3':
     resolution: {integrity: sha512-H0iErY4e43LpXbYDyBci5W4v/RwTgGV3YzYOlJPiGZ8RY8w51kVE+xLn1tg3Z6UmSfyETvtsUK3r7YsgDQEI7Q==}
+
+  '@lezer/cpp@1.1.6':
+    resolution: {integrity: sha512-vh9gWWJOXFVY8HBHK3Twzq8MgwG2iN4GSyzBP9sCGTe37P15x2R14VaBQk0VA0ezTRN1KHYBBsHhvpGZ2Xy/pA==}
 
   '@lezer/highlight@1.2.5':
     resolution: {integrity: sha512-O1GMVKgtf5YspFaRzpmqkVgMtIk2HG9uMAbH6wdAIdNh3TVzCsch/+cRi+6l2//UGDKe6NB9BW3cvuR5ezMQ0w==}
@@ -1434,6 +1479,11 @@ snapshots:
       '@codemirror/view': 6.43.13
       '@lezer/common': 1.5.3
 
+  '@codemirror/lang-cpp@6.0.3':
+    dependencies:
+      '@codemirror/language': 6.12.4
+      '@lezer/cpp': 1.1.6
+
   '@codemirror/language@6.12.4':
     dependencies:
       '@codemirror/state': 6.7.6
@@ -1544,6 +1594,12 @@ snapshots:
   '@keyv/serialize@1.1.1': {}
 
   '@lezer/common@1.5.3': {}
+
+  '@lezer/cpp@1.1.6':
+    dependencies:
+      '@lezer/common': 1.5.3
+      '@lezer/highlight': 1.2.5
+      '@lezer/lr': 1.4.10
 
   '@lezer/highlight@1.2.5':
     dependencies:

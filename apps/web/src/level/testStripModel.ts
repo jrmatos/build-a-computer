@@ -222,6 +222,12 @@ export function planStrip(level: Pick<Level, 'starter' | 'tests'>): StripPlan {
         make = (i) => ({ test: ti, kind: test.kind, index: i, inputs: test.setup?.regs ?? {}, expect: test.expect.regs ?? {} });
         break;
       }
+      case 'js': {
+        // One column per call; Track 2 panels show the details.
+        count = 1;
+        make = (i) => ({ test: ti, kind: test.kind, index: i, inputs: {}, expect: {} });
+        break;
+      }
     }
     segments.push({ kind: test.kind, start, count });
     makers.push(make);
