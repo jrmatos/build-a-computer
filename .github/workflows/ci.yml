@@ -3,8 +3,10 @@ name: CI
 # Fork-safe (E-PLAT-07): this workflow uses `pull_request` (never
 # `pull_request_target`), reads no secrets, and has a read-only token, so a PR
 # from a fork runs the same checks with nothing to steal. Jobs that need
-# secrets (preview deploys, M6+) go in a separate workflow guarded by
+# secrets (e.g. static preview deploys) go in a separate workflow guarded by
 #   if: github.event.pull_request.head.repo.full_name == github.repository
+#
+# No service containers: v1 has no backend or database (ADR-008).
 on:
   push:
     branches: [main]

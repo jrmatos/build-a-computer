@@ -1,4 +1,7 @@
 export const ui: Record<string, string> = {
+  'help.save': 'Save to your file (or export)',
+  'help.saveAs': 'Save to a new file',
+  'help.openFile': 'Open a file',
   'menu.leaveChipFirst': 'Leave the chip you are editing before opening a file.',
   // Toolbar
   'toolbar.label': 'Tools',

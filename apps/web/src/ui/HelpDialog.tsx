@@ -35,6 +35,9 @@ function groups(): { title: string; rows: Row[] }[] {
         [t('help.nudge'), ['← ↑ → ↓']],
         [t('action.delete'), ['Del', 'Backspace']],
         [t('action.selectAll'), [kbd('Mod+A')]],
+        [t('help.save'), [kbd('Mod+S')]],
+        [t('help.saveAs'), [kbd('Mod+Shift+S')]],
+        [t('help.openFile'), [kbd('Mod+O')]],
       ],
     },
     {

@@ -4,6 +4,7 @@
 - Date: 2026-10-04
 - Deciders: project owner; M0 agent session
 - Related: FND-01, FND-04, `docs/plan.md` → "Tech stack", "Architecture"
+- Amended by: [ADR-008](008-no-backend.md) (no backend in v1)
 
 ## Context
 
@@ -35,6 +36,13 @@ TypeScript everywhere, in a pnpm-workspace monorepo built with Turborepo.
 | Auth (M6)      | See ADR-003                                                           |
 | Hosting        | Static site (Cloudflare Pages); one API container; managed Postgres   |
 | Local dev      | Docker Compose: Vite dev server, nginx production preview, Postgres   |
+
+> **Amended by [ADR-008](008-no-backend.md) (2026-10-05).** v1 has no backend:
+> the API (NestJS, PostgreSQL, Drizzle, pg-boss) and Auth (ADR-003, superseded)
+> rows are dropped, hosting is a static site only (no API container or
+> Postgres), and local dev in Docker Compose is the Vite dev server and the nginx
+> production preview. The server verifier mentioned under Context is not built
+> in v1. The table above is kept as the original decision.
 
 ## Alternatives considered
 

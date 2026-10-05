@@ -27,7 +27,7 @@ Task ID: <!-- e.g. SIM-03 --> · Spec section: <!-- docs/plan.md heading -->
 Owner approval is required if this PR touches any of these (tick what applies):
 
 - [ ] Schema or save-format change (version bump + forward migration + migration tests included)
-- [ ] Auth or security code
+- [ ] Security code (import parsing, file access, CSP or headers)
 - [ ] New dependency or license (ADR in `docs/adr/` included)
 - [ ] Curriculum text or resource links (links fetched; `verifiedAt` and `verifiedTitle` recorded)
 - [ ] User data

@@ -1,6 +1,6 @@
 # docker compose up web                      -> dev server, http://localhost:5173
 # docker compose --profile prod up web-prod  -> nginx build, http://localhost:8080
-# docker compose --profile api up -d db      -> Postgres 17 (M6)
+# No database or API service: v1 is a static site (ADR-008).
 name: ground-up
 
 services:
@@ -36,24 +36,6 @@ services:
       - '${WEB_PROD_PORT:-8080}:80'
     restart: unless-stopped
 
-  db:
-    profiles: ['api']
-    image: postgres:17-alpine
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-groundup}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-groundup-dev-only}
-      POSTGRES_DB: ${POSTGRES_DB:-groundup}
-    ports:
-      - '127.0.0.1:${POSTGRES_PORT:-5432}:5432'
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
-      interval: 5s
-      timeout: 3s
-      retries: 10
-    restart: unless-stopped
-
 volumes:
   node_modules:
   nm_web:
@@ -63,4 +45,3 @@ volumes:
   nm_sim_logic:
   nm_worker:
   pnpm_store:
-  pgdata:

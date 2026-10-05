@@ -1,9 +1,21 @@
-import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
-import { migrateSave, NewerVersionError, parseUntrustedJson, type Board, type Save } from '@ground-up/schema';
-import { levelById } from '@ground-up/content';
-import { adoptBoard } from '../level/persist';
-import { makeSave } from '../level/saves';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import type { Board } from '@ground-up/schema';
 import { useEditor } from '../editor/store';
+import {
+  disconnectFile,
+  exportAll,
+  exportBoard,
+  importFile,
+  openFile,
+  saveNow,
+  saveToFile,
+  startStorage,
+} from '../storage/controller';
+import { FileStatus } from '../storage/FileStatus';
+import { IconPackage, IconSave, IconUnlink, IconUpload } from '../storage/icons';
+import { ImportDialog } from '../storage/ImportDialog';
+import { installFileKeys } from '../storage/keys';
+import { useFileUi } from '../storage/state';
 import { t } from '../i18n';
 import { Dialog } from './Dialog';
 import {
@@ -44,7 +56,18 @@ export function MainMenu() {
   const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const fsa = useFileUi((s) => s.fsa);
+  const fileName = useFileUi((s) => s.sync.fileName);
+
+  // Workspace files: autosave into a connected file, Ctrl+S / Ctrl+O (STO-03, STO-04).
+  useEffect(() => {
+    startStorage();
+    return installFileKeys({
+      save: () => void saveNow(),
+      saveAs: () => void saveToFile(),
+      open: () => void openFile(),
+    });
+  }, []);
 
   // The store owns the theme; mirror it on <html> so tokens.css switches.
   useEffect(() => {
@@ -70,47 +93,6 @@ export function MainMenu() {
   const run = (fn: () => void) => {
     close(false);
     fn();
-  };
-
-  const onFile = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    const { toast, commit, level: current, editStack } = useEditor.getState();
-    if (editStack.length) {
-      toast(t('menu.leaveChipFirst'), 'info');
-      return;
-    }
-    let save: Save;
-    try {
-      save = migrateSave(parseUntrustedJson(await file.text()));
-    } catch (err) {
-      // E-DATA-04: a newer file is reported and never loaded over the board.
-      if (err instanceof NewerVersionError) toast(err.message, 'error');
-      else toast(t('menu.loadFailed', { reason: err instanceof Error ? err.message.split('\n')[0]! : String(err) }), 'error');
-      return;
-    }
-    // Embedded chips join the library first, so chip parts on the board have pins.
-    commit(() => adoptBoard(save), []);
-    if (current && save.levelId !== current.id) toast(t('menu.otherLevel', { id: save.levelId }), 'info');
-    else toast(t('menu.loaded'), 'success');
-  };
-
-  const saveToFile = () => {
-    const { board, editStack, chips, level: current, toast } = useEditor.getState();
-    // Inside a chip, the file still holds the level's board (chips travel embedded).
-    const root = editStack.length ? editStack[0]!.parentBoard : board;
-    const save: Save = makeSave(current ?? levelById('sandbox')!, root, chips);
-    const name = `ground-up-${save.levelId}.json`;
-    const url = URL.createObjectURL(new Blob([JSON.stringify(save, null, 2)], { type: 'application/json' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    toast(t('menu.saved', { file: name }), 'success');
   };
 
   const doReset = () => {
@@ -147,6 +129,7 @@ export function MainMenu() {
         <IconChip size={15} />
         <span>{title}</span>
       </button>
+      <FileStatus />
 
       {open && (
         <div
@@ -161,8 +144,28 @@ export function MainMenu() {
             } else onMenuKeyDown(e);
           }}
         >
-          <MenuItem icon={<IconFolderOpen />} label={t('menu.openFile')} disabled={readOnly} onSelect={() => run(() => fileRef.current?.click())} />
-          <MenuItem icon={<IconDownload />} label={t('menu.saveFile')} onSelect={() => run(saveToFile)} />
+          {fsa && (
+            <MenuItem icon={<IconFolderOpen />} label={t('storage.menu.open')} shortcut={kbd('Mod+O')} disabled={readOnly} onSelect={() => run(() => void openFile())} />
+          )}
+          {fsa && <MenuItem icon={<IconSave />} label={t('storage.menu.save')} shortcut={kbd('Mod+S')} onSelect={() => run(() => void saveToFile())} />}
+          {fsa && fileName && (
+            <MenuItem icon={<IconUnlink />} label={t('storage.menu.disconnect', { file: fileName })} onSelect={() => run(disconnectFile)} />
+          )}
+          <MenuItem
+            icon={<IconPackage />}
+            label={t('storage.menu.exportAll')}
+            shortcut={fsa ? undefined : kbd('Mod+S')}
+            onSelect={() => run(() => void exportAll())}
+          />
+          <MenuItem
+            icon={<IconUpload />}
+            label={t('storage.menu.import')}
+            shortcut={fsa ? undefined : kbd('Mod+O')}
+            disabled={readOnly}
+            onSelect={() => run(() => void importFile())}
+          />
+          <MenuItem icon={<IconDownload />} label={t('storage.menu.exportBoard')} onSelect={() => run(exportBoard)} />
+          <div className="gu-menu-sep" role="separator" />
           <MenuItem icon={<IconReset />} label={t('menu.reset')} danger disabled={readOnly} onSelect={() => run(() => setConfirmReset(true))} />
           <div className="gu-menu-sep" role="separator" />
           <MenuItem icon={<IconLevels />} label={t('menu.levels')} onSelect={() => run(() => set({ levelsOpen: true }))} />
@@ -186,7 +189,7 @@ export function MainMenu() {
         </div>
       )}
 
-      <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={onFile} />
+      <ImportDialog />
 
       {confirmReset && (
         <Dialog

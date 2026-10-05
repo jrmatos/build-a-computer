@@ -19,7 +19,7 @@
     "format:check": "prettier --check .",
     "docker:dev": "docker compose up web",
     "docker:prod": "docker compose --profile prod up --build web-prod",
-    "docker:down": "docker compose --profile prod --profile api down"
+    "docker:down": "docker compose --profile prod down"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

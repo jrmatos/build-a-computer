@@ -8,6 +8,8 @@ export interface Storage {
   readonly mode: 'indexeddb' | 'memory';
   getSave(levelId: string): Promise<unknown>;
   putSave(levelId: string, save: unknown): Promise<void>;
+  /** Every stored save record by key (including `~` backup keys), for workspace export. */
+  listSaves(): Promise<Map<string, unknown>>;
   getProgress(): Promise<unknown>;
   putProgress(progress: unknown): Promise<void>;
 }
@@ -44,6 +46,11 @@ export async function openIndexedDb(timeoutMs = 3000): Promise<Storage> {
     putSave: async (id, save) => {
       await db.saves.put(save, id);
     },
+    listSaves: async () => {
+      const keys = await db.saves.toCollection().primaryKeys();
+      const values = await db.saves.bulkGet(keys);
+      return new Map(keys.map((k, i) => [k, values[i]]));
+    },
     getProgress: () => db.progress.get(PROGRESS_KEY),
     putProgress: async (p) => {
       await db.progress.put(p, PROGRESS_KEY);
@@ -62,6 +69,11 @@ export function memoryStorage(fallback?: Storage): Storage {
       saves.has(id) ? structuredClone(saves.get(id)) : await fallback?.getSave(id).catch(() => undefined),
     putSave: async (id, s) => {
       saves.set(id, structuredClone(s));
+    },
+    listSaves: async () => {
+      const out = (await fallback?.listSaves().catch(() => undefined)) ?? new Map<string, unknown>();
+      for (const [k, v] of saves) out.set(k, structuredClone(v));
+      return out;
     },
     getProgress: async () =>
       progress !== undefined ? structuredClone(progress) : await fallback?.getProgress().catch(() => undefined),

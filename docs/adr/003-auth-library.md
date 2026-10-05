@@ -1,6 +1,6 @@
 # ADR-003: Authentication library
 
-- Status: **Proposed — needs owner review** (auth is a human review gate)
+- Status: **Superseded by [ADR-008](008-no-backend.md)** (2026-10-05: v1 has no backend and no accounts; the text below is kept as history)
 - Date: 2026-10-04
 - Deciders: project owner
 - Related: API-03, E-PLAT-01, E-PLAT-05, `docs/plan.md` → "Backend", "Security and privacy", "Open questions" (accounts from 16)

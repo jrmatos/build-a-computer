@@ -43,7 +43,18 @@ Node 24 (`.nvmrc`), pnpm 10 via corepack (`corepack enable`).
 | `pnpm format`                                       | Prettier                                                |
 | `docker compose up web`                             | Dev server in Docker (hot reload), port 5173            |
 | `docker compose --profile prod up --build web-prod` | nginx production build, port 8080                       |
-| `docker compose --profile api up -d db`             | Postgres 17 (M6+)                                       |
+
+## No backend
+
+v1 is a static site with no backend, database or accounts
+([ADR-008](docs/adr/008-no-backend.md)). Do not add a server, API package,
+database service or third-party data service. Player data lives in IndexedDB
+(autosave), in a workspace JSON file the player exports and imports, and in
+files saved through the File System Access API (download/upload fallback).
+Every imported or opened file is untrusted: validate it with the
+`packages/schema` zod schemas and the E-DATA-03 size, depth and prototype-key
+limits. Later cloud storage (Google Drive, Dropbox) stays client-side (OAuth
+PKCE in the browser) and needs its own ADR plus a CSP review.
 
 ## Package boundaries
 
@@ -87,7 +98,7 @@ and `| 0`.
 The project owner approves before merge for:
 
 - schema and save-format changes
-- auth and security code
+- security code (import parsing, file access, CSP and headers)
 - new dependencies or licenses
 - curriculum text and resource links
 - anything touching user data

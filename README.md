@@ -6,8 +6,9 @@ NAND gate, wire up logic, arithmetic and memory, build a CPU, then write the
 assembler programs, C code and operating system that run on it. It is aimed at
 programmers who are new to hardware.
 
-All simulation runs in the browser (a Web Worker); the server, when it arrives,
-only stores and re-verifies.
+Everything runs in your browser: the simulator in a Web Worker, your saves on
+your own machine. There is no backend, no database and no account in v1
+([ADR-008](docs/adr/008-no-backend.md)); the site is static files.
 
 - Spec and backlog: [`docs/plan.md`](docs/plan.md)
 - Plan as a shared doc: <https://claude.ai/artifact/SHKETuSK6EnuuL993dDKWi>
@@ -22,6 +23,22 @@ only stores and re-verifies.
 | M1 Logic simulation core: reference engine, compile, power, clock | Reference engine in place             |
 | M2 Board editor                                                   | In progress                           |
 | M3 Levels and first playable (first public release)               | Next                                  |
+
+## Where your work is stored
+
+- **Autosave**: boards, progress and settings save to your browser's IndexedDB
+  as you work. If IndexedDB is unavailable (some private modes), the app runs in
+  memory and offers an export so nothing is lost silently.
+- **Workspace file**: export your whole workspace as one JSON file and import it
+  in another browser or on another device. This is your backup and your sync.
+- **Save to file**: like Excalidraw, save a board to a file you choose. In
+  Chromium-based browsers the app keeps autosaving to that file (File System
+  Access API); elsewhere it downloads and re-opens files.
+- **Sharing** is by sending a file. Leaderboards are not in v1; each level shows
+  your own local best.
+
+Google Drive and Dropbox storage are planned for a later milestone, still fully
+client-side (OAuth in the browser, no server of ours).
 
 ## Quick start
 
@@ -38,14 +55,27 @@ With Docker only (no local Node needed):
 ```sh
 docker compose up web                               # dev server + hot reload, http://localhost:5173
 docker compose --profile prod up --build web-prod   # production build on nginx, http://localhost:8080
-docker compose --profile api up -d db               # Postgres 17, for the API (M6)
-docker compose --profile prod --profile api down    # stop everything
+docker compose --profile prod down                  # stop everything
 ```
 
 The dev container bind-mounts the repo and keeps `node_modules` in named Docker
 volumes, so it never touches your host install. Copy `.env.example` to `.env` to
-change ports or Postgres credentials; set `CHOKIDAR_USEPOLLING=true` there if
-hot reload misses file changes on your Docker setup.
+change the preview port; set `CHOKIDAR_USEPOLLING=true` there if hot reload
+misses file changes on your Docker setup.
+
+## Deploy
+
+The site is static: `pnpm build` writes it to `apps/web/dist`. Publish that
+folder to Cloudflare Pages (the reference deploy) or any static host, with a SPA
+fallback to `index.html` and the headers from
+[`docker/nginx/security-headers.conf`](docker/nginx/security-headers.conf)
+(CSP, `nosniff`, frame denial). Or run the `web-prod` image, which is that
+build on nginx with the headers already set:
+
+```sh
+docker build --target prod -t ground-up-web .
+docker run -p 8080:80 ground-up-web     # http://localhost:8080, health check at /healthz
+```
 
 ## Scripts
 
@@ -75,11 +105,12 @@ Run one package with `pnpm --filter @ground-up/<name> <script>`.
 | `docs/plan.md`                     | Full spec, edge cases and milestone backlog                        |
 | `docs/adr/`                        | Architecture decision records                                      |
 | `docker/nginx/`                    | Production nginx config: SPA fallback, caching, CSP                |
-| `Dockerfile`, `docker-compose.yml` | Dev, build and prod images; Postgres                               |
+| `Dockerfile`, `docker-compose.yml` | Dev, build and prod (static nginx) images                          |
 | `.github/`                         | CI workflow, PR and issue templates                                |
 
 Later milestones add `packages/rv32`, `asm`, `cc`, `libc`, `os-kit`, `tensor`,
-`platform-core`, `apps/api` and `tools/*` (see the plan).
+`platform-core` and `tools/*` (see the plan). There is no `apps/api`
+([ADR-008](docs/adr/008-no-backend.md)).
 
 ## Tech
 

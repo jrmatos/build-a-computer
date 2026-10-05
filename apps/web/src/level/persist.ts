@@ -5,7 +5,7 @@
  * overwritten (E-DATA-04); old saves migrate forward (E-DATA-05).
  */
 import { LEVELS, levelById } from '@ground-up/content';
-import type { Board, Level, Progress } from '@ground-up/schema';
+import { mergeProgress, type Board, type Level, type Progress, type Save } from '@ground-up/schema';
 import { zoomToFit } from '../editor/camera';
 import { exitChip, rootBoard, setChips, startChipLibrary } from '../editor/chips';
 import { pruneChipWires } from '../ui/chips/logic';
@@ -133,6 +133,57 @@ export function exportBoardFile(): void {
   const { level, chips } = editor();
   if (!level) return;
   downloadJson(`ground-up-${level.id}.json`, JSON.stringify(makeSave(level, rootBoard(), chips), null, 2));
+}
+
+// ---------------------------------------------------------------- whole workspace (STO-01)
+
+/**
+ * Progress and every readable level save on this device, after saving the
+ * current board. Backup (`~`) records, unreadable and newer-version saves stay
+ * in IndexedDB and are not exported.
+ */
+export async function workspaceData(): Promise<{ progress: Progress; saves: Record<string, Save> }> {
+  await flushSave();
+  const saves: Record<string, Save> = {};
+  let raw = new Map<string, unknown>();
+  try {
+    raw = await storage.listSaves();
+  } catch (e) {
+    console.error(e);
+  }
+  for (const [id, record] of raw) {
+    if (id.includes('~')) continue;
+    const d = decodeSave(record, id);
+    if (d.kind === 'ok') saves[id] = d.save;
+  }
+  return { progress, saves };
+}
+
+/**
+ * Apply an imported workspace (after the player confirmed it): progress merges
+ * (never backward), replaced boards are first kept under their backup keys,
+ * then the chosen saves are written. The open level reloads if its board
+ * changed. Chips must already be in the library (setChips) before this runs.
+ */
+export async function applyImport(input: { progress: Progress; saves: Record<string, Save>; backups: Record<string, Save> }): Promise<void> {
+  if (editor().editStack.length) exitChip(0);
+  await flushSave();
+  if (!progressBlocked) {
+    progress = mergeProgress(progress, input.progress);
+    publishProgress();
+    await saveProgress();
+  }
+  for (const [key, save] of Object.entries(input.backups)) await write((s) => s.putSave(key, save)).catch((e) => console.error(e));
+  for (const [id, save] of Object.entries(input.saves)) {
+    if (blocked.has(id)) continue;
+    await write((s) => s.putSave(id, save)).catch((e) => console.error(e));
+  }
+  const fresh = currentId ? input.saves[currentId] : undefined;
+  if (fresh && currentId && !editor().readOnly && !blocked.has(currentId)) {
+    const board = adoptBoard(fresh);
+    savedBoard = board;
+    editor().set({ board, past: [], future: [], selection: [], testRun: null, transientBase: null });
+  }
 }
 
 // ---------------------------------------------------------------- level opening

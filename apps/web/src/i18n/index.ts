@@ -9,8 +9,9 @@ import { ui } from './en/ui';
 import { level } from './en/level';
 import { panels } from './en/panels';
 import { chips } from './en/chips';
+import { storage } from './en/storage';
 
-const en: Record<string, string> = { ...app, ...editor, ...ui, ...level, ...chips, ...panels };
+const en: Record<string, string> = { ...app, ...editor, ...ui, ...level, ...chips, ...panels, ...storage };
 
 /** Locales load from here once translations exist. */
 const locales: Record<string, Record<string, string>> = { en };

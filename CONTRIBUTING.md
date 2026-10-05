@@ -14,6 +14,11 @@ pnpm dev                 # http://localhost:5173
 
 Or with Docker only: `docker compose up web` (see README).
 
+There is no backend or database to run: the app is a static site and stores
+player data in the browser and in files the player owns
+([ADR-008](docs/adr/008-no-backend.md)). `docker compose --profile prod up
+--build web-prod` previews the production build on nginx.
+
 ## Workflow
 
 1. Pick a task from the backlog in `docs/plan.md` whose dependencies are merged.
@@ -26,7 +31,7 @@ Or with Docker only: `docker compose up web` (see README).
 
 ## What needs extra review
 
-Schema/save-format changes, auth and security code, new dependencies or
+Schema/save-format changes, security code (import parsing, file access, CSP), new dependencies or
 licenses, curriculum text and resource links, and anything touching user data
 need the project owner's approval. A new runtime dependency also needs an ADR in
 `docs/adr/`.

@@ -1,0 +1,181 @@
+/* ---------- File status (top left, next to the level chip) ---------- */
+.gu-file-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  max-width: 260px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.gu-file-status:hover {
+  background: var(--hover);
+}
+.gu-file-status:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.gu-file-status svg {
+  flex: none;
+}
+.gu-file-status__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+}
+.gu-file-status--dirty .gu-file-status__dot {
+  background: var(--warning);
+}
+.gu-file-status--saving .gu-file-status__dot {
+  background: var(--accent);
+  animation: gu-file-pulse 1s ease-in-out infinite;
+}
+.gu-file-status--error .gu-file-status__dot {
+  background: var(--danger);
+}
+.gu-file-status--error .gu-file-status__state {
+  color: var(--danger);
+}
+.gu-file-status--reconnect,
+.gu-file-status--hint {
+  color: var(--text);
+}
+.gu-file-status--reconnect svg {
+  color: var(--accent-strong);
+}
+.gu-file-status--hint svg {
+  color: var(--warning);
+}
+.gu-file-status__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--text);
+}
+.gu-file-status--saved .gu-file-status__name,
+.gu-file-status--dirty .gu-file-status__name,
+.gu-file-status--saving .gu-file-status__name,
+.gu-file-status--error .gu-file-status__name {
+  max-width: 130px;
+}
+.gu-file-status__state {
+  flex: none;
+  white-space: nowrap;
+}
+@keyframes gu-file-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gu-file-status--saving .gu-file-status__dot {
+    animation: none;
+  }
+}
+/* Narrower screens: the toolbar needs the room. Hide the file name, then all text (the tooltip keeps it). */
+@media (max-width: 1400px) {
+  .gu-file-status--saved .gu-file-status__name,
+  .gu-file-status--dirty .gu-file-status__name,
+  .gu-file-status--saving .gu-file-status__name,
+  .gu-file-status--error .gu-file-status__name {
+    display: none;
+  }
+  .gu-file-status {
+    max-width: 200px;
+  }
+}
+@media (max-width: 1200px) {
+  .gu-file-status__name,
+  .gu-file-status__state {
+    display: none;
+  }
+}
+
+/* ---------- Import summary dialog ---------- */
+.gu-import {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 14px;
+}
+.gu-import__list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+}
+.gu-import__h {
+  font-weight: 600;
+  color: var(--text) !important;
+}
+.gu-import__conflicts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+.gu-import__conflict {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.gu-import__level {
+  font-weight: 600;
+  font-size: 13px;
+}
+.gu-import__opts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.gu-import__opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--island-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.gu-import__opt.is-on {
+  border-color: var(--accent);
+  background: var(--hover);
+}
+.gu-import__opt input {
+  margin: 3px 0 0;
+  accent-color: var(--accent);
+}
+.gu-import__opt span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.gu-import__opt small {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.gu-import__badge {
+  align-self: flex-start;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.gu-import__note {
+  font-size: 12px;
+}
