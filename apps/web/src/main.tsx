@@ -27,4 +27,8 @@ async function boot() {
   );
 }
 
+// End-to-end tests (tools/e2e) open the app with ?e2e=1 to get a read-only state hook.
+if (new URLSearchParams(location.search).has('e2e'))
+  void import('./e2e').then((m) => m.installE2eHook());
+
 void boot();

@@ -12,13 +12,13 @@
   --island-shadow: 0 1px 2px rgba(15, 18, 25, 0.06), 0 4px 16px rgba(15, 18, 25, 0.08);
   --text: #1b1e25;
   --text-muted: #5d6474;
-  --text-faint: #9097a6;
+  --text-faint: #656c7a; /* 4.5:1 on --hover (WCAG AA, axe in tools/e2e) */
   --hover: #eef0f4;
   --active: #e3e2fe;
   --accent: #6965db;
-  --accent-strong: #5753c9;
+  --accent-strong: #4f4bbf;
   --accent-text: #ffffff;
-  --danger: #e03131;
+  --danger: #c92a2a; /* 4.5:1 on its own 10% tint */
   --success: #2f9e44;
   --warning: #e8590c;
   --sig-1: #16a34a;
@@ -38,11 +38,11 @@
   --island-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.35);
   --text: #e6e8ec;
   --text-muted: #a3a9b6;
-  --text-faint: #6b7280;
+  --text-faint: #959cac; /* 4.5:1 on --hover */
   --hover: #2d3139;
   --active: #403e6a;
   --accent: #a8a5ff;
-  --accent-strong: #8f8bff;
+  --accent-strong: #b4b1ff; /* text on --active stays 4.5:1 */
   --accent-text: #121418;
   --danger: #ff6b6b;
   --success: #5ef38c;

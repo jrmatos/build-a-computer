@@ -1,4 +1,4 @@
-<!-- Snapshot of the Claude Doc "Build a Computer — Platform Implementation Plan" (rev 39, 2026-10-05). The doc is the source of truth: https://claude.ai/artifact/SHKETuSK6EnuuL993dDKWi -->
+<!-- Snapshot of the Claude Doc "Build a Computer — Platform Implementation Plan" (rev 47, 2026-10-05). The doc is the source of truth: https://claude.ai/artifact/SHKETuSK6EnuuL993dDKWi -->
 
 # Build a Computer — Platform Implementation Plan
 
@@ -34,6 +34,47 @@ Each level has a short tutorial, progressive hints, and 2 to 4 verified links to
 - A player's own kernel boots on their own CPU design and runs a shell in the browser.
 - Every shipped resource link passed an automated check in the last 30 days.
 - The editor holds 60 fps with 2,000 visible components on a mid-range 2020 laptop.
+
+## Status
+
+Both tracks play end to end at [jrmatos.github.io/build-a-computer](https://jrmatos.github.io/build-a-computer/): Track 1 has all 88 levels from one NAND gate to an OS on the player's own CPU, and Track 2 all 31 levels from one neuron to a tiny GPT. Every level is still a draft awaiting owner review. 1,940 tests pass, the first level loads 312 KB of JavaScript (budget 400 KB), and CI enforces every performance budget.
+
+| Milestone | Status | Notes |
+| --- | --- | --- |
+| M0 Foundations | Done | Monorepo, CI, schemas, ADRs 001–009 |
+| M1 Logic simulation core | Done | Reference and fast engines, 1–32-bit buses, fuzzed tick for tick |
+| M2 Board editor | Done | Excalidraw-style canvas; 2,000 parts at 60 fps |
+| M3 Levels and first playable | Done | Public on GitHub Pages; offline as an installable app |
+| M4 Arithmetic and memory | Done | Custom chips, behavioral blocks, waveform panel |
+| M5 Toy CPU | Done | Toy-8 ISA; a 65-part CPU board passes the program levels |
+| M6 Files and cloud storage | Partly | Workspace file and Save to file done; Drive and Dropbox (STO-06, STO-07) later |
+| M7 RISC-V core | Done | Emulator passes 133/133 riscv-tests; Phase 5 datapath blocks |
+| M8 Assembly and debugger | Done | Assembler byte-identical to GNU on 20/20 programs; editor and debugger |
+| M9 Devices, traps and privilege | Done | UART, CLINT, PLIC, keyboard, framebuffer, block device, Sv32 |
+| M10 C compiler and libc | Done | 74/74 programs match riscv-gcc; libc written in C |
+| M11 Operating system | Done | 10 OS levels; process and page-table visualizers (OS-05) open |
+| M12 Platform and tensor engine | Partly | Tensor engine on CPU and WebGPU; TrackPlugin refactor (PLAT-01) and GPU training open |
+| M13 LLM track content | Done | 31 levels in JavaScript, run in a sandbox |
+| M14 Community | Done | Share links, level editor, level packs, local best results |
+
+### Beyond the plan
+
+- Debug any test case: boards show expected against actual, the fan-in of a wrong output and a timeline; code and JavaScript levels load that test's setup with live diffs.
+- 58 achievements, kept locally and carried in the workspace file.
+- A Show solution button (ADR-007) and hint ladders that end in exact wiring.
+
+### Changes from the plan
+
+- Track 2 levels are JavaScript in a sandboxed worker (no network, time limits, seeded randomness), not a graph editor.
+- Buses carry at most 32 bits, not 64 (ADR-006).
+- The teaching kernel runs in machine mode and user programs in user mode, with no supervisor mode (`docs/os.md`).
+- Plain `char` is unsigned, matching GCC on RISC-V.
+
+### Still open
+
+- Owner review: all level text, the Toy-8 ISA, ADRs 001–009, the JavaScript sandbox's security, and new dependencies (CodeMirror, vite-plugin-pwa).
+- PLAT-01, OS-05, a real-GPU check of the WebGPU kernels and GPU training, and the Drive and Dropbox providers.
+- WebKit's offline test is skipped: Playwright's WebKit offline mode stops the reload before the service worker answers. Cross-browser end-to-end tests (Chromium, Firefox, WebKit, touch on two phones) and axe checks run in CI.
 
 ## How AI agents use this plan
 
@@ -141,8 +182,10 @@ Every simulation runs in the worker, so the UI never freezes. There is no server
 | `packages/tensor` | Tensors, autograd, CPU and WebGPU backends | det |
 | `packages/content` | Tracks, levels, tutorials, resources and reference solutions | schema |
 | `packages/worker` | Worker entry, command protocol, time slicing, snapshot diffs | sim-logic, rv32, tensor |
-| `apps/web` | React app with board, code and graph editors, autosave and file storage | platform-core, worker, content |
+| `apps/web` | React app with board editor, assembly/C editor and JavaScript workspace, autosave and file storage | platform-core, worker, content |
 | `tools/*` | Content checker, link checker, benchmarks, ISA and compiler test runners | various |
+| `packages/rv-check` | Builds assembly and C levels, runs 'riscv' tests on the emulator, maps errors and steps to source lines | rv32, asm, cc, libc |
+| `packages/js-check` | JavaScript sandbox for Track 2 (no network, time limits, seeded randomness) and the 'js' test checker | tensor |
 
 ### Runtime split
 
@@ -447,7 +490,7 @@ Players own their data: the game autosaves in the browser and saves into files t
 
 ### Workspace file
 
-- `build-a-computer/workspace` version 1 holds progress, every level's save, the chip library and settings, validated by zod with forward migrations (E-DATA-04, E-DATA-05).
+- `build-a-computer``/workspace` version 1 holds progress, every level's save, the chip library and settings, validated by zod with forward migrations (E-DATA-04, E-DATA-05).
 - Import accepts one level's save or a whole workspace and shows a summary first. Progress merges by best status; a level whose save differs asks Keep mine or Use file.
 - Imports over 20 MB, nested deeper than 64 levels, or with prototype keys are rejected (E-DATA-03).
 
@@ -834,10 +877,11 @@ The biggest risk is scope: this is years of hobby work, so every milestone must 
 
 ## Open questions
 
-Five questions are settled, and each open one has a default, so agents are never blocked. Changing a default after work starts needs an ADR.
+Six questions are settled, and each open one has a default, so agents are never blocked. Changing a default after work starts needs an ADR.
 
 ### Decided
 
+- Name: Build a Computer (decided 2026-10-05); repo, folder and packages are named `build-a-computer`.
 - Languages: English only at launch. Interface text still goes through i18n keys, so a translation stays possible later.
 - Open source and free: a public repo, and no payments in v1.
 - Audience: programmers who are new to hardware. Tutorials assume programming experience and teach hardware from zero, with no beginner primer in v1.
@@ -848,7 +892,6 @@ Five questions are settled, and each open one has a default, so agents are never
 
 | Question | Default if unanswered | Affects |
 | --- | --- | --- |
-| Final name? | Build a Computer (renamed from "Ground Up" on 2026-10-05); repo named `build-a-computer` | Branding, domain, repo |
 | Which licenses? | Public repo from M3; code under MIT, content under CC BY-SA 4.0 | Repo, contributions |
 | Should reference solutions be hidden? | Public in packages/content/solutions, never bundled or linked from the game; move them to a private repo if spoilers become a problem | Content, CI |
 | 32-bit or 64-bit RISC-V? | RV32: simpler to build and teach. xv6-riscv is 64-bit, so it is a reference, not a binary we run | M7, M9, M11 |

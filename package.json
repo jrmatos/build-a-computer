@@ -16,6 +16,7 @@
     "typecheck": "turbo run typecheck",
     "check": "turbo run //#lint:eslint typecheck test --continue",
     "bench:ci": "pnpm --filter @build-a-computer/bench bench:ci",
+    "e2e": "pnpm --filter @build-a-computer/e2e e2e",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "docker:dev": "docker compose up web",

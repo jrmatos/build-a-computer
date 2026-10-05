@@ -1,0 +1,65 @@
+name: End to end
+
+# docs/plan.md "Testing and quality": Playwright on Chromium, Firefox and
+# WebKit against a production build served under /build-a-computer/, plus
+# touch emulation (EDIT-07) and axe accessibility checks. Locally: `pnpm e2e`.
+#
+# Fork-safe like ci.yml: `pull_request` only, no secrets, read-only token.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  e2e:
+    name: Playwright (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - browser: chromium
+            projects: --project=chromium --project=mobile-chromium
+          - browser: firefox
+            projects: --project=firefox
+          - browser: webkit
+            projects: --project=webkit --project=mobile-webkit
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4 # version from package.json "packageManager"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install ${{ matrix.browser }} with system dependencies
+        run: pnpm --filter @build-a-computer/e2e exec playwright install --with-deps ${{ matrix.browser }}
+
+      - name: Run end-to-end tests
+        run: pnpm e2e ${{ matrix.projects }}
+
+      - name: Upload HTML report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ matrix.browser }}
+          path: |
+            tools/e2e/out/report
+            tools/e2e/out/test-results
+          retention-days: 14
+          if-no-files-found: ignore

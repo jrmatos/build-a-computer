@@ -2,3 +2,4 @@ packages:
   - "packages/*"
   - "apps/*"
   - "tools/bench"
+  - "tools/e2e"

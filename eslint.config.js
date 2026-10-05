@@ -26,7 +26,7 @@ const simGlobals = (allow = []) =>
   ].filter((entry) => !allow.includes(entry.name));
 
 export default tseslint.config(
-  { ignores: ['**/dist/**', '**/node_modules/**', '**/.turbo/**', '**/coverage/**'] },
+  { ignores: ['**/dist/**', '**/node_modules/**', '**/.turbo/**', '**/coverage/**', 'tools/*/out/**'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
