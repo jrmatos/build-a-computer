@@ -1,0 +1,66 @@
+# docker compose up web                      -> dev server, http://localhost:5173
+# docker compose --profile prod up web-prod  -> nginx build, http://localhost:8080
+# docker compose --profile api up -d db      -> Postgres 17 (M6)
+name: ground-up
+
+services:
+  web:
+    build:
+      context: .
+      target: dev
+    image: ground-up-dev
+    ports:
+      - '5173:5173'
+    environment:
+      CHOKIDAR_USEPOLLING: ${CHOKIDAR_USEPOLLING:-true}
+    volumes:
+      - .:/app
+      # node_modules stay in named volumes so the host's install is untouched.
+      - node_modules:/app/node_modules
+      - nm_web:/app/apps/web/node_modules
+      - nm_content:/app/packages/content/node_modules
+      - nm_det:/app/packages/det/node_modules
+      - nm_schema:/app/packages/schema/node_modules
+      - nm_sim_logic:/app/packages/sim-logic/node_modules
+      - nm_worker:/app/packages/worker/node_modules
+      - pnpm_store:/pnpm/store
+    init: true
+
+  web-prod:
+    profiles: ['prod']
+    build:
+      context: .
+      target: prod
+    image: ground-up-web
+    ports:
+      - '${WEB_PROD_PORT:-8080}:80'
+    restart: unless-stopped
+
+  db:
+    profiles: ['api']
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-groundup}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-groundup-dev-only}
+      POSTGRES_DB: ${POSTGRES_DB:-groundup}
+    ports:
+      - '127.0.0.1:${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  node_modules:
+  nm_web:
+  nm_content:
+  nm_det:
+  nm_schema:
+  nm_sim_logic:
+  nm_worker:
+  pnpm_store:
+  pgdata:

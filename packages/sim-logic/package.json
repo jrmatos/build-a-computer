@@ -1,0 +1,23 @@
+{
+  "name": "@ground-up/sim-logic",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests",
+    "bench": "vitest run --root ../../tools/bench --reporter=verbose",
+    "fuzz:full": "FUZZ_FULL=1 vitest run src/fuzz.test.ts"
+  },
+  "dependencies": {
+    "@ground-up/det": "workspace:*",
+    "@ground-up/schema": "workspace:*"
+  },
+  "devDependencies": {
+    "fast-check": "^4.10.2"
+  }
+}

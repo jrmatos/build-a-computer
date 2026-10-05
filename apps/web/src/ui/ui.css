@@ -1,0 +1,944 @@
+/*
+ * UI chrome: Excalidraw-style islands. Uses only tokens from styles/tokens.css,
+ * except the part tiles, which are always dark like Turing Complete's components.
+ */
+
+/* ---------- Shared primitives ---------- */
+.gu-icon-btn,
+.gu-tool,
+.gu-island-btn,
+.gu-zoom-value,
+.gu-level-chip,
+.gu-menu-item,
+.gu-tile,
+.gu-btn {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(.gu-icon-btn, .gu-tool, .gu-island-btn, .gu-zoom-value, .gu-level-chip, .gu-menu-item, .gu-tile, .gu-btn, .gu-input):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.gu-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.gu-icon-btn:hover:not(:disabled) {
+  background: var(--hover);
+}
+.gu-icon-btn:active:not(:disabled) {
+  background: var(--active);
+}
+.gu-icon-btn:disabled {
+  color: var(--text-faint);
+  opacity: 0.55;
+  cursor: default;
+}
+.gu-icon-btn--sm {
+  width: 24px;
+  height: 24px;
+}
+.gu-icon-btn--boxed {
+  width: 36px;
+  height: 36px;
+  background: var(--hover);
+}
+.gu-icon-btn--boxed:hover:not(:disabled) {
+  background: var(--active);
+}
+.gu-icon-btn--danger:hover:not(:disabled) {
+  color: var(--danger);
+}
+
+.gu-island-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  cursor: pointer;
+  color: var(--text);
+}
+.gu-island-btn:hover {
+  background: var(--hover);
+}
+.gu-island-btn[aria-expanded='true'] {
+  background: var(--active);
+}
+
+.gu-btn {
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--island-border);
+  border-radius: var(--radius-sm);
+  background: var(--island);
+  color: var(--text);
+  font-weight: 500;
+  cursor: pointer;
+}
+.gu-btn:hover {
+  background: var(--hover);
+}
+.gu-btn--danger {
+  border-color: transparent;
+  background: var(--danger);
+  color: #fff;
+}
+.gu-btn--danger:hover {
+  background: var(--danger);
+  filter: brightness(1.08);
+}
+
+.gu-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+}
+
+.gu-divider {
+  flex: none;
+  width: 1px;
+  height: 22px;
+  margin: 0 4px;
+  background: var(--island-border);
+}
+
+.gu-muted {
+  color: var(--text-muted);
+}
+
+kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/* ---------- Toolbar ---------- */
+.gu-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.gu-toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+.gu-tool {
+  position: relative;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.gu-tool:hover:not(:disabled) {
+  background: var(--hover);
+}
+.gu-tool[aria-pressed='true'] {
+  background: var(--active);
+  color: var(--accent-strong);
+}
+:root[data-theme='dark'] .gu-tool[aria-pressed='true'] {
+  color: var(--accent);
+}
+.gu-tool:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.gu-tool--part {
+  width: 40px;
+}
+.gu-tool--part[draggable='true'] {
+  cursor: grab;
+}
+.gu-tool--lock[aria-pressed='true'] {
+  color: var(--accent-strong);
+}
+.gu-tool__badge {
+  position: absolute;
+  right: 3px;
+  bottom: 1px;
+  font-size: 9.5px;
+  line-height: 1;
+  font-weight: 500;
+  color: var(--text-faint);
+  pointer-events: none;
+}
+.gu-tool[aria-pressed='true'] .gu-tool__badge {
+  color: inherit;
+  opacity: 0.75;
+}
+
+/* ---------- Footer ---------- */
+.gu-footer {
+  display: flex;
+  gap: 8px;
+}
+.gu-zoom-value {
+  min-width: 52px;
+  height: 32px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  cursor: pointer;
+}
+.gu-zoom-value:hover {
+  background: var(--hover);
+}
+
+/* ---------- Main menu ---------- */
+.gu-mainmenu {
+  position: relative;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.gu-level-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  max-width: 240px;
+  padding: 0 14px 0 12px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+.gu-level-chip svg {
+  flex: none;
+  color: var(--accent-strong);
+}
+:root[data-theme='dark'] .gu-level-chip svg {
+  color: var(--accent);
+}
+.gu-level-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gu-level-chip:hover {
+  background: var(--hover);
+}
+
+.gu-dropdown {
+  position: absolute;
+  top: 48px;
+  left: 0;
+  z-index: 10;
+  width: 240px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  animation: gu-pop 0.12s ease-out;
+}
+@keyframes gu-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+
+.gu-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 34px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font-size: 13px;
+  cursor: pointer;
+}
+.gu-menu-item:hover,
+.gu-menu-item:focus-visible {
+  background: var(--hover);
+}
+.gu-menu-item:focus-visible {
+  outline-offset: -2px;
+}
+.gu-menu-item[aria-disabled='true'] {
+  color: var(--text-faint);
+  cursor: default;
+}
+.gu-menu-item[aria-disabled='true']:hover {
+  background: transparent;
+}
+.gu-menu-item--danger:not([aria-disabled='true']):hover {
+  color: var(--danger);
+}
+.gu-menu-item__icon {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  flex: none;
+}
+.gu-menu-item__icon svg {
+  width: 16px;
+  height: 16px;
+}
+.gu-menu-item__label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gu-menu-item__check {
+  display: inline-grid;
+  color: var(--accent-strong);
+}
+:root[data-theme='dark'] .gu-menu-item__check {
+  color: var(--accent);
+}
+.gu-menu-item__kbd {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.gu-menu-sep {
+  height: 1px;
+  margin: 5px 6px;
+  background: var(--island-border);
+}
+.gu-menu-about {
+  margin: 4px 8px 4px;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+/* ---------- Context menu ---------- */
+.gu-context {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 20;
+  width: 230px;
+  animation: none;
+}
+
+/* ---------- Properties ---------- */
+.gu-props {
+  width: 208px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  animation: gu-slide-in 0.14s ease-out;
+}
+@keyframes gu-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+}
+.gu-props__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+}
+.gu-props__head strong {
+  font-size: 13px;
+}
+.gu-props__title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.gu-props__locked {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.gu-props__section {
+  margin: 4px 0 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+}
+.gu-btn-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.gu-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.gu-input {
+  height: 32px;
+  width: 100%;
+  padding: 0 10px;
+  border: 1px solid var(--island-border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+.gu-input:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--active);
+}
+.gu-input:disabled {
+  color: var(--text-faint);
+}
+.gu-input::placeholder {
+  color: var(--text-faint);
+  font-family: var(--font-ui);
+}
+
+/* Dark component tile, Turing Complete style. */
+.gu-mini-tile,
+.gu-tile__face {
+  --tile-bg: #2a2e37;
+  --tile-top: #343944;
+  --tile-edge: #1a1d23;
+  --tile-ink: #e9ecf2;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 8px;
+  background: linear-gradient(180deg, var(--tile-top), var(--tile-bg));
+  border: 1px solid var(--tile-edge);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.28);
+  color: var(--tile-ink);
+}
+:root[data-theme='dark'] .gu-mini-tile,
+:root[data-theme='dark'] .gu-tile__face {
+  --tile-bg: #1d2027;
+  --tile-top: #262a33;
+  --tile-edge: #3a3f4b;
+}
+.gu-mini-tile {
+  flex: none;
+  width: 36px;
+  height: 32px;
+}
+
+/* ---------- Library ---------- */
+.gu-library {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  bottom: 16px;
+  z-index: 6;
+  width: 300px;
+  max-width: calc(100vw - 32px);
+  display: flex;
+  flex-direction: column;
+  transform: translateX(calc(100% + 24px));
+  visibility: hidden;
+  transition:
+    transform 0.2s ease,
+    visibility 0s linear 0.2s;
+}
+.gu-library.is-open {
+  transform: none;
+  visibility: visible;
+  transition: transform 0.2s ease;
+}
+.gu-library__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 10px 8px 16px;
+}
+.gu-library__head h2,
+.gu-dialog__head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+.gu-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 12px 8px;
+  padding: 0 10px;
+  height: 36px;
+  border: 1px solid var(--island-border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text-muted);
+}
+.gu-search:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--active);
+}
+.gu-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+.gu-search input::placeholder {
+  color: var(--text-faint);
+}
+.gu-library__body {
+  flex: 1;
+  scrollbar-width: thin;
+  overflow-y: auto;
+  padding: 0 12px 12px;
+}
+.gu-library__group h3 {
+  margin: 12px 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.gu-tiles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.gu-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 4px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.gu-tile[draggable='true'] {
+  cursor: grab;
+}
+.gu-tile:hover:not(:disabled) {
+  background: var(--hover);
+}
+.gu-tile.is-active {
+  background: var(--active);
+  border-color: var(--accent);
+}
+.gu-tile:disabled {
+  cursor: not-allowed;
+}
+.gu-tile:disabled .gu-tile__face {
+  opacity: 0.45;
+  filter: grayscale(1);
+}
+.gu-tile:disabled .gu-tile__name {
+  color: var(--text-faint);
+}
+.gu-tile__face {
+  position: relative;
+  width: 64px;
+  height: 52px;
+  transition:
+    transform 0.12s ease,
+    border-color 0.12s ease;
+}
+.gu-tile:hover:not(:disabled) .gu-tile__face {
+  transform: translateY(-1px);
+  border-color: var(--accent);
+}
+.gu-tile__lock {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: inline-grid;
+  color: var(--tile-ink);
+}
+.gu-tile__key {
+  position: absolute;
+  right: 5px;
+  bottom: 4px;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: rgba(233, 236, 242, 0.55);
+}
+.gu-tile__name {
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
+}
+.gu-tile__note {
+  margin-top: -4px;
+  font-size: 10px;
+  color: var(--text-faint);
+}
+.gu-library__foot {
+  margin: 0;
+  padding: 10px 16px 14px;
+  border-top: 1px solid var(--island-border);
+  font-size: 12px;
+}
+
+/* ---------- Dialogs ---------- */
+.gu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(10, 12, 16, 0.35);
+  animation: gu-fade 0.15s ease-out;
+}
+:root[data-theme='dark'] .gu-backdrop {
+  background: rgba(0, 0, 0, 0.5);
+}
+@keyframes gu-fade {
+  from {
+    opacity: 0;
+  }
+}
+.gu-dialog {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: calc(100vh - 32px);
+  box-shadow:
+    var(--island-shadow),
+    0 24px 60px rgba(0, 0, 0, 0.18);
+  animation: gu-pop 0.15s ease-out;
+}
+.gu-dialog:focus {
+  outline: none;
+}
+.gu-dialog--sm {
+  max-width: 420px;
+}
+.gu-dialog--lg {
+  max-width: 860px;
+}
+.gu-dialog__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 14px 8px 22px;
+}
+.gu-dialog__body {
+  padding: 4px 22px 18px;
+  overflow-y: auto;
+  line-height: 1.5;
+  color: var(--text);
+}
+.gu-dialog__body p {
+  margin: 0;
+  color: var(--text-muted);
+}
+.gu-dialog__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 22px 18px;
+}
+
+/* Help */
+.gu-help-wiring {
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: var(--hover);
+}
+.gu-help-wiring h3,
+.gu-help-h {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 650;
+}
+.gu-help-h {
+  margin-top: 18px;
+}
+.gu-help-wiring ol {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--text-muted);
+}
+.gu-help-grid {
+  columns: 3 230px;
+  column-gap: 28px;
+}
+.gu-help-group {
+  break-inside: avoid;
+  padding: 10px 0 8px;
+}
+.gu-help-group h4 {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent-strong);
+}
+:root[data-theme='dark'] .gu-help-group h4 {
+  color: var(--accent);
+}
+.gu-help-group dl {
+  margin: 0;
+}
+.gu-help-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--island-border);
+  font-size: 13px;
+}
+.gu-help-row dt {
+  color: var(--text);
+}
+.gu-help-row dd {
+  margin: 0;
+  white-space: nowrap;
+}
+.gu-help-row kbd {
+  display: inline-block;
+  min-width: 22px;
+  padding: 2px 6px;
+  border: 1px solid var(--island-border);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--text);
+  text-align: center;
+}
+.gu-help-fab {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 3;
+  width: 36px;
+  height: 36px;
+  color: var(--text-muted);
+}
+
+/* ---------- Toasts ---------- */
+.gu-toasts {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 40;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  pointer-events: none;
+}
+.gu-toasts__stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.gu-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 480px;
+  padding: 8px 8px 8px 12px;
+  border-left: 3px solid var(--accent);
+  font-size: 13px;
+  pointer-events: auto;
+  animation: gu-toast-in 0.18s ease-out;
+}
+@keyframes gu-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+.gu-toast__icon {
+  display: inline-grid;
+  color: var(--accent-strong);
+}
+.gu-toast__text {
+  flex: 1;
+}
+.gu-toast--success {
+  border-left-color: var(--success);
+}
+.gu-toast--success .gu-toast__icon {
+  color: var(--success);
+}
+.gu-toast--error {
+  border-left-color: var(--danger);
+}
+.gu-toast--error .gu-toast__icon {
+  color: var(--danger);
+}
+
+/* ---------- Welcome ---------- */
+.layer > .welcome-hint.gu-welcome {
+  pointer-events: none;
+}
+.gu-welcome {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(440px, calc(100vw - 48px));
+  text-align: center;
+  color: var(--text-faint);
+  user-select: none;
+  transition:
+    opacity 0.35s ease,
+    transform 0.35s ease;
+}
+.gu-welcome.is-hidden {
+  opacity: 0;
+  transform: translate(-50%, calc(-50% + 8px));
+  visibility: hidden;
+  transition:
+    opacity 0.35s ease,
+    transform 0.35s ease,
+    visibility 0s linear 0.35s;
+}
+.gu-welcome__logo {
+  display: inline-grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 10px;
+  border-radius: 16px;
+  background: var(--active);
+  color: var(--accent-strong);
+  opacity: 0.85;
+}
+:root[data-theme='dark'] .gu-welcome__logo {
+  color: var(--accent);
+}
+.gu-welcome__title {
+  margin: 0;
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--accent-strong);
+  opacity: 0.85;
+}
+:root[data-theme='dark'] .gu-welcome__title {
+  color: var(--accent);
+}
+.gu-welcome__tagline {
+  margin: 4px 0 18px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.gu-welcome__hints {
+  list-style: none;
+  margin: 0 auto;
+  padding: 0;
+  width: max-content;
+  max-width: 100%;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13.5px;
+  color: var(--text-faint);
+}
+.gu-welcome__hints li::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 8px;
+  vertical-align: middle;
+  border-radius: 50%;
+  background: var(--sig-1);
+  opacity: 0.8;
+}
+
+/* Compact strip when the level already put parts on the board. */
+.gu-welcome--compact {
+  top: auto;
+  bottom: 84px;
+  width: max-content;
+  max-width: calc(100vw - 48px);
+  transform: translateX(-50%);
+}
+.gu-welcome--compact.is-hidden {
+  transform: translate(-50%, 8px);
+}
+.gu-welcome--compact .gu-welcome__logo,
+.gu-welcome--compact .gu-welcome__title,
+.gu-welcome--compact .gu-welcome__tagline {
+  display: none;
+}
+.gu-welcome--compact .gu-welcome__hints {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 22px;
+  font-size: 13px;
+}
+
+/* ---------- Small screens ---------- */
+@media (max-width: 760px) {
+  /* The toolbar moves to the bottom on small screens; keep the footer and toasts above it. */
+  .gu-footer {
+    margin-bottom: 60px;
+  }
+  .gu-toasts {
+    bottom: 136px;
+  }
+  .gu-help-fab {
+    display: none;
+  }
+  .gu-level-chip {
+    max-width: 140px;
+  }
+  .gu-library {
+    top: 8px;
+    right: 8px;
+    bottom: 8px;
+    max-width: calc(100vw - 16px);
+  }
+  .gu-welcome__title {
+    font-size: 26px;
+  }
+}
+@media (max-width: 480px) {
+  .gu-level-chip {
+    display: none;
+  }
+}

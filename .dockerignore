@@ -1,0 +1,13 @@
+**/node_modules
+**/dist
+**/.turbo
+**/coverage
+**/*.log
+.git
+.env
+.env.*
+!.env.example
+test-results
+playwright-report
+Dockerfile
+docker-compose.yml

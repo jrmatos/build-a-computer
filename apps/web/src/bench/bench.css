@@ -1,0 +1,82 @@
+#board {
+  position: fixed;
+  inset: 0;
+  display: block;
+  background: var(--board-bg);
+}
+
+#hud {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  min-width: 240px;
+  padding: 12px 14px;
+  font-size: 13px;
+}
+
+#hud .title {
+  font-weight: 600;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#hud .tag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--active);
+  color: var(--text);
+}
+
+#hud dl {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 4px 16px;
+  margin: 0;
+}
+
+#hud dt {
+  color: var(--text-muted);
+}
+
+#hud dd {
+  margin: 0;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+#hud .ok {
+  color: var(--success);
+}
+
+#hud .bad {
+  color: var(--danger);
+}
+
+#hud .verdict {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+#hud .row {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+#hud button {
+  border: 1px solid var(--island-border);
+  background: var(--island);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+#hud button:hover {
+  background: var(--hover);
+}

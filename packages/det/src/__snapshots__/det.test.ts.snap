@@ -1,0 +1,9 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Prng > matches the golden sequence for seed 1 1`] = `
+[
+  2442144158,
+  3238099751,
+  3819917871,
+]
+`;

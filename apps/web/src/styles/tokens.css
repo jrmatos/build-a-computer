@@ -1,0 +1,101 @@
+/*
+ * Design tokens. Chrome follows Excalidraw (floating islands, violet accent);
+ * the board follows Turing Complete (dark grid, chunky tiles, glowing signals).
+ * Signal colors must stay in sync with editor/palette.ts.
+ */
+:root,
+:root[data-theme='light'] {
+  --bg: #f6f7f9;
+  --board-bg: #fbfbfc;
+  --island: #ffffff;
+  --island-border: #e3e5ea;
+  --island-shadow: 0 1px 2px rgba(15, 18, 25, 0.06), 0 4px 16px rgba(15, 18, 25, 0.08);
+  --text: #1b1e25;
+  --text-muted: #5d6474;
+  --text-faint: #9097a6;
+  --hover: #eef0f4;
+  --active: #e3e2fe;
+  --accent: #6965db;
+  --accent-strong: #5753c9;
+  --accent-text: #ffffff;
+  --danger: #e03131;
+  --success: #2f9e44;
+  --warning: #e8590c;
+  --sig-1: #16a34a;
+  --sig-0: #b8bec9;
+  --sig-x: #d97706;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --font-ui: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+:root[data-theme='dark'] {
+  --bg: #121418;
+  --board-bg: #16181d;
+  --island: #22252c;
+  --island-border: #30343d;
+  --island-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.35);
+  --text: #e6e8ec;
+  --text-muted: #a3a9b6;
+  --text-faint: #6b7280;
+  --hover: #2d3139;
+  --active: #403e6a;
+  --accent: #a8a5ff;
+  --accent-strong: #8f8bff;
+  --accent-text: #121418;
+  --danger: #ff6b6b;
+  --success: #5ef38c;
+  --warning: #ffa94d;
+  --sig-1: #5ef38c;
+  --sig-0: #3a4150;
+  --sig-x: #f59e0b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/** A floating panel, Excalidraw style. */
+.island {
+  background: var(--island);
+  border: 1px solid var(--island-border);
+  border-radius: var(--radius);
+  box-shadow: var(--island-shadow);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

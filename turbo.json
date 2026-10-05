@@ -1,0 +1,21 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["tsconfig.base.json"],
+  "tasks": {
+    "build": { "dependsOn": ["^build"], "outputs": [] },
+    "@ground-up/web#build": { "dependsOn": ["^build"], "outputs": ["dist/**"] },
+    "typecheck": { "dependsOn": ["^typecheck"], "outputs": [] },
+    "test": { "dependsOn": ["^typecheck"], "outputs": [] },
+    "//#lint:eslint": {
+      "inputs": [
+        "eslint.config.js",
+        "**/*.{js,mjs,cjs,ts,tsx}",
+        "!**/node_modules/**",
+        "!**/dist/**",
+        "!**/.turbo/**"
+      ],
+      "outputs": []
+    },
+    "dev": { "cache": false, "persistent": true }
+  }
+}

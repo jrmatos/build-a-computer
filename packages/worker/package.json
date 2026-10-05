@@ -1,0 +1,22 @@
+{
+  "name": "@ground-up/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@ground-up/schema": "workspace:*",
+    "@ground-up/sim-logic": "workspace:*",
+    "comlink": "^4.4.2"
+  },
+  "devDependencies": {
+    "@ground-up/content": "workspace:*"
+  }
+}

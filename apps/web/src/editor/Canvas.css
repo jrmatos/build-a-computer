@@ -1,0 +1,33 @@
+.board-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--board-bg);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  outline: none;
+}
+
+/* Inline label editor shown over a part on double-click. */
+.label-editor {
+  position: absolute;
+  z-index: 3;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--island);
+  color: var(--text);
+  font: 500 14px var(--font-ui);
+  text-align: center;
+  box-shadow: var(--island-shadow);
+  outline: none;
+}
+.label-editor:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent), var(--island-shadow);
+}

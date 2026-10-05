@@ -1,0 +1,83 @@
+.app {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  /* Like Excalidraw: dragging on the board never selects interface text. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+.app input,
+.app textarea,
+.app [contenteditable='true'] {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Islands float over the canvas; the layer itself lets pointer events through. */
+.layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+.layer > * > *,
+.layer > .status-banner,
+.layer > .welcome-hint {
+  pointer-events: auto;
+}
+
+.top-left,
+.top-center,
+.top-right {
+  position: absolute;
+  top: 16px;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.top-left {
+  left: 16px;
+}
+.top-center {
+  /* Full width so the toolbar can use the room it needs; the layer ignores pointer events. */
+  left: 16px;
+  right: 16px;
+  justify-content: center;
+}
+.top-right {
+  right: 16px;
+}
+.left-dock {
+  position: absolute;
+  left: 16px;
+  top: 72px;
+  max-height: calc(100% - 150px);
+  display: flex;
+  flex-direction: column;
+}
+.right-dock {
+  position: absolute;
+  right: 16px;
+  top: 72px;
+  max-height: calc(100% - 100px);
+  display: flex;
+  flex-direction: column;
+}
+.bottom-left {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  display: flex;
+  gap: 8px;
+}
+
+@media (max-width: 760px) {
+  .top-center {
+    top: auto;
+    bottom: 16px;
+  }
+  .right-dock,
+  .left-dock {
+    display: none;
+  }
+}

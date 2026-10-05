@@ -1,0 +1,27 @@
+Ground Up curriculum content license
+====================================
+
+Code in this repository is licensed under the MIT License (see LICENSE).
+
+Curriculum content is licensed under the Creative Commons
+Attribution-ShareAlike 4.0 International License (CC BY-SA 4.0). This covers:
+
+  - packages/content/ : tracks, levels, tutorial text, hints, afterwords,
+    resource lists and reference solutions (YAML, MDX, Markdown and the
+    data files compiled from them)
+  - images, diagrams and other media that ship with that content
+
+TypeScript source that loads, validates or compiles the content
+(packages/content/src/**/*.ts) is code and stays under MIT.
+
+You may share and adapt the content for any purpose, including commercially,
+as long as you give appropriate credit ("Ground Up contributors"), link to the
+license, indicate if changes were made, and distribute your contributions under
+the same license.
+
+Full legal text: https://creativecommons.org/licenses/by-sa/4.0/legalcode
+Summary:         https://creativecommons.org/licenses/by-sa/4.0/
+
+Third-party material (vendored test suites, quoted resources) keeps its own
+license, recorded next to the material. The project owner checks each license
+before import.
