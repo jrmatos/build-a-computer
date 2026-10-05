@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { PART_TYPES, type Board, type Level, type PartType } from '@ground-up/schema';
+import { PART_TYPES, type Board, type ChipMap, type Level, type PartType } from '@ground-up/schema';
 import type { CaseResult } from '@ground-up/sim-logic';
 import type { Snapshot } from '@ground-up/worker';
 
@@ -59,6 +59,14 @@ export interface EditorState {
   contextMenu: { x: number; y: number; world: { x: number; y: number } } | null;
   /** Part whose label is being edited inline on the canvas. */
   editingLabel: string | null;
+  /** Custom chips available to every level (global library), by id. */
+  chips: ChipMap;
+  /**
+   * Breadcrumbs when editing inside a chip (double-click enters, plan: Custom chips).
+   * Empty at the level's board. While non-empty, `board` is the innermost chip's
+   * board; each frame keeps what to restore on exit.
+   */
+  editStack: { chipId: string; parentBoard: Board; parentPast: Board[]; parentFuture: Board[]; parentSelection: string[] }[];
 
   /** Apply an edit as one undoable step. */
   commit: (fn: (b: Board) => Board, selection?: string[]) => void;
@@ -100,6 +108,8 @@ export const useEditor = create<EditorState>()((set, get) => ({
   toasts: [],
   contextMenu: null,
   editingLabel: null,
+  chips: {},
+  editStack: [],
 
   commit: (fn, selection) => {
     const { board, past, readOnly } = get();

@@ -233,7 +233,7 @@ const orBody = <path d="M8 4h5c5 0 9 4 11 8-2 4-6 8-11 8H8c2.5-5 2.5-11 0-16z" /
 const xorTail = <path d="M5 4c2.5 5 2.5 11 0 16" />;
 const bubble = (cx: number) => <circle cx={cx} cy="12" r="2" />;
 
-const SYMBOLS: Record<PartType, ReactNode> = {
+const SYMBOLS: Partial<Record<PartType, ReactNode>> = {
   nand: (
     <>
       {leads2}

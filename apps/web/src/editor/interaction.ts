@@ -11,7 +11,7 @@ import { panBy, scaleOf, screenToWorld, zoomBy } from './camera';
 import { normRect, pinPos, routeWire, type Pt } from './geometry';
 import { SpatialIndex, type Hit } from './hit';
 import { addPart, addWire, duplicateIds, moveIds } from './ops';
-import { GEOMETRY } from './parts';
+import { geomOf, geomOfType } from './parts';
 import type { Overlay } from './render-types';
 import { useEditor, type Tool } from './store';
 import { isPartAllowed } from './tools';
@@ -76,7 +76,7 @@ export const snapDelta = (from: Pt, to: Pt): Pt => ({ x: Math.round(to.x - from.
 
 /** Part origin that centers the part body on the cursor, on whole cells. */
 export function ghostOrigin(type: PartType, world: Pt): Pt {
-  const b = GEOMETRY[type].body;
+  const b = geomOfType(type).body;
   return { x: Math.round(world.x - b.x - b.w / 2), y: Math.round(world.y - b.y - b.h / 2) };
 }
 

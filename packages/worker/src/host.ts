@@ -3,7 +3,7 @@ import {
   CompileError,
   FastEngine,
   compile,
-  runTruthTable,
+  runTest,
   type CaseResult,
   type Netlist,
   type SettleResult,
@@ -62,6 +62,27 @@ export class SimHost implements SimApi {
     return { ok: true, diagnostics: this.nl.diagnostics };
   }
 
+  setValue(_partId: string, _value: number): void {
+    // Multi-bit inputs: implemented with the bus engine.
+  }
+
+  press(partId: string, down: boolean): void {
+    // Until buttons have their own engine support they act like a switch.
+    if (this.nl?.partIndex.has(partId)) this.setSwitch(partId, down);
+  }
+
+  memory(_partId: string): number[] {
+    return [];
+  }
+
+  watch(_wireIds: string[]): void {
+    // Waveform recording: implemented with the bus engine.
+  }
+
+  history(): { ticks: number[]; values: Record<string, { w: number; v: number; x: number }[]> } {
+    return { ticks: [], values: {} };
+  }
+
   setSwitch(partId: string, on: boolean): void {
     if (!this.engine) return;
     this.last = this.engine.setSwitch(partId, on);
@@ -110,7 +131,7 @@ export class SimHost implements SimApi {
     let passed = 0;
     let total = 0;
     for (const t of level.tests) {
-      for (const r of runTruthTable(this.nl, t)) {
+      for (const r of runTest(this.nl, t)) {
         total++;
         if (r.pass) passed++;
         // Awaited so a proxied callback lands before the final result.
@@ -165,6 +186,9 @@ export class SimHost implements SimApi {
     }
     return {
       wires,
+      buses: {},
+      busPins: {},
+      switchValues: {},
       pins,
       switchesOn: nl && e ? nl.parts.filter((p) => p.behavior.kind === 'switch' && e.isSwitchOn(p.id)).map((p) => p.id) : [],
       powered: e?.isPowered ?? false,

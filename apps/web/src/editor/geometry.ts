@@ -1,12 +1,12 @@
 import type { Board, Part, PinRef, Wire } from '@ground-up/schema';
-import { GEOMETRY, type PinGeom } from './parts';
+import { geomOf, type PinGeom } from './parts';
 
 export type Pt = { x: number; y: number };
 export type Rect = { x: number; y: number; w: number; h: number };
 
 /** Map a point local to the part into world grid cells: flip, rotate about the pivot, translate. */
 export function toWorld(part: Part, lx: number, ly: number): Pt {
-  const [px, py] = GEOMETRY[part.type].pivot;
+  const [px, py] = geomOf(part).pivot;
   let dx = (part.flip ? 2 * px - lx : lx) - px;
   let dy = ly - py;
   for (let r = 0; r < part.rot; r += 90) [dx, dy] = [-dy, dx];
@@ -29,7 +29,7 @@ export interface WorldPin extends PinGeom {
 }
 
 export function partPins(part: Part): WorldPin[] {
-  return GEOMETRY[part.type].pins.map((pin) => {
+  return geomOf(part).pins.map((pin) => {
     const w = toWorld(part, pin.x, pin.y);
     return { ...pin, part, wx: w.x, wy: w.y, wdir: dirToWorld(part, pin.dir) };
   });
@@ -43,7 +43,7 @@ export function pinPos(board: Board, ref: PinRef, parts?: Map<string, Part>): Wo
 
 /** World-space bounding box of a part body. */
 export function partRect(part: Part): Rect {
-  const b = GEOMETRY[part.type].body;
+  const b = geomOf(part).body;
   const a = toWorld(part, b.x, b.y);
   const c = toWorld(part, b.x + b.w, b.y + b.h);
   return { x: Math.min(a.x, c.x), y: Math.min(a.y, c.y), w: Math.abs(c.x - a.x), h: Math.abs(c.y - a.y) };

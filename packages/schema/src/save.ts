@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { Board } from './board';
+import { ChipMap } from './chip';
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 export const SaveV1 = z.object({
   kind: z.literal('ground-up/save'),
@@ -10,14 +11,22 @@ export const SaveV1 = z.object({
   levelVersion: z.number().int().min(1),
   updatedAt: z.string().datetime(),
   board: Board,
-  /** Assembly or C text for code levels (M8+). */
   source: z.string().max(1_000_000).optional(),
 });
-export type Save = z.infer<typeof SaveV1>;
-export const Save = SaveV1;
+
+/** v2 embeds the custom chips the board uses (transitively), so a save is self-contained. */
+export const SaveV2 = SaveV1.extend({
+  version: z.literal(2),
+  chips: ChipMap.default({}),
+});
+export type Save = z.infer<typeof SaveV2>;
+export const Save = SaveV2;
 
 /** Migrations are pure functions from version N to N+1. Index i migrates i+1 -> i+2. */
-export const SAVE_MIGRATIONS: ((data: Record<string, unknown>) => Record<string, unknown>)[] = [];
+export const SAVE_MIGRATIONS: ((data: Record<string, unknown>) => Record<string, unknown>)[] = [
+  // 1 -> 2: no custom chips existed yet.
+  (d) => ({ ...d, version: 2, chips: {} }),
+];
 
 export class NewerVersionError extends Error {
   constructor(

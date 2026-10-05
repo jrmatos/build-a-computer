@@ -63,6 +63,15 @@
   display: flex;
   flex-direction: column;
 }
+.bottom-dock {
+  /* Waveform, diagnostics and CPU panels: between the footer and the right dock. */
+  position: absolute;
+  left: 260px;
+  right: 360px;
+  bottom: 16px;
+  display: flex;
+  justify-content: center;
+}
 .bottom-left {
   position: absolute;
   left: 16px;

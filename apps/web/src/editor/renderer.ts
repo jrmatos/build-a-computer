@@ -23,7 +23,7 @@ import type { Snapshot } from '@ground-up/worker';
 import type { Pt, Rect } from './geometry';
 import type { SpatialIndex } from './hit';
 import { mix, PALETTES, type Palette } from './palette';
-import { GEOMETRY } from './parts';
+import { geomOf, geomOfType } from './parts';
 import type { Renderer, Scene } from './render-types';
 import { GRID } from './store';
 
@@ -58,8 +58,8 @@ type Mat = [number, number, number, number, number, number];
  * Affine matrix [a, b, c, d, e, f] mapping part-local cells to world cells,
  * matching geometry.toWorld: world = (a*x + c*y + e, b*x + d*y + f).
  */
-export function partMatrix(part: Pick<Part, 'type' | 'x' | 'y' | 'rot' | 'flip'>): Mat {
-  const [px, py] = GEOMETRY[part.type].pivot;
+export function partMatrix(part: Part): Mat {
+  const [px, py] = geomOf(part).pivot;
   const f = part.flip ? -1 : 1;
   const r = ((part.rot / 90) | 0) & 3;
   const cos = r === 0 ? 1 : r === 2 ? -1 : 0;
@@ -134,7 +134,7 @@ class Mapper {
 
 /** World-space body rectangle of a part (axis-aligned: rotations are multiples of 90 degrees). */
 function bodyRectWith(P: Mapper, part: Part): Rect {
-  const g = GEOMETRY[part.type].body;
+  const g = geomOf(part).body;
   P.set(part);
   const x0 = P.X(g.x, g.y);
   const y0 = P.Y(g.x, g.y);
@@ -191,7 +191,7 @@ const CAPTION: Partial<Record<PartType, [string, number]>> = {
  * in local cells. They stop at the symbol outline (the OR back curve crosses
  * y=0 and y=2 about 0.075 cells in), so they can be drawn after the sprites.
  */
-const LEADS: Record<PartType, [string, number, number, number, number][]> = (() => {
+const LEADS: Partial<Record<PartType, [string, number, number, number, number][]>> = (() => {
   const gate = (inEnd: number, out0: number): [string, number, number, number, number][] => [
     ['a', 0, 0, inEnd, 0],
     ['b', 0, 2, inEnd, 2],
@@ -260,7 +260,7 @@ function junctionsOf(index: SpatialIndex): Junction[] {
 const pinKeyCache = new WeakMap<Part, string[]>();
 function pinKeys(part: Part): string[] {
   let k = pinKeyCache.get(part);
-  if (!k) pinKeyCache.set(part, (k = GEOMETRY[part.type].pins.map((p) => `${part.id}:${p.name}`)));
+  if (!k) pinKeyCache.set(part, (k = geomOf(part).pins.map((p) => `${part.id}:${p.name}`)));
   return k;
 }
 
@@ -304,6 +304,9 @@ function stateSnapshot(clone: Part, state: string): Snapshot | null {
 function fakeSnap(patch: Partial<Snapshot>): Snapshot {
   return {
     wires: {},
+    buses: {},
+    busPins: {},
+    switchValues: {},
     pins: {},
     switchesOn: [],
     powered: true,
@@ -1147,10 +1150,10 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
     const pins = F.snap?.pins;
     const leads: number[][] = [[], [], [], []];
     for (const part of parts) {
-      const g = GEOMETRY[part.type];
+      const g = geomOf(part);
       const keys = pinKeys(part);
       P.set(part);
-      for (const [name, x0, y0, x1, y1] of LEADS[part.type]) {
+      for (const [name, x0, y0, x1, y1] of LEADS[part.type] ?? []) {
         const i = name === g.pins[0]!.name ? 0 : name === g.pins[1]?.name ? 1 : 2;
         const b = pins ? bucketOf(pins[keys[i]!]) : 0;
         leads[b]!.push(P.X(x0, y0), P.Y(x0, y0), P.X(x1, y1), P.Y(x1, y1));
@@ -1175,7 +1178,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
     const pins = F.snap?.pins;
     const dots: number[][] = [[], [], [], []];
     for (const part of parts) {
-      const g = GEOMETRY[part.type];
+      const g = geomOf(part);
       const keys = pinKeys(part);
       P.set(part);
       for (let i = 0; i < g.pins.length; i++) {
@@ -1431,7 +1434,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
         const cut = key.lastIndexOf(':');
         const part = scene.index.parts.get(key.slice(0, cut));
         if (!part) continue;
-        const pin = GEOMETRY[part.type].pins.find((q) => q.name === key.slice(cut + 1));
+        const pin = geomOf(part).pins.find((q) => q.name === key.slice(cut + 1));
         if (!pin) continue;
         P.set(part);
         const x = P.X(pin.x, pin.y);

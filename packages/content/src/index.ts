@@ -116,3 +116,4 @@ const raw = [
 export const LEVELS: Level[] = raw.map((l) => Level.parse({ draft: true, ...l }));
 
 export const levelById = (id: string): Level | undefined => LEVELS.find((l) => l.id === id);
+export * from './toy8';

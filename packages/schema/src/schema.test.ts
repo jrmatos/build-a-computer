@@ -12,7 +12,8 @@ import {
 
 const save = {
   kind: 'ground-up/save',
-  version: 1,
+  version: 2,
+  chips: {},
   levelId: 'sandbox',
   levelVersion: 1,
   updatedAt: '2026-10-04T12:00:00.000Z',
@@ -59,7 +60,14 @@ describe('E-DATA-04 / E-DATA-05 migrations', () => {
     const input = structuredClone(save);
     const out = migrateSave(input);
     expect(input).toEqual(save);
-    expect(out.version).toBe(1);
+    expect(out.version).toBe(2);
+  });
+  it('migrates a v1 save to v2 with no chips (fixture)', () => {
+    const { chips: _c, ...v1 } = { ...save, version: 1 };
+    const out = migrateSave(v1);
+    expect(out.version).toBe(2);
+    expect(out.chips).toEqual({});
+    expect(out.board).toEqual(Save.parse(save).board);
   });
 });
 

@@ -22,7 +22,11 @@ const gate2 = (fn: (a: number, b: number) => Value): PartLogic => ({
 });
 
 /** Pin names and behavior for every built-in part. Geometry lives in the editor. */
-export const LIBRARY: Record<PartType, PartLogic> = {
+/**
+ * Legacy 1-bit behaviors used by the current engines. Partial: newer part
+ * types are handled by the multi-bit engine (see parts-spec.ts, blocks/).
+ */
+export const LIBRARY: Partial<Record<PartType, PartLogic>> = {
   switch: { inputs: [], outputs: ['out'], behavior: { kind: 'switch' } },
   lamp: { inputs: ['in'], outputs: [], behavior: { kind: 'lamp' } },
   clock: { inputs: [], outputs: ['out'], behavior: { kind: 'clock' } },

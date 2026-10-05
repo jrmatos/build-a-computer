@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Board, Level } from '@ground-up/schema';
-import { compile, runTruthTable } from '@ground-up/sim-logic';
+import { compile, runTest } from '@ground-up/sim-logic';
 import { LEVELS } from './index';
 
 const playable = LEVELS.filter((l) => l.tests.length > 0);
 
 function allPass(level: Level, board: Board): boolean {
   const nl = compile(board);
-  return level.tests.every((t) => [...runTruthTable(nl, t)].every((r) => r.pass));
+  return level.tests.every((t) => [...runTest(nl, t)].every((r) => r.pass));
 }
 
 describe('content', () => {

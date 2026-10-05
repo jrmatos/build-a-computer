@@ -97,6 +97,9 @@ export function benchSnapshot(board: Board, seed: number, withDiagnostics: boole
   }
   return {
     wires,
+    buses: {},
+    busPins: {},
+    switchValues: {},
     pins,
     switchesOn,
     powered: true,

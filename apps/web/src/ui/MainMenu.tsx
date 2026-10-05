@@ -92,7 +92,8 @@ export function MainMenu() {
     const { board, level: current, toast } = useEditor.getState();
     const save: Save = {
       kind: 'ground-up/save',
-      version: SAVE_VERSION as 1,
+      version: SAVE_VERSION as 2,
+      chips: useEditor.getState().chips,
       levelId: current?.id ?? 'sandbox',
       levelVersion: current?.version ?? 1,
       updatedAt: new Date().toISOString(),

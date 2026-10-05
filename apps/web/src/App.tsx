@@ -7,6 +7,8 @@ import { MainMenu } from './ui/MainMenu';
 import { PropertiesPanel } from './ui/PropertiesPanel';
 import { Toasts } from './ui/Toasts';
 import { Toolbar } from './ui/Toolbar';
+import { Breadcrumbs } from './ui/Breadcrumbs';
+import { BottomDock } from './level/BottomDock';
 import { WelcomeHint } from './ui/WelcomeHint';
 import { LevelPanel } from './level/LevelPanel';
 import { LevelSelect } from './level/LevelSelect';
@@ -27,6 +29,7 @@ export function App() {
       <div className="layer">
         <div className="top-left">
           <MainMenu />
+          <Breadcrumbs />
         </div>
         <div className="top-center">
           <Toolbar />
@@ -42,6 +45,9 @@ export function App() {
         </div>
         <div className="bottom-left">
           <Footer />
+        </div>
+        <div className="bottom-dock">
+          <BottomDock />
         </div>
         <StatusBanner />
         <WelcomeHint />

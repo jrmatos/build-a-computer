@@ -1,4 +1,5 @@
 export * from './board';
+export * from './chip';
 export * from './save';
 export * from './level';
 export * from './progress';

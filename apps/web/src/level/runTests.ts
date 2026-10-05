@@ -7,7 +7,7 @@ import { markCompleted } from './persist';
 import { useLevelUi } from './ui';
 
 export const totalCases = (level: Level | null): number =>
-  level?.tests.reduce((n, test) => n + test.rows.length, 0) ?? 0;
+  level?.tests.reduce((n, test) => n + (test.kind === 'truth-table' ? test.rows.length : 0), 0) ?? 0;
 
 export const canRunTests = (level: Level | null): boolean => !!level && level.track !== 'sandbox' && totalCases(level) > 0;
 

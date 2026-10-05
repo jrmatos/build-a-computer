@@ -192,8 +192,8 @@ function SuccessCard({ level }: { level: Level }) {
 
 interface Row {
   key: number;
-  inputs: Record<string, 0 | 1>;
-  expect: Record<string, 0 | 1>;
+  inputs: Record<string, number>;
+  expect: Record<string, number>;
   result?: CaseResult;
 }
 
@@ -204,7 +204,7 @@ function ResultsTable({ level, run }: { level: Level; run: TestRun | null }) {
     const ins = new Set<string>();
     const outs = new Set<string>();
     for (const test of level.tests)
-      for (const r of test.rows) {
+      for (const r of test.kind === 'truth-table' ? test.rows : []) {
         Object.keys(r.inputs).forEach((k) => ins.add(k));
         Object.keys(r.expect).forEach((k) => outs.add(k));
         rows.push({ key: rows.length, inputs: r.inputs, expect: r.expect });

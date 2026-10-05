@@ -57,7 +57,7 @@ export interface Netlist {
  */
 export function compile(board: Board): Netlist {
   const known = board.parts.filter((p) => LIBRARY[p.type]);
-  const gateCount = known.filter((p) => LIBRARY[p.type].behavior.kind !== 'lamp').length;
+  const gateCount = known.filter((p) => LIBRARY[p.type]!.behavior.kind !== 'lamp').length;
   if (gateCount > LIMITS.maxGates) {
     // E-SIM-06: refused before anything runs.
     throw new CompileError(
@@ -70,7 +70,7 @@ export function compile(board: Board): Netlist {
   const pinIndex = new Map<string, number>();
   const pinKeys: string[] = [];
   for (const p of known) {
-    const lib = LIBRARY[p.type];
+    const lib = LIBRARY[p.type]!;
     for (const pin of [...lib.inputs, ...lib.outputs]) {
       const key = `${p.id}:${pin}`;
       pinIndex.set(key, pinKeys.length);
@@ -123,7 +123,7 @@ export function compile(board: Board): Netlist {
   const slotNet: number[] = [];
   const slotPart: number[] = [];
   const parts: CompiledPart[] = known.map((p, pi) => {
-    const lib = LIBRARY[p.type];
+    const lib = LIBRARY[p.type]!;
     const inputNets = lib.inputs.map((pin) => pinNet.get(`${p.id}:${pin}`)!);
     const outputSlots = lib.outputs.map((pin) => {
       const net = pinNet.get(`${p.id}:${pin}`)!;
@@ -149,7 +149,7 @@ export function compile(board: Board): Netlist {
   parts.forEach((p) => {
     p.inputNets.forEach((net, i) => {
       if (netDrivers[net]!.length === 0) {
-        diagnostics.push({ code: 'floating-input', part: p.id, pin: LIBRARY[p.type].inputs[i]! });
+        diagnostics.push({ code: 'floating-input', part: p.id, pin: LIBRARY[p.type]!.inputs[i]! });
       }
     });
   });

@@ -25,6 +25,7 @@ export function decodeSave(raw: unknown, levelId: string): Decoded {
 export function makeSave(level: Level, board: Board, now = new Date()): Save {
   return {
     kind: 'ground-up/save',
+    chips: {},
     version: SAVE_VERSION,
     levelId: level.id,
     levelVersion: level.version,

@@ -6,8 +6,8 @@ import { VX, valueChar } from './values';
 export interface CaseResult {
   index: number;
   pass: boolean;
-  inputs: Record<string, 0 | 1>;
-  expected: Record<string, 0 | 1>;
+  inputs: Record<string, number>;
+  expected: Record<string, number>;
   actual: Record<string, string>;
   message?: string;
 }
@@ -58,4 +58,16 @@ export function* runTruthTable(
     }
     yield { index, pass, inputs: row.inputs, expected: row.expect, actual, ...(message ? { message } : {}) };
   }
+}
+
+/**
+ * Run any test kind, streaming one result per case. The checkers agent adds
+ * 'exhaustive', 'random', 'sequence' and 'program' (LVL-07, TOY-03).
+ */
+export function* runTest(nl: Netlist, test: TestSpec, opts: EngineOptions = {}): Generator<CaseResult> {
+  if (test.kind === 'truth-table') {
+    yield* runTruthTable(nl, test, opts);
+    return;
+  }
+  throw new Error(`Test kind '${test.kind}' is not implemented yet`);
 }

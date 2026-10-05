@@ -20,3 +20,23 @@ export const xor = (a: number, b: number): Value => (a === VX || b === VX ? VX :
 export const nand = (a: number, b: number): Value => not(and(a, b));
 
 export const valueChar = (v: number): string => (v === V0 ? '0' : v === V1 ? '1' : 'X');
+
+/**
+ * A multi-bit signal. Bit i is unknown when bit i of `x` is set (its `v` bit
+ * is then 0). `w` is the width in bits (1..32); bits above `w` are 0 in both
+ * masks. All math uses `>>> 0` so values stay unsigned 32-bit.
+ */
+export interface Signal {
+  w: number;
+  v: number;
+  x: number;
+}
+
+export const mask = (w: number): number => (w >= 32 ? 0xffffffff : ((1 << w) - 1) >>> 0);
+export const sig = (w: number, v: number, x = 0): Signal => ({ w, v: (v & ~x & mask(w)) >>> 0, x: (x & mask(w)) >>> 0 });
+export const allX = (w: number): Signal => ({ w, v: 0, x: mask(w) });
+export const isKnown = (s: Signal): boolean => s.x === 0;
+
+/** A 1-bit signal as the legacy 0/1/X byte. */
+export const toValue = (s: Signal): Value => ((s.x & 1) !== 0 ? VX : ((s.v & 1) as Value));
+export const fromValue = (v: number): Signal => (v === VX ? allX(1) : sig(1, v));

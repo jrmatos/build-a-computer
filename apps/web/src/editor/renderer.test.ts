@@ -4,7 +4,7 @@ import { PART_TYPES, type Part, type Rotation } from '@ground-up/schema';
 import { describe, expect, it } from 'vitest';
 import { toWorld } from './geometry';
 import { mix, PALETTES } from './palette';
-import { GEOMETRY } from './parts';
+import { geomOf } from './parts';
 import { bucketOf, findJunctions, partMatrix } from './renderer';
 
 describe('partMatrix', () => {
@@ -14,7 +14,7 @@ describe('partMatrix', () => {
         for (const flip of [false, true]) {
           const part: Part = { id: 'p', type, x: 7, y: -3, rot, flip };
           const [a, b, c, d, e, f] = partMatrix(part);
-          const g = GEOMETRY[type];
+          const g = geomOf(part);
           const probes = [...g.pins.map((p) => [p.x, p.y] as const), [g.body.x, g.body.y] as const, [0.3, 1.7] as const];
           for (const [lx, ly] of probes) {
             const w = toWorld(part, lx, ly);

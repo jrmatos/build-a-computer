@@ -29,15 +29,15 @@ export interface Scenario {
 export function specToBoard(spec: CircuitSpec): Board {
   const parts: Part[] = spec.types.map((type, i) => ({ id: `p${i}`, type, x: 0, y: 0, rot: 0, flip: false }));
   const wires: Wire[] = spec.wires.map(([from, to, pin], i) => {
-    const lib = LIBRARY[spec.types[to]!];
+    const lib = LIBRARY[spec.types[to]!]!;
     const target = pin < 0 ? lib.outputs[0]! : lib.inputs[pin]!;
-    const source = LIBRARY[spec.types[from]!].outputs[0]!;
+    const source = LIBRARY[spec.types[from]!]!.outputs[0]!;
     return { id: `w${i}`, from: { part: `p${from}`, pin: source }, to: { part: `p${to}`, pin: target }, points: [] };
   });
   return { parts, wires };
 }
 
-const hasOutput = (t: PartType): boolean => LIBRARY[t].outputs.length > 0;
+const hasOutput = (t: PartType): boolean => LIBRARY[t]!.outputs.length > 0;
 
 const gateType = fc.constantFrom<PartType>('nand', 'not', 'and', 'or', 'nor', 'xor', 'xnor');
 
@@ -58,7 +58,7 @@ function pickDriver(choice: number, drivers: number[]): number {
 
 function inputPins(types: PartType[]): [number, number][] {
   const pins: [number, number][] = [];
-  types.forEach((t, i) => LIBRARY[t].inputs.forEach((_, k) => pins.push([i, k])));
+  types.forEach((t, i) => LIBRARY[t]!.inputs.forEach((_, k) => pins.push([i, k])));
   return pins;
 }
 
@@ -227,7 +227,7 @@ export function runDiff(sc: Scenario, stats: DiffStats = emptyStats(), nl: Netli
     if (ref.ticks !== fast.ticks || ref.clock !== fast.clock || ref.isPowered !== fast.isPowered) fail('clock/power');
     for (const id of switches) if (ref.isSwitchOn(id) !== fast.isSwitchOn(id)) fail(`switch ${id}`);
     for (const p of nl.parts) {
-      for (const pin of [...LIBRARY[p.type].inputs, ...LIBRARY[p.type].outputs]) {
+      for (const pin of [...LIBRARY[p.type]!.inputs, ...LIBRARY[p.type]!.outputs]) {
         if (ref.readPin(p.id, pin) !== fast.readPin(p.id, pin)) fail(`pin ${p.id}.${pin}`);
       }
     }

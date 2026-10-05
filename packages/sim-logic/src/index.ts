@@ -5,3 +5,8 @@ export * from './engine';
 export * from './checkers';
 export * from './levelize';
 export * from './fast-engine';
+export * from './parts-spec';
+export * from './flatten';
+export * from './blocks/types';
+export * from './blocks/index';
+export * from './blocks/references';
