@@ -1,6 +1,5 @@
 import type { Netlist } from './compile';
-import { LIBRARY } from './library';
-import { V0, V1, VX } from './values';
+import { mask } from './values';
 
 /**
  * SIM-03: the second compile stage. Turns a `Netlist` into flat typed arrays
@@ -8,30 +7,46 @@ import { V0, V1, VX } from './values';
  *
  * - TIMED parts are simulated wave by wave with unit delay, exactly like the
  *   reference engine, because the exact moment their outputs change can be
- *   observed: gates on combinational loops, flip-flops whose clock comes from
- *   logic ("dirty" clocks), every gate in the fan-in cone of those, and every
- *   flip-flop.
- * - FREE parts are the remaining gates. Nothing timing-sensitive reads them
- *   (they only feed lamps, other free gates, and the D pin of flip-flops with
- *   a clean clock, which sample D before any gate has switched), so after a
- *   settle only their final values matter. They are levelized and evaluated
- *   once per settle in level order.
+ *   observed: combinational parts on combinational loops, flip-flops whose
+ *   clock comes from logic ("dirty" clocks), every clocked block, every
+ *   combinational part in the fan-in cone of those, and every flip-flop.
+ * - FREE parts are the remaining combinational parts (gates, buffers,
+ *   tri-states, splitters, joiners, combinational blocks). Nothing
+ *   timing-sensitive reads them (they only feed lamps, other free parts, and
+ *   the D pin of flip-flops with a clean clock, which sample D before any
+ *   part has switched), so after a settle only their final values matter.
+ *   They are levelized and evaluated once per settle in level order.
  *
  * A flip-flop has a CLEAN clock when every driver of its clock net is a
- * switch or the global clock. Such a flip-flop can only capture in the first
- * wave of a settle, using the D value from before the settle, so glitches on
- * its D cone are invisible and the cone does not need timing.
+ * switch, button, const or the global clock. Such a flip-flop can only
+ * capture in the first wave of a settle, using the D value from before the
+ * settle, so glitches on its D cone are invisible and the cone does not need
+ * timing. Clocked blocks are always seeds of the timed region: their outputs
+ * may depend on their inputs combinationally (RAM read), so their whole
+ * fan-in cone is timed.
  */
 
 export const K_GATE = 0;
-export const K_SWITCH = 1;
+export const K_SOURCE = 1;
 export const K_CLOCK = 2;
 export const K_LAMP = 3;
 export const K_DFF = 4;
+export const K_BUF = 5;
+export const K_TRI = 6;
+export const K_SPLIT = 7;
+export const K_JOIN = 8;
+export const K_BLOCK = 9;
+/** A clocked block. */
+export const K_CBLOCK = 10;
+/** Legacy alias. */
+export const K_SWITCH = K_SOURCE;
 
 export const R_NONE = 0;
 export const R_TIMED = 1;
 export const R_FREE = 2;
+
+/** Combinational kinds: K_GATE and K_BUF..K_BLOCK. */
+export const isComb = (k: number): boolean => k === K_GATE || (k >= K_BUF && k <= K_BLOCK);
 
 export interface FastProgram {
   partCount: number;
@@ -39,16 +54,24 @@ export interface FastProgram {
   slotCount: number;
   /** K_* per part. */
   kind: Uint8Array;
-  /** Row in `gateTable` for gates. */
-  gate: Uint8Array;
-  /** Truth tables: gateTable[gate * 9 + a * 3 + b] for values 0, 1, X. */
-  gateTable: Uint8Array;
-  /** Input nets per part (-1 when the pin does not exist). */
+  /** Gate op (G_*) for gates. */
+  op: Uint8Array;
+  /** First two input nets per part (-1 when the pin does not exist). One-input gates read in0 twice. */
   in0: Int32Array;
   in1: Int32Array;
-  /** Output slot per part (-1 when none). Every library part has at most one output. */
+  /** CSR: part -> input nets. */
+  inStart: Int32Array;
+  inNet: Int32Array;
+  /** First output slot per part (-1 when none); a part's slots are out[p] .. out[p] + nOut[p] - 1. */
   out: Int32Array;
+  nOut: Int32Array;
+  /** Splitter/joiner chunk size. */
+  chunk: Int32Array;
+  /** Index of the 'clk' input for clocked parts (dff: 1). */
+  clkIn: Int32Array;
   slotNet: Int32Array;
+  slotMask: Uint32Array;
+  netMask: Uint32Array;
   /** CSR: net -> driver slots, in netlist order. */
   drvStart: Int32Array;
   drv: Int32Array;
@@ -65,46 +88,28 @@ export interface FastProgram {
   multiNets: Int32Array;
   /** Compiler's `inLoop` flag (Tarjan over all parts); used for power-on loop resolution. */
   inLoop: Uint8Array;
-  /** 1 for gates on a purely combinational loop (flip-flops break loops here). */
+  /** 1 for combinational parts on a purely combinational loop. */
   comboLoop: Uint8Array;
-  /** 1 for flip-flops whose clock net is driven only by switches or clocks. */
+  /** 1 for flip-flops and clocked blocks whose clock net is driven only by sources or clocks. */
   cleanClock: Uint8Array;
   /** R_* per part. */
   region: Uint8Array;
-  /** Free-region level (1 = reads no free gate); 0 for every other part. */
+  /** Free-region level (1 = reads no free part); 0 for every other part. */
   level: Int32Array;
   /** Free parts sorted by level; level L occupies order[levelStart[L - 1] .. levelStart[L]). */
   order: Int32Array;
   levelStart: Int32Array;
   maxLevel: number;
   freeCount: number;
-  /** Sum of `level` over free parts (used for the event bound). */
-  sumLevels: number;
+  /** Output slots of free parts, and the sum of level * outputs over free parts (event bound). */
+  freeSlots: number;
+  sumLevelSlots: number;
   timedCount: number;
+  /** Number of clocked blocks. */
+  cblockCount: number;
 }
 
-const GATE_TYPES: string[] = [];
-
-function buildGateTable(): Uint8Array {
-  const vals = [V0, V1, VX];
-  const rows: number[] = [];
-  for (const [type, lib] of Object.entries(LIBRARY)) {
-    const b = lib.behavior;
-    if (b.kind !== 'gate') continue;
-    if (lib.inputs.length < 1 || lib.inputs.length > 2 || lib.outputs.length !== 1) {
-      throw new Error(`Fast engine supports 1- and 2-input gates only (${type})`);
-    }
-    GATE_TYPES.push(type);
-    for (const a of vals) {
-      for (const c of vals) rows.push(lib.inputs.length === 1 ? b.eval([a]) : b.eval([a, c]));
-    }
-  }
-  return Uint8Array.from(rows);
-}
-
-const GATE_TABLE = buildGateTable();
-
-function csr(lists: readonly (readonly number[])[]): [Int32Array, Int32Array] {
+export function csr(lists: readonly (readonly number[])[]): [Int32Array, Int32Array] {
   const start = new Int32Array(lists.length + 1);
   let total = 0;
   for (let i = 0; i < lists.length; i++) {
@@ -118,34 +123,51 @@ function csr(lists: readonly (readonly number[])[]): [Int32Array, Int32Array] {
   return [start, flat];
 }
 
+const KIND: Record<string, number> = {
+  gate: K_GATE,
+  switch: K_SOURCE,
+  button: K_SOURCE,
+  const: K_SOURCE,
+  clock: K_CLOCK,
+  lamp: K_LAMP,
+  dff: K_DFF,
+  buffer: K_BUF,
+  tristate: K_TRI,
+  splitter: K_SPLIT,
+  joiner: K_JOIN,
+};
+
 export function levelize(nl: Netlist): FastProgram {
   const P = nl.parts.length;
   const N = nl.netCount;
   const S = nl.slotNet.length;
   const kind = new Uint8Array(P);
-  const gate = new Uint8Array(P);
+  const op = new Uint8Array(P);
   const in0 = new Int32Array(P).fill(-1);
   const in1 = new Int32Array(P).fill(-1);
   const out = new Int32Array(P).fill(-1);
+  const nOut = new Int32Array(P);
+  const chunk = new Int32Array(P);
+  const clkIn = new Int32Array(P).fill(-1);
   const inLoop = new Uint8Array(P);
+  let cblockCount = 0;
 
   nl.parts.forEach((p, i) => {
-    const b = p.behavior.kind;
-    kind[i] = b === 'gate' ? K_GATE : b === 'switch' ? K_SWITCH : b === 'clock' ? K_CLOCK : b === 'lamp' ? K_LAMP : K_DFF;
-    if (b === 'gate') {
-      const g = GATE_TYPES.indexOf(p.type);
-      if (g < 0) throw new Error(`Unknown gate ${p.type}`);
-      gate[i] = g;
-    }
-    if (p.outputSlots.length > 1) throw new Error(`Fast engine supports one output per part (${p.type})`);
-    if (p.inputNets.length > 2) throw new Error(`Fast engine supports two inputs per part (${p.type})`);
+    const k = p.kind === 'block' ? (p.clocked ? K_CBLOCK : K_BLOCK) : KIND[p.kind]!;
+    kind[i] = k;
+    if (k === K_CBLOCK) cblockCount++;
+    if (p.op >= 0) op[i] = p.op;
     if (p.inputNets.length > 0) in0[i] = p.inputNets[0]!;
-    // A one-input gate reads its only net twice so the table lookup stays branch-free.
+    // A one-input gate reads its only net twice so evaluation stays branch-free.
     if (p.inputNets.length > 1) in1[i] = p.inputNets[1]!;
-    else if (b === 'gate') in1[i] = p.inputNets[0]!;
-    if (p.outputSlots.length === 1) out[i] = p.outputSlots[0]!;
+    else if (k === K_GATE) in1[i] = p.inputNets[0]!;
+    if (p.outputSlots.length > 0) out[i] = p.outputSlots[0]!;
+    nOut[i] = p.outputSlots.length;
+    chunk[i] = k === K_SPLIT ? (p.outputWidths[0] ?? 1) : k === K_JOIN ? (p.inputWidths[0] ?? 1) : 0;
+    clkIn[i] = p.clocked ? p.clkInput : -1;
     inLoop[i] = p.inLoop ? 1 : 0;
   });
+  const [inStart, inNet] = csr(nl.parts.map((p) => p.inputNets));
 
   const [drvStart, drv] = csr(nl.netDrivers);
   const [rdStart, rd] = csr(nl.netReaders);
@@ -153,42 +175,41 @@ export function levelize(nl: Netlist): FastProgram {
   const multi: number[] = [];
   for (let n = 0; n < N; n++) if (drvStart[n + 1]! - drvStart[n]! > 1) multi.push(n);
 
-  // Gate-only successor lists: g -> gates reading g's output net.
-  const outNet = (p: number): number => (out[p]! >= 0 ? nl.slotNet[out[p]!]! : -1);
-  const comboLoop = markComboLoops(P, kind, outNet, rdStart, rd);
+  const comboLoop = markComboLoops(P, kind, out, nOut, nl.slotNet, rdStart, rd);
 
-  // Clean clocks: every driver of the clock net is a switch or the clock.
+  // Clean clocks: every driver of the clock net is a source or the clock.
   const cleanClock = new Uint8Array(P);
   for (let p = 0; p < P; p++) {
-    if (kind[p] !== K_DFF) continue;
-    const clk = in1[p]!;
+    if (kind[p] !== K_DFF && kind[p] !== K_CBLOCK) continue;
+    const clk = inNet[inStart[p]! + clkIn[p]!]!;
     let clean = 1;
     for (let k = drvStart[clk]!; k < drvStart[clk + 1]!; k++) {
       const q = kind[slotPart[drv[k]!]!]!;
-      if (q !== K_SWITCH && q !== K_CLOCK) clean = 0;
+      if (q !== K_SOURCE && q !== K_CLOCK) clean = 0;
     }
     cleanClock[p] = clean;
   }
 
-  // Timed region: backward closure from loop gates and dirty-clock flip-flops.
-  // The walk does not continue through clean-clock flip-flops: their output
-  // timing does not depend on their inputs.
+  // Timed region: backward closure from loop parts, dirty-clock flip-flops
+  // and clocked blocks. The walk does not continue through clean-clock
+  // flip-flops: their output timing does not depend on their inputs.
   const region = new Uint8Array(P);
   const queue: number[] = [];
   for (let p = 0; p < P; p++) {
-    if (kind[p] === K_DFF) region[p] = R_TIMED;
-    if ((kind[p] === K_GATE && comboLoop[p]) || (kind[p] === K_DFF && !cleanClock[p])) {
+    const k = kind[p]!;
+    if (k === K_DFF || k === K_CBLOCK) region[p] = R_TIMED;
+    if ((isComb(k) && comboLoop[p]) || (k === K_DFF && !cleanClock[p]) || k === K_CBLOCK) {
       region[p] = R_TIMED;
       queue.push(p);
     }
   }
   while (queue.length) {
     const p = queue.pop()!;
-    for (const n of [in0[p]!, in1[p]!]) {
-      if (n < 0) continue;
+    for (let j = inStart[p]!; j < inStart[p + 1]!; j++) {
+      const n = inNet[j]!;
       for (let k = drvStart[n]!; k < drvStart[n + 1]!; k++) {
         const q = slotPart[drv[k]!]!;
-        if (kind[q] === K_GATE && region[q] !== R_TIMED) {
+        if (isComb(kind[q]!) && region[q] !== R_TIMED) {
           region[q] = R_TIMED;
           queue.push(q);
         }
@@ -197,25 +218,28 @@ export function levelize(nl: Netlist): FastProgram {
   }
   let timedCount = 0;
   for (let p = 0; p < P; p++) {
-    if (kind[p] === K_GATE && region[p] !== R_TIMED) region[p] = R_FREE;
+    if (isComb(kind[p]!) && region[p] !== R_TIMED) region[p] = R_FREE;
     if (region[p] === R_TIMED) timedCount++;
   }
 
-  // Levelize the free region (it is acyclic: free gates are never on a combinational loop).
+  // Levelize the free region (it is acyclic: free parts are never on a combinational loop).
   const level = new Int32Array(P);
   const indeg = new Int32Array(P);
   const freeSucc = (p: number, f: (r: number) => void): void => {
-    const n = outNet(p);
-    if (n < 0) return;
-    for (let k = rdStart[n]!; k < rdStart[n + 1]!; k++) {
-      const r = rd[k]!;
-      if (region[r] === R_FREE) f(r);
+    for (let s = out[p]!; s < out[p]! + nOut[p]!; s++) {
+      const n = nl.slotNet[s]!;
+      for (let k = rdStart[n]!; k < rdStart[n + 1]!; k++) {
+        const r = rd[k]!;
+        if (region[r] === R_FREE) f(r);
+      }
     }
   };
   let freeCount = 0;
+  let freeSlots = 0;
   for (let p = 0; p < P; p++) {
     if (region[p] !== R_FREE) continue;
     freeCount++;
+    freeSlots += nOut[p]!;
     freeSucc(p, (r) => indeg[r]!++);
   }
   const topo: number[] = [];
@@ -230,10 +254,10 @@ export function levelize(nl: Netlist): FastProgram {
   }
   if (topo.length !== freeCount) throw new Error('levelize: free region is not acyclic');
   let maxLevel = 0;
-  let sumLevels = 0;
+  let sumLevelSlots = 0;
   for (const p of topo) {
     if (level[p]! > maxLevel) maxLevel = level[p]!;
-    sumLevels += level[p]!;
+    sumLevelSlots += level[p]! * nOut[p]!;
   }
   const levelStart = new Int32Array(maxLevel + 1);
   for (const p of topo) levelStart[level[p]!]!++;
@@ -263,12 +287,18 @@ export function levelize(nl: Netlist): FastProgram {
     netCount: N,
     slotCount: S,
     kind,
-    gate,
-    gateTable: GATE_TABLE,
+    op,
     in0,
     in1,
+    inStart,
+    inNet,
     out,
+    nOut,
+    chunk,
+    clkIn,
     slotNet: nl.slotNet,
+    slotMask: Uint32Array.from(nl.slotWidth, (w) => mask(w)),
+    netMask: Uint32Array.from(nl.netWidth, (w) => mask(w)),
     drvStart,
     drv,
     rdStart,
@@ -287,25 +317,30 @@ export function levelize(nl: Netlist): FastProgram {
     levelStart,
     maxLevel,
     freeCount,
-    sumLevels,
+    freeSlots,
+    sumLevelSlots,
     timedCount,
+    cblockCount,
   };
 }
 
-/** Iterative Tarjan SCC over gates only; flags gates on combinational loops. */
+/** Iterative Tarjan SCC over combinational parts only; flags parts on combinational loops. */
 function markComboLoops(
   P: number,
   kind: Uint8Array,
-  outNet: (p: number) => number,
+  out: Int32Array,
+  nOut: Int32Array,
+  slotNet: Int32Array,
   rdStart: Int32Array,
   rd: Int32Array,
 ): Uint8Array {
   const flag = new Uint8Array(P);
   const succ = (p: number): number[] => {
     const res: number[] = [];
-    const n = outNet(p);
-    if (n < 0) return res;
-    for (let k = rdStart[n]!; k < rdStart[n + 1]!; k++) if (kind[rd[k]!] === K_GATE) res.push(rd[k]!);
+    for (let s = out[p]!; s < out[p]! + nOut[p]!; s++) {
+      const n = slotNet[s]!;
+      for (let k = rdStart[n]!; k < rdStart[n + 1]!; k++) if (isComb(kind[rd[k]!]!)) res.push(rd[k]!);
+    }
     return res;
   };
   const index = new Int32Array(P).fill(-1);
@@ -314,7 +349,7 @@ function markComboLoops(
   const stack: number[] = [];
   let counter = 0;
   for (let root = 0; root < P; root++) {
-    if (kind[root] !== K_GATE || index[root] !== -1) continue;
+    if (!isComb(kind[root]!) || index[root] !== -1) continue;
     const work: { v: number; edges: number[]; i: number }[] = [{ v: root, edges: succ(root), i: 0 }];
     index[root] = low[root] = counter++;
     stack.push(root);

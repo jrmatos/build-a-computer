@@ -1,50 +1,71 @@
 import { Prng } from '@ground-up/det';
-import type { Netlist } from './compile';
-import type { EngineOptions, SettleResult } from './engine';
-import { K_CLOCK, K_DFF, K_GATE, K_SWITCH, R_FREE, R_TIMED, levelize, type FastProgram } from './levelize';
-import { V0, V1, VX, type Value } from './values';
+import { assertRunnable, type CompiledPart, type Netlist } from './compile';
+import { idle, stateKey, type Engine, type EngineOptions, type InternalState, type SettleResult } from './engine';
+import { gate, type VX2 } from './library';
+import {
+  K_BLOCK,
+  K_BUF,
+  K_CBLOCK,
+  K_CLOCK,
+  K_DFF,
+  K_GATE,
+  K_JOIN,
+  K_SOURCE,
+  K_SPLIT,
+  K_TRI,
+  R_FREE,
+  R_TIMED,
+  isComb,
+  levelize,
+  type FastProgram,
+} from './levelize';
+import { V0, V1, VX, allX, mask, type Signal, type Value } from './values';
 
 /**
  * SIM-04: the fast engine. Same public API as `ReferenceEngine`, and the same
  * observable results.
  *
- * WHAT "MATCHES" MEANS. After every call (powerOn, powerOff, setSwitch, tick)
- * the two engines agree on:
- *   - every net value (`net`, `readPin`),
+ * WHAT "MATCHES" MEANS. After every call (powerOn, powerOff, setSwitch,
+ * setValue, press, tick) the two engines agree on:
+ *   - every net value (`netV`, `netX`, `readSignal`, `readPin`),
  *   - `stable`, and `unstableNets` (as a sorted list),
  *   - `contentionNets` as a SET (this engine returns it sorted ascending; the
  *     reference returns Set insertion order, which is an artifact),
- *   - every internal state bit that can influence the future: output slots,
- *     flip-flop state and last-seen clock (see `internalState`),
- *   - `ticks`, `clock`, `isPowered`, `isSwitchOn`.
+ *   - every internal state that can influence the future: output slots
+ *     (value, X and Z masks), flip-flop state, last-seen clocks and block
+ *     states (see `internalState`),
+ *   - `ticks`, `clock`, `isPowered`, switch values, `memory`.
  * `events` is the amount of work done. It equals the reference whenever the
  * settle ran on the exact path, and is never larger than the reference on the
- * fast path (free gates switch at most once instead of glitching).
+ * fast path (free parts switch at most once instead of glitching).
  *
- * HOW. `levelize` splits gates into a TIMED region (combinational loops,
- * flip-flops clocked from logic, and their fan-in cones) and a FREE region
- * (acyclic gates that nothing timing-sensitive reads). A settle normally runs
- * on the FAST path:
- *   1. The timed region (plus every flip-flop) is simulated wave by wave with
- *      unit delay, exactly as the reference does. Timed parts never read a
- *      net with a free driver, so this is identical wave for wave. Glitches,
- *      races, latch decisions and flip-flop edges therefore all match.
- *   2. Free gates are evaluated once each, in level order, starting from the
+ * HOW. `levelize` splits combinational parts into a TIMED region
+ * (combinational loops, flip-flops clocked from logic, clocked blocks, and
+ * their fan-in cones) and a FREE region (acyclic logic that nothing
+ * timing-sensitive reads). A settle normally runs on the FAST path:
+ *   1. The timed region (plus every flip-flop and clocked block) is simulated
+ *      wave by wave with unit delay, exactly as the reference does. Timed
+ *      parts never read a net with a free driver (except the D pin of
+ *      clean-clock flip-flops, which only sample in the first wave), so this
+ *      is identical wave for wave.
+ *   2. Free parts are evaluated once each, in level order, starting from the
  *      ones whose inputs changed. For acyclic logic the settled value is the
  *      combinational function of the settled inputs, which is what the
  *      reference ends with after its glitches die out.
- * The reference counts free-gate glitches against the event budget, so the
- * fast path must prove that the reference could not have run out of budget:
- * `timedEvents + bound(free events) <= budget`, where a free gate at level L
- * switches at most `W + L` times (W = timed waves), tightened if needed by
- * counting the waves in which each free gate can actually be woken. If the
- * proof fails, or the timed region alone exceeds the budget (an oscillation),
- * the timed changes are rolled back from an undo log and the settle is rerun
- * on the EXACT path: a typed-array port of the reference algorithm, including
- * its post-budget scan for unstable nets and its wave ordering.
+ * The reference counts free glitches against the event budget, so the fast
+ * path must prove that the reference could not have run out of budget:
+ * `timedEvents + bound(free events) <= budget`, where a free part at level L
+ * switches in at most `W + L` waves (W = timed waves), each switch changing
+ * at most its number of outputs, tightened if needed by counting the waves in
+ * which each free part can actually be woken. If the proof fails, the timed
+ * region alone exceeds the budget (an oscillation), or a clocked block sees a
+ * rising edge (its state may be updated in place, so it cannot be rolled
+ * back), the timed changes are rolled back from an undo log and the settle is
+ * rerun on the EXACT path: a typed-array port of the reference algorithm,
+ * including its post-budget scan for unstable nets and its wave ordering.
  *
- * The fast path also needs every free gate to be "consistent" before the
- * settle (output = function of current inputs) and every flip-flop to have
+ * The fast path also needs every free part to be "consistent" before the
+ * settle (outputs = function of current inputs) and every flip-flop to have
  * seen its current clock, because the reference may wake a stale part on a
  * glitch that the fast path never produces. That holds after any stable
  * settle; after an unstable one (or a forced loop value at power on) the
@@ -58,12 +79,6 @@ export interface FastStats {
   fallbacks: number;
 }
 
-export interface InternalState {
-  slot: Uint8Array;
-  dffState: Uint8Array;
-  dffPrevClk: Uint8Array;
-}
-
 const U_SLOT = 0;
 const U_NET = 1;
 const U_CONT = 2;
@@ -71,14 +86,23 @@ const U_STATE = 3;
 const U_PREV = 4;
 const SAT = 1 << 30;
 
-export class FastEngine {
-  readonly net: Uint8Array;
+const bitValue = (v: number, x: number): Value => ((x & 1) !== 0 ? VX : ((v & 1) as Value));
+
+export class FastEngine implements Engine {
+  readonly netV: Uint32Array;
+  readonly netX: Uint32Array;
   readonly prog: FastProgram;
   readonly stats: FastStats = { fastSettles: 0, exactSettles: 0, fallbacks: 0 };
-  private readonly slot: Uint8Array;
-  private readonly dffState: Uint8Array;
-  private readonly dffPrevClk: Uint8Array;
-  private readonly switchOn: Uint8Array;
+  private readonly parts: CompiledPart[];
+  private readonly netWidth: Int32Array;
+  private readonly slotV: Uint32Array;
+  private readonly slotX: Uint32Array;
+  private readonly slotZ: Uint32Array;
+  private readonly stV: Uint32Array;
+  private readonly stX: Uint32Array;
+  private readonly prevClk: Uint8Array;
+  private readonly blockState: unknown[];
+  private readonly inputValue: Uint32Array;
   private readonly cont: Uint8Array;
   private readonly clockParts: Int32Array;
   private clockLevel: Value = V0;
@@ -86,6 +110,9 @@ export class FastEngine {
   private readonly prng: Prng;
   private powered = false;
   private consistent = false;
+  /** Set when a clocked block sees an edge during a fast settle. */
+  private abort = false;
+  private readonly R: VX2 = { v: 0, x: 0 };
   /** Total clock half-periods since power on. */
   ticks = 0;
 
@@ -96,7 +123,9 @@ export class FastEngine {
   private readonly netStamp: Uint32Array;
   private stampCounter = 0;
   private readonly chS: Int32Array;
-  private readonly chV: Uint8Array;
+  private readonly chV: Uint32Array;
+  private readonly chX: Uint32Array;
+  private readonly chZ: Uint32Array;
   private readonly netsList: Int32Array;
   private readonly lastChanged: Int32Array;
 
@@ -119,20 +148,31 @@ export class FastEngine {
   private undoLen = 0;
   private undoKind = new Uint8Array(1024);
   private undoIdx = new Int32Array(1024);
-  private undoOld = new Uint8Array(1024);
+  private undoA = new Uint32Array(1024);
+  private undoB = new Uint32Array(1024);
+  private undoC = new Uint32Array(1024);
 
   constructor(
     readonly nl: Netlist,
     private readonly opts: EngineOptions = {},
   ) {
+    assertRunnable(nl);
     const prog = (this.prog = levelize(nl));
+    this.parts = nl.parts;
+    this.netWidth = nl.netWidth;
     const P = prog.partCount;
     const N = prog.netCount;
-    this.net = new Uint8Array(N).fill(VX);
-    this.slot = new Uint8Array(prog.slotCount).fill(VX);
-    this.dffState = new Uint8Array(P).fill(VX);
-    this.dffPrevClk = new Uint8Array(P).fill(VX);
-    this.switchOn = Uint8Array.from(nl.parts, (p) => (p.initialOn ? 1 : 0));
+    const S = prog.slotCount;
+    this.netV = new Uint32Array(N);
+    this.netX = prog.netMask.slice();
+    this.slotV = new Uint32Array(S);
+    this.slotX = prog.slotMask.slice();
+    this.slotZ = new Uint32Array(S);
+    this.stV = new Uint32Array(P);
+    this.stX = new Uint32Array(P).fill(1);
+    this.prevClk = new Uint8Array(P).fill(VX);
+    this.blockState = new Array<unknown>(P).fill(undefined);
+    this.inputValue = Uint32Array.from(nl.parts, (p) => p.initialValue);
     this.cont = new Uint8Array(N);
     const clocks: number[] = [];
     for (let p = 0; p < P; p++) if (prog.kind[p] === K_CLOCK) clocks.push(p);
@@ -145,8 +185,10 @@ export class FastEngine {
     this.nxt = new Int32Array(P);
     this.partStamp = new Uint32Array(P);
     this.netStamp = new Uint32Array(N);
-    this.chS = new Int32Array(P);
-    this.chV = new Uint8Array(P);
+    this.chS = new Int32Array(S);
+    this.chV = new Uint32Array(S);
+    this.chX = new Uint32Array(S);
+    this.chZ = new Uint32Array(S);
     this.netsList = new Int32Array(N);
     this.lastChanged = new Int32Array(N);
 
@@ -175,18 +217,25 @@ export class FastEngine {
     this.powered = true;
     this.ticks = 0;
     this.clockLevel = V0;
-    this.net.fill(VX);
-    this.slot.fill(VX);
+    this.clearNets();
     this.cont.fill(0);
     const random = this.opts.powerOnState === 'random';
     for (let i = 0; i < prog.partCount; i++) {
-      if (prog.kind[i] === K_DFF) {
-        this.dffState[i] = random ? this.prng.nextBit() : V0;
-        this.dffPrevClk[i] = VX;
+      const k = prog.kind[i];
+      if (k === K_DFF) {
+        this.stV[i] = random ? this.prng.nextBit() : V0;
+        this.stX[i] = 0;
+        this.prevClk[i] = VX;
+      } else if (k === K_BLOCK || k === K_CBLOCK) {
+        const p = this.parts[i]!;
+        if (!(p.nonVolatile && this.blockState[i] !== undefined)) {
+          this.blockState[i] = p.block!.init(p.part, random ? 'random' : 'zero', this.prng);
+        }
+        if (k === K_CBLOCK) this.prevClk[i] = VX;
       }
       this.writeSourceOutputs(i);
     }
-    for (let n = 0; n < prog.netCount; n++) this.net[n] = this.resolve(n);
+    for (let n = 0; n < prog.netCount; n++) this.refresh(n);
 
     // Every part is in the start set, so staleness cannot matter.
     this.consistent = true;
@@ -197,41 +246,52 @@ export class FastEngine {
     for (let i = 0; i < prog.partCount; i++) {
       if (!prog.inLoop[i] || prog.kind[i] !== K_GATE) continue;
       const s = prog.out[i]!;
-      if (this.slot[s] !== VX) continue;
-      this.slot[s] = random ? this.prng.nextBit() : V0;
+      const x = this.slotX[s]!;
+      if (x === 0) continue;
+      const r = random ? (this.parts[i]!.width === 1 ? this.prng.nextBit() : this.prng.nextU32()) : 0;
+      this.slotV[s] = (this.slotV[s]! | (r & x)) >>> 0;
+      this.slotX[s] = 0;
       // A forced free gate no longer equals its function: stay exact until checked.
       if (prog.region[i] === R_FREE) this.consistent = false;
       const n = prog.slotNet[s]!;
       const changed = this.refresh(n);
-      result = this.settle(changed ? prog.rd.subarray(prog.rdStart[n]!, prog.rdStart[n + 1]!) : new Int32Array(0));
+      result = this.settle(changed ? prog.rd.subarray(prog.rdStart[n]!, prog.rdStart[n + 1]!) : EMPTY);
       if (!result.stable) return result;
     }
     return result;
   }
 
-  /** Power off clears every volatile value (E-SIM-08). */
+  /** Power off clears every volatile value (E-SIM-08); non-volatile blocks (ROM) keep their state. */
   powerOff(): void {
     this.powered = false;
     this.consistent = false;
-    this.net.fill(VX);
-    this.slot.fill(VX);
-    this.dffState.fill(VX);
+    this.clearNets();
+    this.stV.fill(0);
+    this.stX.fill(1);
+    for (let i = 0; i < this.parts.length; i++) if (!this.parts[i]!.nonVolatile) this.blockState[i] = undefined;
     this.cont.fill(0);
   }
 
   setSwitch(partId: string, on: boolean): SettleResult {
-    const i = this.nl.partIndex.get(partId);
-    if (i === undefined || this.prog.kind[i] !== K_SWITCH) {
-      throw new Error(`No switch named ${partId}`);
-    }
-    this.switchOn[i] = on ? 1 : 0;
-    if (!this.powered) return idle();
-    return this.settle(this.writeSourceOutputs(i));
+    return this.setInput(partId, on ? 1 : 0, 'switch');
+  }
+
+  setValue(partId: string, value: number): SettleResult {
+    return this.setInput(partId, value, 'switch');
+  }
+
+  press(partId: string, down: boolean): SettleResult {
+    return this.setInput(partId, down ? 1 : 0, 'button');
   }
 
   isSwitchOn(partId: string): boolean {
     const i = this.nl.partIndex.get(partId);
-    return i !== undefined && this.switchOn[i] === 1;
+    return i !== undefined && this.inputValue[i] !== 0;
+  }
+
+  switchValue(partId: string): number {
+    const i = this.nl.partIndex.get(partId);
+    return i === undefined ? 0 : this.inputValue[i]!;
   }
 
   /** Advance the global clock by half a period: one tick. */
@@ -241,17 +301,70 @@ export class FastEngine {
     this.clockLevel = this.clockLevel === V1 ? V0 : V1;
     const woken: number[] = [];
     for (const c of this.clockParts) for (const r of this.writeSourceOutputs(c)) woken.push(r);
+    // A rising edge reaches clocked blocks, which would abort the fast path anyway.
+    if (this.clockLevel === V1 && this.prog.cblockCount > 0) return this.settleExact(woken);
     return this.settle(woken);
   }
 
   readPin(partId: string, pin: string): Value {
     const n = this.nl.pinNet.get(`${partId}:${pin}`);
-    return n === undefined ? VX : (this.net[n] as Value);
+    return n === undefined ? VX : this.netValue(n);
+  }
+
+  readSignal(partId: string, pin: string): Signal {
+    const n = this.nl.pinNet.get(`${partId}:${pin}`);
+    return n === undefined ? allX(1) : this.netSignal(n);
+  }
+
+  netSignal(n: number): Signal {
+    return { w: this.netWidth[n]!, v: this.netV[n]!, x: this.netX[n]! };
+  }
+
+  netValue(n: number): Value {
+    return bitValue(this.netV[n]!, this.netX[n]!);
+  }
+
+  memory(partId: string): number[] {
+    const i = this.nl.partIndex.get(partId);
+    if (i === undefined) return [];
+    const p = this.parts[i]!;
+    const st = this.blockState[i];
+    if (!p.block?.inspect || st === undefined) return [];
+    return Array.from(p.block.inspect(st));
   }
 
   /** Copies of the hidden state, for differential tests. */
   internalState(): InternalState {
-    return { slot: this.slot.slice(), dffState: this.dffState.slice(), dffPrevClk: this.dffPrevClk.slice() };
+    return {
+      slotV: this.slotV.slice(),
+      slotX: this.slotX.slice(),
+      slotZ: this.slotZ.slice(),
+      stV: this.stV.slice(),
+      stX: this.stX.slice(),
+      prevClk: this.prevClk.slice(),
+      blocks: this.parts.map((p, i) => (p.block ? stateKey(this.blockState[i]) : '')),
+    };
+  }
+
+  // ---------------------------------------------------------------- inputs
+
+  private setInput(partId: string, value: number, want: 'switch' | 'button'): SettleResult {
+    const i = this.nl.partIndex.get(partId);
+    const p = i === undefined ? undefined : this.parts[i];
+    if (i === undefined || !p || (p.kind !== 'switch' && p.kind !== 'button')) {
+      throw new Error(`No ${want} named ${partId}`);
+    }
+    this.inputValue[i] = (value & this.prog.slotMask[this.prog.out[i]!]!) >>> 0;
+    if (!this.powered) return idle();
+    return this.settle(this.writeSourceOutputs(i));
+  }
+
+  private clearNets(): void {
+    this.netV.fill(0);
+    this.netX.set(this.prog.netMask);
+    this.slotV.fill(0);
+    this.slotX.set(this.prog.slotMask);
+    this.slotZ.fill(0);
   }
 
   // ---------------------------------------------------------------- settle
@@ -270,40 +383,135 @@ export class FastEngine {
     return ++this.stampCounter;
   }
 
+  /** Record a change of slot `s` at index `ch` when it differs; returns the new count. */
+  private push(ch: number, s: number, v: number, x: number, z: number): number {
+    if (this.slotV[s] === v && this.slotX[s] === x && this.slotZ[s] === z) return ch;
+    this.chS[ch] = s;
+    this.chV[ch] = v;
+    this.chX[ch] = x;
+    this.chZ[ch] = z;
+    return ch + 1;
+  }
+
+  private inputSignals(p: number): Signal[] {
+    const { inStart, inNet } = this.prog;
+    const res: Signal[] = [];
+    for (let j = inStart[p]!; j < inStart[p + 1]!; j++) {
+      const n = inNet[j]!;
+      res.push({ w: this.netWidth[n]!, v: this.netV[n]!, x: this.netX[n]! });
+    }
+    return res;
+  }
+
+  private pushBlockOutputs(p: number, ins: Signal[], ch: number): number {
+    const part = this.parts[p]!;
+    const outs = part.block!.outputs(ins, this.blockState[p], part.part);
+    const { out, nOut, slotMask } = this.prog;
+    for (let k = 0; k < nOut[p]!; k++) {
+      const s = out[p]! + k;
+      const m = slotMask[s]!;
+      const o = outs[k];
+      const x = o ? (o.x & m) >>> 0 : m;
+      ch = this.push(ch, s, o ? (o.v & ~x & m) >>> 0 : 0, x, 0);
+    }
+    return ch;
+  }
+
   /**
-   * Evaluate the parts in `cur[0..len)` (gates and flip-flops) and record
-   * output changes in chS/chV. Returns the number of changes.
+   * Evaluate part `p` against the current nets and record its output changes
+   * from index `ch`. Combinational parts have no side effects; flip-flops and
+   * clocked blocks update their state (logged during fast settles).
    */
+  private evalPart(p: number, ch: number): number {
+    const prog = this.prog;
+    const netV = this.netV;
+    const netX = this.netX;
+    switch (prog.kind[p]) {
+      case K_GATE: {
+        const a = prog.in0[p]!;
+        const b = prog.in1[p]!;
+        const s = prog.out[p]!;
+        const R = this.R;
+        gate(prog.op[p]!, netV[a]!, netX[a]!, netV[b]!, netX[b]!, prog.slotMask[s]!, R);
+        return this.push(ch, s, R.v, R.x, 0);
+      }
+      case K_BUF: {
+        const a = prog.in0[p]!;
+        return this.push(ch, prog.out[p]!, netV[a]!, netX[a]!, 0);
+      }
+      case K_TRI: {
+        const a = prog.in0[p]!;
+        const e = prog.in1[p]!;
+        const s = prog.out[p]!;
+        const m = prog.slotMask[s]!;
+        if (netX[e]! & 1) return this.push(ch, s, 0, m, 0);
+        if (netV[e]! & 1) return this.push(ch, s, netV[a]!, netX[a]!, 0);
+        return this.push(ch, s, 0, 0, m);
+      }
+      case K_SPLIT: {
+        const a = prog.in0[p]!;
+        const c = prog.chunk[p]!;
+        const cm = mask(c);
+        const av = netV[a]!;
+        const ax = netX[a]!;
+        const s0 = prog.out[p]!;
+        for (let k = 0; k < prog.nOut[p]!; k++) {
+          const sh = k * c;
+          ch = this.push(ch, s0 + k, ((av >>> sh) & cm) >>> 0, ((ax >>> sh) & cm) >>> 0, 0);
+        }
+        return ch;
+      }
+      case K_JOIN: {
+        const c = prog.chunk[p]!;
+        const cm = mask(c);
+        let v = 0;
+        let x = 0;
+        const j0 = prog.inStart[p]!;
+        for (let j = j0; j < prog.inStart[p + 1]!; j++) {
+          const n = prog.inNet[j]!;
+          const sh = (j - j0) * c;
+          v |= (netV[n]! & cm) << sh;
+          x |= (netX[n]! & cm) << sh;
+        }
+        return this.push(ch, prog.out[p]!, v >>> 0, x >>> 0, 0);
+      }
+      case K_DFF: {
+        const d = prog.in0[p]!;
+        const c = prog.in1[p]!;
+        const clk = bitValue(netV[c]!, netX[c]!);
+        if (this.prevClk[p] === V0 && clk === V1) this.setState(p, netV[d]! & 1, netX[d]! & 1);
+        if (this.prevClk[p] !== clk) this.setPrev(p, clk);
+        return this.push(ch, prog.out[p]!, this.stV[p]!, this.stX[p]!, 0);
+      }
+      case K_BLOCK:
+        return this.pushBlockOutputs(p, this.inputSignals(p), ch);
+      case K_CBLOCK: {
+        const ins = this.inputSignals(p);
+        const c = ins[prog.clkIn[p]!]!;
+        const clk = bitValue(c.v, c.x);
+        if (this.prevClk[p] === V0 && clk === V1) {
+          if (this.logging) {
+            this.abort = true;
+            return ch;
+          }
+          const part = this.parts[p]!;
+          this.blockState[p] = part.block!.clock!(ins, this.blockState[p], part.part);
+        }
+        if (this.prevClk[p] !== clk) this.setPrev(p, clk);
+        return this.pushBlockOutputs(p, ins, ch);
+      }
+      default:
+        return ch;
+    }
+  }
+
+  /** Evaluate the parts in `cur[0..len)` and record output changes. Returns the number of changes. */
   private evalWave(len: number): number {
-    const { kind, gate, gateTable, in0, in1, out } = this.prog;
-    const net = this.net;
-    const slot = this.slot;
     const cur = this.cur;
-    const chS = this.chS;
-    const chV = this.chV;
     let ch = 0;
     for (let i = 0; i < len; i++) {
-      const p = cur[i]!;
-      const k = kind[p]!;
-      if (k === K_GATE) {
-        const v = gateTable[gate[p]! * 9 + net[in0[p]!]! * 3 + net[in1[p]!]!]!;
-        const s = out[p]!;
-        if (slot[s] !== v) {
-          chS[ch] = s;
-          chV[ch++] = v;
-        }
-      } else if (k === K_DFF) {
-        const d = net[in0[p]!]!;
-        const clk = net[in1[p]!]!;
-        if (this.dffPrevClk[p] === V0 && clk === V1) this.setState(p, d);
-        if (this.dffPrevClk[p] !== clk) this.setPrev(p, clk);
-        const s = out[p]!;
-        const st = this.dffState[p]!;
-        if (slot[s] !== st) {
-          chS[ch] = s;
-          chV[ch++] = st;
-        }
-      }
+      ch = this.evalPart(cur[i]!, ch);
+      if (this.abort) return ch;
     }
     return ch;
   }
@@ -316,8 +524,10 @@ export class FastEngine {
     let len = 0;
     for (let k = 0; k < ch; k++) {
       const s = this.chS[k]!;
-      if (this.logging) this.log(U_SLOT, s, this.slot[s]!);
-      this.slot[s] = this.chV[k]!;
+      if (this.logging) this.log(U_SLOT, s, this.slotV[s]!, this.slotX[s]!, this.slotZ[s]!);
+      this.slotV[s] = this.chV[k]!;
+      this.slotX[s] = this.chX[k]!;
+      this.slotZ[s] = this.chZ[k]!;
       const n = slotNet[s]!;
       if (netStamp[n] !== w) {
         netStamp[n] = w;
@@ -380,9 +590,9 @@ export class FastEngine {
     if (this.prog.freeCount > 0) this.consistent = this.checkConsistent();
   }
 
-  /** Same as the reference: up to 64 more waves of gates, slot by slot, listing every net that moves. */
+  /** Same as the reference: up to 64 more waves of combinational parts, listing every net that moves. */
   private collectUnstable(curLen: number, lastLen: number): number[] {
-    const { kind, gate, gateTable, in0, in1, out, slotNet, rdStart, rd } = this.prog;
+    const { kind, slotNet, rdStart, rd } = this.prog;
     const moving = new Set<number>();
     for (let i = 0; i < lastLen; i++) moving.add(this.lastChanged[i]!);
     let waveLen = curLen;
@@ -390,20 +600,16 @@ export class FastEngine {
       let ch = 0;
       for (let i = 0; i < waveLen; i++) {
         const p = this.cur[i]!;
-        if (kind[p] !== K_GATE) continue;
-        const v = gateTable[gate[p]! * 9 + this.net[in0[p]!]! * 3 + this.net[in1[p]!]!]!;
-        const s = out[p]!;
-        if (this.slot[s] !== v) {
-          this.chS[ch] = s;
-          this.chV[ch++] = v;
-        }
+        if (isComb(kind[p]!)) ch = this.evalPart(p, ch);
       }
       const w = this.nextStamp();
       let nextLen = 0;
       const nxt = this.nxt;
       for (let j = 0; j < ch; j++) {
         const s = this.chS[j]!;
-        this.slot[s] = this.chV[j]!;
+        this.slotV[s] = this.chV[j]!;
+        this.slotX[s] = this.chX[j]!;
+        this.slotZ[s] = this.chZ[j]!;
         const n = slotNet[s]!;
         if (!this.refresh(n)) continue;
         moving.add(n);
@@ -452,6 +658,7 @@ export class FastEngine {
     while (curLen) {
       waves++;
       const ch = this.evalWave(curLen);
+      if (this.abort) return this.fallback(start);
       const w = this.nextStamp();
       const nlen = this.applyWave(ch, w);
       let nextLen = 0;
@@ -481,7 +688,7 @@ export class FastEngine {
       if (eT > this.budget) return this.fallback(start);
     }
 
-    const cheap = eT + prog.freeCount * waves + prog.sumLevels;
+    const cheap = eT + prog.freeSlots * waves + prog.sumLevelSlots;
     if (cheap > this.budget && !this.tightBound(eT, waves)) return this.fallback(start);
 
     this.logging = false;
@@ -493,24 +700,29 @@ export class FastEngine {
   private fallback(start: ArrayLike<number>): SettleResult {
     this.stats.fallbacks++;
     this.logging = false;
+    this.abort = false;
     for (let i = this.undoLen - 1; i >= 0; i--) {
       const idx = this.undoIdx[i]!;
-      const old = this.undoOld[i]!;
+      const a = this.undoA[i]!;
       switch (this.undoKind[i]) {
         case U_SLOT:
-          this.slot[idx] = old;
+          this.slotV[idx] = a;
+          this.slotX[idx] = this.undoB[i]!;
+          this.slotZ[idx] = this.undoC[i]!;
           break;
         case U_NET:
-          this.net[idx] = old;
+          this.netV[idx] = a;
+          this.netX[idx] = this.undoB[i]!;
           break;
         case U_CONT:
-          this.cont[idx] = old;
+          this.cont[idx] = a;
           break;
         case U_STATE:
-          this.dffState[idx] = old;
+          this.stV[idx] = a;
+          this.stX[idx] = this.undoB[i]!;
           break;
         default:
-          this.dffPrevClk[idx] = old;
+          this.prevClk[idx] = a;
       }
     }
     this.undoLen = 0;
@@ -519,13 +731,14 @@ export class FastEngine {
   }
 
   /**
-   * Upper bound on free-gate events in the reference, tighter than the cheap
-   * one: a free gate switches at most once per wave in which it is woken, it
+   * Upper bound on free-part events in the reference, tighter than the cheap
+   * one: a free part switches at most once per wave in which it is woken, it
    * is woken by timed drivers in the waves counted in `wakeCount`, and by a
-   * free driver at most as often as that driver switches.
+   * free driver at most as often as that driver switches. Each switch changes
+   * at most all of the part's outputs.
    */
   private tightBound(eT: number, waves: number): boolean {
-    const { order, level, out, slotNet, fRdStart, fRd } = this.prog;
+    const { order, level, out, nOut, slotNet, fRdStart, fRd } = this.prog;
     const acc = this.acc;
     acc.fill(0);
     let total = eT;
@@ -535,13 +748,15 @@ export class FastEngine {
       const cap = waves + level[p]!;
       if (b > cap) b = cap;
       if (b === 0) continue;
-      total += b;
+      total += b * nOut[p]!;
       if (total > this.budget) return false;
-      const n = slotNet[out[p]!]!;
-      for (let k = fRdStart[n]!; k < fRdStart[n + 1]!; k++) {
-        const r = fRd[k]!;
-        const v = acc[r]! + b;
-        acc[r] = v > SAT ? SAT : v;
+      for (let s = out[p]!; s < out[p]! + nOut[p]!; s++) {
+        const n = slotNet[s]!;
+        for (let k = fRdStart[n]!; k < fRdStart[n + 1]!; k++) {
+          const r = fRd[k]!;
+          const v = acc[r]! + b;
+          acc[r] = v > SAT ? SAT : v;
+        }
       }
     }
     return true;
@@ -578,11 +793,9 @@ export class FastEngine {
     this.maxDirty = 0;
   }
 
-  /** Evaluate dirty free gates once each, in level order. Returns events. */
+  /** Evaluate dirty free parts once each, in level order. Returns events. */
   private freePass(): number {
-    const { gate, gateTable, in0, in1, out, slotNet, levelStart, fRdStart, fRd } = this.prog;
-    const net = this.net;
-    const slot = this.slot;
+    const { slotNet, levelStart, fRdStart, fRd } = this.prog;
     let events = 0;
     for (let L = this.minDirty; L <= this.maxDirty; L++) {
       const base = levelStart[L - 1]!;
@@ -590,14 +803,17 @@ export class FastEngine {
       for (let i = 0; i < fill; i++) {
         const p = this.bucket[base + i]!;
         this.fDirty[p] = 0;
-        const v = gateTable[gate[p]! * 9 + net[in0[p]!]! * 3 + net[in1[p]!]!]!;
-        const s = out[p]!;
-        if (slot[s] === v) continue;
-        slot[s] = v;
-        events++;
-        const n = slotNet[s]!;
-        if (!this.refresh(n)) continue;
-        for (let k = fRdStart[n]!; k < fRdStart[n + 1]!; k++) this.markFree(fRd[k]!);
+        const ch = this.evalPart(p, 0);
+        for (let k = 0; k < ch; k++) {
+          const s = this.chS[k]!;
+          this.slotV[s] = this.chV[k]!;
+          this.slotX[s] = this.chX[k]!;
+          this.slotZ[s] = this.chZ[k]!;
+          events++;
+          const n = slotNet[s]!;
+          if (!this.refresh(n)) continue;
+          for (let q = fRdStart[n]!; q < fRdStart[n + 1]!; q++) this.markFree(fRd[q]!);
+        }
       }
       this.bucketFill[L] = 0;
     }
@@ -606,15 +822,20 @@ export class FastEngine {
     return events;
   }
 
-  /** Free gates equal their function and flip-flops have seen their clock. */
+  /**
+   * Free parts equal their function and flip-flops have seen their clock.
+   * (Clocked blocks never read free nets, so a free glitch cannot wake them.)
+   */
   private checkConsistent(): boolean {
-    const { kind, region, gate, gateTable, in0, in1, out } = this.prog;
+    const { kind, region, in1, out } = this.prog;
     for (let p = 0; p < this.prog.partCount; p++) {
       if (region[p] === R_FREE) {
-        const v = gateTable[gate[p]! * 9 + this.net[in0[p]!]! * 3 + this.net[in1[p]!]!]!;
-        if (this.slot[out[p]!] !== v) return false;
+        if (this.evalPart(p, 0) !== 0) return false;
       } else if (kind[p] === K_DFF) {
-        if (this.dffPrevClk[p] !== this.net[in1[p]!] || this.slot[out[p]!] !== this.dffState[p]) return false;
+        const c = in1[p]!;
+        if (this.prevClk[p] !== bitValue(this.netV[c]!, this.netX[c]!)) return false;
+        const s = out[p]!;
+        if (this.slotV[s] !== this.stV[p] || this.slotX[s] !== this.stX[p] || this.slotZ[s] !== 0) return false;
       }
     }
     return true;
@@ -622,63 +843,84 @@ export class FastEngine {
 
   // ---------------------------------------------------------------- nets
 
-  private log(kind: number, idx: number, old: number): void {
+  private log(kind: number, idx: number, a: number, b = 0, c = 0): void {
     if (this.undoLen === this.undoKind.length) {
-      const grow = <T extends Uint8Array | Int32Array>(a: T, make: (n: number) => T): T => {
-        const b = make(a.length * 2);
-        b.set(a);
-        return b;
+      const grow = <T extends Uint8Array | Int32Array | Uint32Array>(arr: T, make: (n: number) => T): T => {
+        const r = make(arr.length * 2);
+        r.set(arr);
+        return r;
       };
       this.undoKind = grow(this.undoKind, (n) => new Uint8Array(n));
       this.undoIdx = grow(this.undoIdx, (n) => new Int32Array(n));
-      this.undoOld = grow(this.undoOld, (n) => new Uint8Array(n));
+      this.undoA = grow(this.undoA, (n) => new Uint32Array(n));
+      this.undoB = grow(this.undoB, (n) => new Uint32Array(n));
+      this.undoC = grow(this.undoC, (n) => new Uint32Array(n));
     }
-    this.undoKind[this.undoLen] = kind;
-    this.undoIdx[this.undoLen] = idx;
-    this.undoOld[this.undoLen++] = old;
+    const i = this.undoLen++;
+    this.undoKind[i] = kind;
+    this.undoIdx[i] = idx;
+    this.undoA[i] = a;
+    this.undoB[i] = b;
+    this.undoC[i] = c;
   }
 
-  private setState(p: number, v: number): void {
-    if (this.dffState[p] === v) return;
-    if (this.logging) this.log(U_STATE, p, this.dffState[p]!);
-    this.dffState[p] = v;
+  private setState(p: number, v: number, x: number): void {
+    if (this.stV[p] === v && this.stX[p] === x) return;
+    if (this.logging) this.log(U_STATE, p, this.stV[p]!, this.stX[p]!);
+    this.stV[p] = v;
+    this.stX[p] = x;
   }
 
   private setPrev(p: number, v: number): void {
-    if (this.logging) this.log(U_PREV, p, this.dffPrevClk[p]!);
-    this.dffPrevClk[p] = v;
+    if (this.logging) this.log(U_PREV, p, this.prevClk[p]!);
+    this.prevClk[p] = v;
   }
 
-  /** Recompute a net from its drivers; returns true when its value changed. */
+  /** Recompute a net from its drivers (same rule as the reference); returns true when its value changed. */
   private refresh(n: number): boolean {
-    const v = this.resolve(n);
-    if (this.net[n] === v) return false;
-    if (this.logging) this.log(U_NET, n, this.net[n]!);
-    this.net[n] = v;
-    return true;
-  }
-
-  /** Same resolution rule (and driver order) as the reference. */
-  private resolve(n: number): number {
-    const { drvStart, drv } = this.prog;
+    const { drvStart, drv, netMask } = this.prog;
     const a = drvStart[n]!;
     const b = drvStart[n + 1]!;
-    if (a === b) return VX;
-    let v = this.slot[drv[a]!]!;
-    if (b - a === 1) return v;
-    let clash = 0;
-    for (let k = a + 1; k < b; k++) {
-      const d = this.slot[drv[k]!]!;
-      if (d !== v) {
-        if (d !== VX && v !== VX) clash = 1;
-        v = VX;
+    const m = netMask[n]!;
+    let v: number;
+    let x: number;
+    if (b - a === 1) {
+      const s = drv[a]!;
+      x = (this.slotX[s]! | this.slotZ[s]!) & m;
+      v = this.slotV[s]! & m & ~x;
+    } else if (a === b) {
+      v = 0;
+      x = m;
+    } else {
+      let any1 = 0;
+      let any0 = 0;
+      let anyX = 0;
+      for (let k = a; k < b; k++) {
+        const s = drv[k]!;
+        const sv = this.slotV[s]!;
+        const sx = this.slotX[s]!;
+        const d = ~this.slotZ[s]! & m;
+        any1 |= sv & d;
+        anyX |= sx & d;
+        any0 |= ~(sv | sx) & d;
+      }
+      const k1 = any1 & ~any0 & ~anyX;
+      const k0 = any0 & ~any1 & ~anyX;
+      v = k1;
+      x = m & ~(k1 | k0);
+      const clash = (any1 & any0) !== 0 ? 1 : 0;
+      if (this.cont[n] !== clash) {
+        if (this.logging) this.log(U_CONT, n, this.cont[n]!);
+        this.cont[n] = clash;
       }
     }
-    if (this.cont[n] !== clash) {
-      if (this.logging) this.log(U_CONT, n, this.cont[n]!);
-      this.cont[n] = clash;
-    }
-    return v;
+    v >>>= 0;
+    x >>>= 0;
+    if (this.netV[n] === v && this.netX[n] === x) return false;
+    if (this.logging) this.log(U_NET, n, this.netV[n]!, this.netX[n]!);
+    this.netV[n] = v;
+    this.netX[n] = x;
+    return true;
   }
 
   private contentionList(): number[] {
@@ -692,19 +934,20 @@ export class FastEngine {
     const prog = this.prog;
     const k = prog.kind[i];
     let v: number;
-    if (k === K_SWITCH) v = this.switchOn[i] ? V1 : V0;
+    let x = 0;
+    if (k === K_SOURCE) v = this.parts[i]!.kind === 'const' ? this.parts[i]!.initialValue : this.inputValue[i]!;
     else if (k === K_CLOCK) v = this.clockLevel;
-    else if (k === K_DFF) v = this.dffState[i]!;
-    else return EMPTY;
+    else if (k === K_DFF) {
+      v = this.stV[i]!;
+      x = this.stX[i]!;
+    } else return EMPTY;
     const s = prog.out[i]!;
-    this.slot[s] = v;
+    this.slotV[s] = v;
+    this.slotX[s] = x;
+    this.slotZ[s] = 0;
     const n = prog.slotNet[s]!;
     return this.refresh(n) ? prog.rd.subarray(prog.rdStart[n]!, prog.rdStart[n + 1]!) : EMPTY;
   }
 }
 
 const EMPTY = new Int32Array(0);
-
-function idle(): SettleResult {
-  return { stable: true, unstableNets: [], contentionNets: [], events: 0 };
-}

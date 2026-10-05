@@ -1,73 +1,68 @@
 import type { TestSpec } from '@ground-up/schema';
 import type { Netlist } from './compile';
-import { ReferenceEngine, type EngineOptions } from './engine';
-import { VX, valueChar } from './values';
+import { failCase, type CaseResult, type CheckOptions } from './checkers/common';
+import { runExhaustive, runRandom, runTruthTable } from './checkers/combinational';
+import { runSequence } from './checkers/sequence';
+import { runProgram } from './checkers/program';
 
-export interface CaseResult {
-  index: number;
-  pass: boolean;
-  inputs: Record<string, number>;
-  expected: Record<string, number>;
-  actual: Record<string, string>;
-  message?: string;
-}
-
-/** Find the part labelled `label` (level inputs and outputs are labelled). */
-function byLabel(nl: Netlist, label: string, kind: 'switch' | 'lamp'): string | undefined {
-  return nl.parts.find((p) => p.label === label && p.behavior.kind === kind)?.id;
-}
+export type { CaseResult, CheckOptions, CheckerEngine, TestKind } from './checkers/common';
+export { MAX_EXHAUSTIVE_BITS, runExhaustive, runRandom, runTruthTable } from './checkers/combinational';
+export { runSequence } from './checkers/sequence';
+export { loadProgram, parseProgram, runProgram } from './checkers/program';
 
 /**
- * Run a truth-table test. Each row sets the labelled switches, settles, and
- * compares the labelled lamps. Results are yielded one case at a time so the
- * UI can stream them.
+ * Run any test kind, streaming one result per case (LVL-02, LVL-07, TOY-03).
+ * For 'program' tests, compile `loadProgram(board, test)` first.
+ * Options carry the level's power mode (`powerOnState`), an engine factory,
+ * and a wall-clock budget (`now` + `budgetMs`, injected by the worker).
  */
-export function* runTruthTable(
-  nl: Netlist,
-  test: Extract<TestSpec, { kind: 'truth-table' }>,
-  opts: EngineOptions = {},
-): Generator<CaseResult> {
-  const engine = new ReferenceEngine(nl, opts);
-  const boot = engine.powerOn();
-  for (let index = 0; index < test.rows.length; index++) {
-    const row = test.rows[index]!;
-    const actual: Record<string, string> = {};
-    let message: string | undefined;
-    let settle = boot;
-    for (const [label, bit] of Object.entries(row.inputs)) {
-      const id = byLabel(nl, label, 'switch');
-      if (!id) {
-        message = `Input ${label} is missing from the board.`;
-        break;
-      }
-      settle = engine.setSwitch(id, bit === 1);
-    }
-    let pass = message === undefined;
-    if (pass && !settle.stable) {
-      pass = false;
-      message = 'The circuit never settled: a signal keeps oscillating. Look for a loop without a latch.';
-    }
-    for (const [label, want] of Object.entries(row.expect)) {
-      const id = byLabel(nl, label, 'lamp');
-      const got = id ? engine.readPin(id, 'in') : VX;
-      actual[label] = valueChar(got);
-      if (got !== want) {
-        pass = false;
-        if (!message && got === VX) message = `Output ${label} is unknown (X). Is something left unconnected?`;
-      }
-    }
-    yield { index, pass, inputs: row.inputs, expected: row.expect, actual, ...(message ? { message } : {}) };
-  }
-}
-
-/**
- * Run any test kind, streaming one result per case. The checkers agent adds
- * 'exhaustive', 'random', 'sequence' and 'program' (LVL-07, TOY-03).
- */
-export function* runTest(nl: Netlist, test: TestSpec, opts: EngineOptions = {}): Generator<CaseResult> {
-  if (test.kind === 'truth-table') {
-    yield* runTruthTable(nl, test, opts);
+export function* runTest(nl: Netlist, test: TestSpec, opts: CheckOptions = {}): Generator<CaseResult> {
+  const blocked = cannotRun(nl);
+  if (blocked) {
+    yield failCase(test.kind, 0, blocked);
     return;
   }
-  throw new Error(`Test kind '${test.kind}' is not implemented yet`);
+  switch (test.kind) {
+    case 'truth-table':
+      return yield* runTruthTable(nl, test, opts);
+    case 'exhaustive':
+      return yield* runExhaustive(nl, test, opts);
+    case 'random':
+      return yield* runRandom(nl, test, opts);
+    case 'sequence':
+      return yield* runSequence(nl, test, opts);
+    case 'program':
+      return yield* runProgram(nl, test, opts);
+  }
+}
+
+/** A player-facing reason the netlist cannot be simulated, or undefined. */
+function cannotRun(nl: Netlist): string | undefined {
+  const n = nl as Netlist & { canRun?: boolean; diagnostics?: { code: string }[] };
+  if (n.canRun !== false) return undefined;
+  const codes = new Set<string>((n.diagnostics ?? []).map((d) => d.code));
+  if (codes.has('width-mismatch'))
+    return 'Some wires join pins of different widths, so the circuit cannot run. Fix the highlighted wires and test again.';
+  if (codes.has('unsupported-part')) return 'The board uses a part the simulator cannot run yet, so the tests cannot start.';
+  return 'The circuit cannot run yet. Fix the problems shown on the board and test again.';
+}
+
+/**
+ * How many cases a test yields when nothing goes wrong early (for progress
+ * bars). Exhaustive needs input widths: pass `inputBits` (sum of widths) or
+ * get an estimate that assumes 1-bit inputs.
+ */
+export function caseCount(test: TestSpec, inputBits?: number): number {
+  switch (test.kind) {
+    case 'truth-table':
+      return test.rows.length;
+    case 'exhaustive':
+      return 2 ** Math.min(inputBits ?? test.inputs.length, 16);
+    case 'random':
+      return test.count ?? 1000;
+    case 'sequence':
+      return test.steps.length;
+    case 'program':
+      return 1;
+  }
 }

@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Level } from '@ground-up/schema';
 import { partPins } from './geometry';
-import { Interaction, ghostOrigin, snap, snapDelta, wheelAction, type PointerInput } from './interaction';
-import { addPart } from './ops';
+import { Interaction, clickActionOf, ghostOrigin, snap, snapDelta, wheelAction, type PointerInput } from './interaction';
+import { addPart, addWire } from './ops';
 import { commandFor, parseClip } from './shortcuts';
 import { useEditor } from './store';
 import { paletteShortcuts } from './tools';
@@ -326,5 +326,126 @@ describe('Interaction', () => {
     const [sw] = withParts(['switch', 0, 0]);
     const part = useEditor.getState().board.parts.find((p) => p.id === sw)!;
     expect(partPins(part).map((p) => [p.wx, p.wy])).toEqual([[2, 1]]);
+  });
+});
+
+describe('Interaction: inputs, chips and probes', () => {
+  let ctrl: Interaction;
+  const toggle = vi.fn();
+  const press = vi.fn();
+  const openNumber = vi.fn();
+  const enter = vi.fn();
+  beforeEach(() => {
+    reset();
+    for (const f of [toggle, press, openNumber, enter]) f.mockReset();
+    ctrl = new Interaction({ toggleSwitch: toggle, press, openNumberInput: openNumber, enterChip: enter });
+  });
+
+  const setProps = (id: string, props: Record<string, unknown>) =>
+    useEditor.setState({ board: { ...useEditor.getState().board, parts: useEditor.getState().board.parts.map((p) => (p.id === id ? { ...p, props } : p)) } });
+
+  it('placing a part gives it the type defaults', () => {
+    useEditor.getState().setTool('place:ram');
+    click(ctrl, 10, 10);
+    expect(useEditor.getState().board.parts[0]!.props).toEqual({ width: 8, addrWidth: 4 });
+    useEditor.getState().setTool('place:nand');
+    click(ctrl, 30, 10);
+    expect(useEditor.getState().board.parts[1]!.props).toEqual({ width: 1 });
+  });
+
+  it('a 1-bit switch toggles; a wide switch opens the number input', () => {
+    const [sw] = withParts(['switch', 0, 0]);
+    click(ctrl, 1, 1);
+    expect(toggle).toHaveBeenCalledWith(sw);
+    setProps(sw!, { width: 8 });
+    click(ctrl, 1, 1);
+    expect(toggle).toHaveBeenCalledTimes(1);
+    expect(openNumber).toHaveBeenCalledWith(sw);
+  });
+
+  it('a clock does nothing on click besides selecting', () => {
+    const [clk] = withParts(['clock', 0, 0]);
+    click(ctrl, 1, 1);
+    expect(toggle).not.toHaveBeenCalled();
+    expect(useEditor.getState().selection).toEqual([clk]);
+  });
+
+  it('a button is held while pressed and does not drag', () => {
+    const [b] = withParts(['button', 0, 0]);
+    ctrl.down(ptr(1, 1));
+    expect(press).toHaveBeenLastCalledWith(b, true);
+    ctrl.move(ptr(4, 4));
+    expect(useEditor.getState().board.parts[0]).toMatchObject({ x: 0, y: 0 });
+    ctrl.up(ptr(4, 4));
+    expect(press).toHaveBeenLastCalledWith(b, false);
+    expect(press).toHaveBeenCalledTimes(2);
+  });
+
+  it('a button is released when the pointer leaves the canvas', () => {
+    const [b] = withParts(['button', 0, 0]);
+    ctrl.down(ptr(1, 1));
+    ctrl.leave();
+    expect(press).toHaveBeenLastCalledWith(b, false);
+  });
+
+  it('a selected button can still be dragged away', () => {
+    const [b] = withParts(['button', 0, 0]);
+    useEditor.getState().setSelection([b!]);
+    drag(ctrl, [1, 1], [5, 1]);
+    expect(useEditor.getState().board.parts[0]).toMatchObject({ x: 4, y: 0 });
+    expect(press).toHaveBeenLastCalledWith(b, false);
+  });
+
+  it('read-only boards still accept inputs', () => {
+    const [sw, b] = withParts(['switch', 0, 0], ['button', 10, 0]);
+    useEditor.setState({ readOnly: true });
+    click(ctrl, 1, 1);
+    expect(toggle).toHaveBeenCalledWith(sw);
+    click(ctrl, 11, 1);
+    expect(press).toHaveBeenCalledWith(b, true);
+  });
+
+  it('double-clicking a chip enters it; other parts edit their label', () => {
+    let board = useEditor.getState().board;
+    const [b1, chipPart] = addPart(board, 'chip', 0, 0, { chip: 'c1' });
+    board = b1;
+    const [b2, nand] = addPart(board, 'nand', 20, 0);
+    useEditor.setState({ board: b2 });
+    ctrl.doubleClick(1 * S, 0.5 * S);
+    expect(enter).toHaveBeenCalledWith(chipPart.id);
+    ctrl.doubleClick(21.5 * S, 1 * S);
+    expect(useEditor.getState().editingLabel).toBe(nand.id);
+  });
+
+  it('places chips only when they exist and would not contain themselves', () => {
+    const def = { id: 'c1', name: 'C', version: 1, board: { parts: [], wires: [] }, ports: { inputs: [], outputs: [] } };
+    useEditor.setState({ chips: { c1: def } });
+    expect(ctrl.place('chip', { x: 5, y: 5 }, 'nope')).toBeNull();
+    const id = ctrl.place('chip', { x: 5, y: 5 }, 'c1');
+    expect(useEditor.getState().board.parts.find((p) => p.id === id)).toMatchObject({ type: 'chip', chip: 'c1' });
+    useEditor.setState({ editStack: [{ chipId: 'c1', parentBoard: { parts: [], wires: [] }, parentPast: [], parentFuture: [], parentSelection: [] }] });
+    expect(ctrl.place('chip', { x: 5, y: 5 }, 'c1')).toBeNull();
+    useEditor.setState({ chips: {}, editStack: [] });
+  });
+
+  it('EDIT-09: hovering a wire targets the probe; Alt+hover targets a pin', () => {
+    const [n, l] = withParts(['nand', 0, 0], ['lamp', 10, 0]);
+    const st = useEditor.getState();
+    st.commit((b) => addWire(b, { part: n!, pin: 'out' }, { part: l!, pin: 'in' })[0]);
+    const wid = useEditor.getState().board.wires[0]!.id;
+    ctrl.move(ptr(6, 1));
+    expect(ctrl.probe?.target).toEqual({ kind: 'wire', id: wid });
+    ctrl.move(ptr(10, 1));
+    expect(ctrl.probe).toBeNull();
+    ctrl.setAlt(true);
+    expect(ctrl.probe?.target).toEqual({ kind: 'pin', ref: { part: l, pin: 'in' } });
+    ctrl.leave();
+    expect(ctrl.probe).toBeNull();
+  });
+
+  it('clickActionOf', () => {
+    expect(clickActionOf({ id: 'a', type: 'switch', x: 0, y: 0, rot: 0, flip: false })).toBe('toggle');
+    expect(clickActionOf({ id: 'a', type: 'switch', x: 0, y: 0, rot: 0, flip: false, props: { width: 4 } })).toBe('number');
+    expect(clickActionOf({ id: 'a', type: 'clock', x: 0, y: 0, rot: 0, flip: false })).toBeNull();
   });
 });

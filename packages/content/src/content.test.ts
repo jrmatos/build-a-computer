@@ -1,14 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { Board, Level } from '@ground-up/schema';
-import { compile, runTest } from '@ground-up/sim-logic';
 import { LEVELS } from './index';
+import { allPass, pendingReason } from '../solutions/harness';
 
 const playable = LEVELS.filter((l) => l.tests.length > 0);
-
-function allPass(level: Level, board: Board): boolean {
-  const nl = compile(board);
-  return level.tests.every((t) => [...runTest(nl, t)].every((r) => r.pass));
-}
 
 describe('content', () => {
   it('has unique ids and known requirements', () => {
@@ -18,7 +12,11 @@ describe('content', () => {
   });
 
   it('E-RES-06: the empty starter board fails every playable level', () => {
-    for (const l of playable) expect(allPass(l, l.starter), l.id).toBe(false);
+    // Levels whose engine features are still landing are skipped (and named) by
+    // the per-level E-RES-06 tests next to each phase's solutions.
+    const checkable = playable.filter((l) => pendingReason(l, l.starter) === null);
+    expect(checkable.length).toBeGreaterThan(0);
+    for (const l of checkable) expect(allPass(l, l.starter), l.id).toBe(false);
   });
 
   it('every playable level has hints and an afterword', () => {

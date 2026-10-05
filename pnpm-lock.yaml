@@ -41,6 +41,9 @@ importers:
       '@ground-up/content':
         specifier: workspace:*
         version: link:../../packages/content
+      '@ground-up/det':
+        specifier: workspace:*
+        version: link:../../packages/det
       '@ground-up/schema':
         specifier: workspace:*
         version: link:../../packages/schema
@@ -66,9 +69,6 @@ importers:
         specifier: ^5.0.15
         version: 5.0.15(@types/react@19.3.0)(react@19.3.0)
     devDependencies:
-      '@ground-up/det':
-        specifier: workspace:*
-        version: link:../../packages/det
       '@types/react':
         specifier: ^19.3.0
         version: 19.3.0
@@ -82,6 +82,12 @@ importers:
         specifier: ^8.3.2
         version: 8.3.2(@types/node@26.6.4)
 
+  packages/asm:
+    devDependencies:
+      fast-check:
+        specifier: ^4.10.2
+        version: 4.10.2
+
   packages/content:
     dependencies:
       '@ground-up/schema':
@@ -93,6 +99,16 @@ importers:
         version: link:../sim-logic
 
   packages/det: {}
+
+  packages/rv32:
+    dependencies:
+      '@ground-up/det':
+        specifier: workspace:*
+        version: link:../det
+    devDependencies:
+      fast-check:
+        specifier: ^4.10.2
+        version: 4.10.2
 
   packages/schema:
     dependencies:

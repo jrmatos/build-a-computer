@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
-import { migrateSave, NewerVersionError, parseUntrustedJson, SAVE_VERSION, type Board, type Save } from '@ground-up/schema';
+import { migrateSave, NewerVersionError, parseUntrustedJson, type Board, type Save } from '@ground-up/schema';
+import { levelById } from '@ground-up/content';
+import { adoptBoard } from '../level/persist';
+import { makeSave } from '../level/saves';
 import { useEditor } from '../editor/store';
 import { t } from '../i18n';
 import { Dialog } from './Dialog';
@@ -73,7 +76,11 @@ export function MainMenu() {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    const { toast, commit, level: current } = useEditor.getState();
+    const { toast, commit, level: current, editStack } = useEditor.getState();
+    if (editStack.length) {
+      toast(t('menu.leaveChipFirst'), 'info');
+      return;
+    }
     let save: Save;
     try {
       save = migrateSave(parseUntrustedJson(await file.text()));
@@ -83,22 +90,17 @@ export function MainMenu() {
       else toast(t('menu.loadFailed', { reason: err instanceof Error ? err.message.split('\n')[0]! : String(err) }), 'error');
       return;
     }
-    commit(() => save.board, []);
+    // Embedded chips join the library first, so chip parts on the board have pins.
+    commit(() => adoptBoard(save), []);
     if (current && save.levelId !== current.id) toast(t('menu.otherLevel', { id: save.levelId }), 'info');
     else toast(t('menu.loaded'), 'success');
   };
 
   const saveToFile = () => {
-    const { board, level: current, toast } = useEditor.getState();
-    const save: Save = {
-      kind: 'ground-up/save',
-      version: SAVE_VERSION as 2,
-      chips: useEditor.getState().chips,
-      levelId: current?.id ?? 'sandbox',
-      levelVersion: current?.version ?? 1,
-      updatedAt: new Date().toISOString(),
-      board,
-    };
+    const { board, editStack, chips, level: current, toast } = useEditor.getState();
+    // Inside a chip, the file still holds the level's board (chips travel embedded).
+    const root = editStack.length ? editStack[0]!.parentBoard : board;
+    const save: Save = makeSave(current ?? levelById('sandbox')!, root, chips);
     const name = `ground-up-${save.levelId}.json`;
     const url = URL.createObjectURL(new Blob([JSON.stringify(save, null, 2)], { type: 'application/json' }));
     const a = document.createElement('a');

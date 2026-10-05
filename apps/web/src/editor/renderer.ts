@@ -19,11 +19,11 @@
  *  5. Overlays: hover, selection, previews, flashes and diagnostics.
  */
 import type { Part, PartType } from '@ground-up/schema';
-import type { Snapshot } from '@ground-up/worker';
+import type { BusValue, Snapshot } from '@ground-up/worker';
 import type { Pt, Rect } from './geometry';
 import type { SpatialIndex } from './hit';
-import { mix, PALETTES, type Palette } from './palette';
-import { geomOf, geomOfType } from './parts';
+import { inkOn, mix, PALETTES, type Palette } from './palette';
+import { geomOf, getChipRegistry } from './parts';
 import type { Renderer, Scene } from './render-types';
 import { GRID } from './store';
 
@@ -34,10 +34,14 @@ const HALF_PI = Math.PI / 2;
 const WIRE_W = 0.16;
 const MIN_WIRE_PX = 2;
 const DASH = 0.32;
+/** Bus (multi-bit wire) width in cells and its minimum on screen; the darker core line is this fraction of it. */
+const BUS_W = 0.34;
+const MIN_BUS_PX = 4;
+const BUS_CORE = 0.36;
 const GAP = 0.22;
 
 /** Zoom levels (screen pixels per cell) at which details appear. */
-export const LOD = { symbols: 3.5, pins: 9, labels: 12, captions: 22 } as const;
+export const LOD = { symbols: 3.5, pins: 9, labels: 12, values: 16, captions: 22 } as const;
 
 /** Above this many device pixels per cell, parts are drawn as vectors instead of sprites. */
 const SPRITE_MAX_K = 64;
@@ -47,6 +51,10 @@ const CHUNK = 512;
 const MAX_CHUNKS = 48;
 /** Re-render sprites at the exact zoom once it has been still this long. */
 const ZOOM_SETTLE_MS = 120;
+/** When the atlas fills up, overflowing parts are drawn as vectors; it is rebuilt at most this often. */
+const FULL_RESET_MS = 400;
+/** Sprites bigger than this (device px per side) are drawn as vectors instead. */
+const MAX_SPRITE_PX = 420;
 
 /* ------------------------------------------------------------------ */
 /* Part matrix                                                         */
@@ -170,6 +178,7 @@ function orShape(P: Mapper, x0: number): void {
 }
 
 const NOT_TIP = 1.42;
+const BUF_TIP = 1.58;
 
 function notShape(P: Mapper): void {
   P.M(0.42, 0.28).L(NOT_TIP, 1).L(0.42, 1.72).Z();
@@ -209,8 +218,20 @@ const LEADS: Partial<Record<PartType, [string, number, number, number, number][]
       ['in', 0, 1, 0.42, 1],
       ['out', NOT_TIP + 2 * BUBBLE, 1, 2, 1],
     ],
+    buffer: [
+      ['in', 0, 1, 0.42, 1],
+      ['out', BUF_TIP, 1, 2, 1],
+    ],
+    tristate: [
+      ['in', 0, 1, 0.42, 1],
+      // The enable stub meets the triangle's lower edge.
+      ['en', 1, 2, 1, 1.72 - ((1 - 0.42) / (BUF_TIP - 0.42)) * 0.72],
+      ['out', BUF_TIP, 1, 2, 1],
+    ],
     switch: [['out', 1.62, 1, 2, 1]],
     clock: [['out', 1.62, 1, 2, 1]],
+    button: [['out', 1.62, 1, 2, 1]],
+    const: [['out', 1.62, 1, 2, 1]],
     lamp: [['in', 0, 1, 0.4, 1]],
     dff: [
       ['d', 0, 0, 0.55, 0],
@@ -219,6 +240,221 @@ const LEADS: Partial<Record<PartType, [string, number, number, number, number][]
     ],
   };
 })();
+
+/** Splitter and joiner bus bar: x range of the bar, in local cells. */
+const BAR0 = 0.39;
+const BAR1 = 0.61;
+/** Block symbols (register, ALU, chips...) sit this far inside their pins. */
+const BLOCK_IN = 0.5;
+const BLOCK_TOP = -0.72;
+
+const BLOCKS = new Set<PartType>(['register', 'counter', 'ram', 'rom', 'mux', 'decoder', 'adder', 'alu', 'chip']);
+const CLOCKED = new Set<PartType>(['dff', 'register', 'counter', 'ram']);
+
+/**
+ * Per-part caches that also depend on the chip registry (chip pins and names):
+ * dropped whenever setChipRegistry installs a new registry.
+ */
+function partCache<T>(): { get(part: Part): T | undefined; set(part: Part, v: T): void } {
+  let reg = getChipRegistry();
+  let map = new WeakMap<Part, T>();
+  const check = (): void => {
+    const now = getChipRegistry();
+    if (now !== reg) {
+      reg = now;
+      map = new WeakMap();
+    }
+  };
+  return {
+    get(part) {
+      check();
+      return map.get(part);
+    },
+    set(part, v) {
+      map.set(part, v);
+    },
+  };
+}
+
+/** Flat list [pinIndex, x0, y0, x1, y1, ...] of lead lines, in local cells. */
+const leadCache = partCache<number[]>();
+export function leadsOf(part: Part): number[] {
+  let L = leadCache.get(part);
+  if (L) return L;
+  L = [];
+  const g = geomOf(part);
+  const table = LEADS[part.type];
+  if (table) {
+    for (const [name, x0, y0, x1, y1] of table) {
+      const i = g.pins.findIndex((q) => q.name === name);
+      if (i >= 0) L.push(i, x0, y0, x1, y1);
+    }
+  } else if (part.type === 'splitter' || part.type === 'joiner') {
+    g.pins.forEach((q, i) => L!.push(i, q.x, q.y, q.x < 0.5 ? BAR0 : BAR1, q.y));
+  } else {
+    g.pins.forEach((q, i) => L!.push(i, q.x, q.y, q.x - q.dir[0] * BLOCK_IN, q.y - q.dir[1] * BLOCK_IN));
+  }
+  leadCache.set(part, L);
+  return L;
+}
+
+/** Layout of a block symbol in local cells: outline, title, optional value readout. */
+interface BlockLayout {
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+  shape: 'rect' | 'mux' | 'alu';
+  title: string;
+  /** Title position: top row, or centered when there is no readout. */
+  ty: number;
+  /** Value readout box (register q, RAM address and data). */
+  lcd?: { x0: number; y0: number; x1: number; y1: number };
+}
+
+const NAME_CH = 0.18;
+
+const layoutCache = partCache<BlockLayout>();
+function blockLayout(part: Part): BlockLayout {
+  let L = layoutCache.get(part);
+  if (L) return L;
+  const g = geomOf(part);
+  const rows = g.body.h - 1;
+  const w = g.body.w;
+  const x0 = BLOCK_IN;
+  const x1 = w - BLOCK_IN;
+  const y0 = BLOCK_TOP;
+  const y1 = rows - 1 - BLOCK_TOP;
+  const pr = part.props;
+  let title: string;
+  switch (part.type) {
+    case 'ram':
+    case 'rom':
+      title = `${part.type.toUpperCase()} ${2 ** (pr?.addrWidth ?? 4)}×${pr?.width ?? 8}`;
+      break;
+    case 'decoder': {
+      const n = pr?.selectBits ?? 2;
+      title = `DEC ${n}→${2 ** n}`;
+      break;
+    }
+    case 'adder':
+      title = 'ADD';
+      break;
+    case 'chip': {
+      const def = getChipRegistry()[part.chip ?? ''];
+      title = def && !def.deleted ? def.name : '?';
+      break;
+    }
+    default:
+      title = part.type.toUpperCase();
+  }
+  const shape = part.type === 'mux' ? 'mux' : part.type === 'alu' ? 'alu' : 'rect';
+  L = { x0, x1, y0, y1, shape, title, ty: (y0 + y1) / 2 };
+  const upright = part.rot === 0 || part.rot === 180;
+  if (upright && (part.type === 'register' || part.type === 'counter' || part.type === 'ram' || part.type === 'rom')) {
+    const nameLen = (out: boolean): number =>
+      Math.max(0, ...g.pins.filter((q) => q.output === out && q.name !== 'clk').map((q) => q.name.length));
+    const lx = x0 + 0.3 + nameLen(false) * NAME_CH + 0.15;
+    const rx = x1 - 0.3 - nameLen(true) * NAME_CH - 0.15;
+    const cy = Math.max((rows - 1) / 2, 0.22);
+    L.lcd = { x0: lx, x1: Math.max(lx + 1, rx), y0: cy - 0.38, y1: cy + 0.38 };
+    L.ty = Math.min(y0 + 0.38, L.lcd.y0 - 0.32);
+  }
+  layoutCache.set(part, L);
+  return L;
+}
+
+/** Text that never changes for a part (titles, pin names, ranges), drawn into its sprite. */
+interface StaticText {
+  x: number;
+  y: number;
+  text: string;
+  /** Font size in cells. */
+  size: number;
+  bold: boolean;
+  /** 'sym' (on a gate symbol), 'block' (on a block panel), 'label' (on the tile) or 'chip' (on a chip's color). */
+  color: string;
+  /** Inward direction (local) for pin names: aligns the text against that edge. */
+  dir?: [number, number];
+  /** Smallest zoom (screen px per cell) at which it is drawn. */
+  minS: number;
+}
+
+const textCache = partCache<StaticText[]>();
+function staticTexts(part: Part): StaticText[] {
+  let T = textCache.get(part);
+  if (T) return T;
+  T = [];
+  const g = geomOf(part);
+  const cap = CAPTION[part.type];
+  if (cap) T.push({ x: cap[1], y: GCY, text: cap[0], size: 0.36, bold: true, color: 'sym', minS: LOD.captions });
+  if (part.type === 'dff') {
+    T.push({ x: 0.92, y: 0.02, text: 'D', size: 0.5, bold: true, color: 'sym', minS: LOD.captions });
+    T.push({ x: 1.95, y: 1.02, text: 'Q', size: 0.5, bold: true, color: 'sym', minS: LOD.captions });
+  } else if (part.type === 'const') {
+    const w = g.pins[0]!.width;
+    const v = (part.props?.value ?? 0) >>> 0;
+    const text = w > 1 ? formatValue(v, 0, w, 'hex') : String(v & 1);
+    T.push({ x: 0.96, y: 1, text, size: Math.min(0.5, 1.2 / (text.length * 0.6)), bold: true, color: 'label', minS: LOD.labels });
+  } else if (part.type === 'splitter' || part.type === 'joiner') {
+    const c = part.props?.chunk ?? 1;
+    const many = g.pins.filter((q) => q.output === (part.type === 'splitter'));
+    many.forEach((q, i) => {
+      const lo = i * c;
+      const text = c === 1 ? String(lo) : `${lo}–${lo + c - 1}`;
+      T!.push({ x: q.x < 0.5 ? 0.2 : 0.8, y: q.y - 0.32, text, size: 0.28, bold: false, color: 'label', minS: LOD.captions });
+    });
+  } else if (BLOCKS.has(part.type)) {
+    const L = blockLayout(part);
+    const def = part.type === 'chip' ? getChipRegistry()[part.chip ?? ''] : undefined;
+    const ink = def && !def.deleted ? 'chip' : 'block';
+    T.push({ x: (L.x0 + L.x1) / 2 + (L.shape === 'alu' ? 0.15 : 0), y: L.ty, text: L.title, size: L.lcd ? 0.36 : 0.44, bold: true, color: ink, minS: 14 });
+    for (const q of g.pins) {
+      if (q.name === 'clk' && CLOCKED.has(part.type)) continue;
+      const inward: [number, number] = [-q.dir[0], -q.dir[1]];
+      T.push({
+        x: q.x + inward[0] * (BLOCK_IN + 0.14),
+        y: q.y + inward[1] * (BLOCK_IN + 0.14),
+        text: q.name,
+        size: 0.3,
+        bold: false,
+        color: ink,
+        dir: inward,
+        minS: 20,
+      });
+    }
+  }
+  textCache.set(part, T);
+  return T;
+}
+
+/**
+ * A value for display. Hex pads to the width and shows '?' for nibbles with
+ * unknown bits; dec/signed show '?' when any bit is unknown; bin shows 'x'
+ * per unknown bit. Values are unsigned up to 32 bits.
+ */
+export function formatValue(v: number, x: number, w: number, format: 'hex' | 'dec' | 'signed' | 'bin' = 'hex'): string {
+  const mask = w >= 32 ? 0xffffffff : 2 ** w - 1;
+  v = (v & mask) >>> 0;
+  x = (x & mask) >>> 0;
+  if (format === 'bin') {
+    let s = '';
+    for (let i = w - 1; i >= 0; i--) s += (x >>> i) & 1 ? 'x' : (v >>> i) & 1 ? '1' : '0';
+    return s;
+  }
+  if (format === 'hex' || x) {
+    if (format !== 'hex') return '?';
+    const n = Math.ceil(w / 4);
+    let s = '';
+    for (let i = n - 1; i >= 0; i--) s += (x >>> (i * 4)) & 15 ? '?' : ((v >>> (i * 4)) & 15).toString(16).toUpperCase();
+    return `0x${s}`;
+  }
+  if (format === 'signed') {
+    const neg = w < 33 && v >= 2 ** (w - 1);
+    return neg ? String(v - 2 ** w) : `+${v}`;
+  }
+  return String(v);
+}
 
 /* ------------------------------------------------------------------ */
 /* Caches keyed on immutable inputs                                    */
@@ -257,6 +493,92 @@ function junctionsOf(index: SpatialIndex): Junction[] {
   return j;
 }
 
+/** A bus on the board: path, width, bounds, and where its width marker and value label go. */
+interface BusInfo {
+  id: string;
+  path: readonly Pt[];
+  w: number;
+  box: Rect;
+  /** Width marker: point on the first segment and whether that segment is horizontal. */
+  mx: number;
+  my: number;
+  mh: boolean;
+  /** Value label: middle of the longest segment, and whether it is horizontal. */
+  lx: number;
+  ly: number;
+  lh: boolean;
+  /** Length of the longest segment, in cells. */
+  ll: number;
+  /** The label sits on the first segment (shared with the width marker): its far end. */
+  first?: Pt;
+}
+
+const wireWidthCache = new WeakMap<SpatialIndex, { widths: Map<string, number>; buses: BusInfo[] }>();
+
+/** Width in bits of every bus (the wider of its two pins; 1-bit wires are left out), and the list of buses. */
+export function wireWidths(index: SpatialIndex): { widths: Map<string, number>; buses: BusInfo[] } {
+  let c = wireWidthCache.get(index);
+  if (c) return c;
+  const widths = new Map<string, number>();
+  const buses: BusInfo[] = [];
+  const pinW = (ref: { part: string; pin: string }): number => {
+    const part = index.parts.get(ref.part);
+    return part ? (geomOf(part).pins.find((q) => q.name === ref.pin)?.width ?? 1) : 1;
+  };
+  for (const wire of index.board.wires) {
+    const path = index.paths.get(wire.id);
+    if (!path || path.length < 2) continue;
+    const w = Math.max(pinW(wire.from), pinW(wire.to));
+    if (w <= 1) continue;
+    widths.set(wire.id, w);
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    let best = -1;
+    let lx = 0, ly = 0, lh = true, li = 0;
+    for (let i = 0; i < path.length; i++) {
+      const a = path[i]!;
+      x0 = Math.min(x0, a.x);
+      y0 = Math.min(y0, a.y);
+      x1 = Math.max(x1, a.x);
+      y1 = Math.max(y1, a.y);
+      const b = path[i + 1];
+      if (!b) continue;
+      const len = Math.abs(b.x - a.x) + Math.abs(b.y - a.y);
+      // Prefer horizontal runs for labels (text reads along them).
+      const score = len * (b.y === a.y ? 1.5 : 1);
+      if (score > best) {
+        best = score;
+        lx = (a.x + b.x) / 2;
+        ly = (a.y + b.y) / 2;
+        lh = b.y === a.y;
+        li = i;
+      }
+    }
+    const a = path[0]!;
+    const b = path[1]!;
+    const len = Math.abs(b.x - a.x) + Math.abs(b.y - a.y);
+    const t = len ? Math.min(0.85, len * 0.5) / len : 0;
+    buses.push({
+      id: wire.id,
+      path,
+      w,
+      box: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 },
+      mx: a.x + (b.x - a.x) * t,
+      my: a.y + (b.y - a.y) * t,
+      mh: Math.abs(b.x - a.x) >= Math.abs(b.y - a.y),
+      lx,
+      ly,
+      lh,
+      ll: lh ? best / 1.5 : best,
+      first: li === 0 ? b : undefined,
+    });
+  }
+  wireWidthCache.set(index, (c = { widths, buses }));
+  return c;
+}
+
+/** Darker (dark theme) or lighter (light theme) center line of a bus. */
+const busCore = (p: Palette, color: string): string => mix(color, p.board, 0.62);
+
 const pinKeyCache = new WeakMap<Part, string[]>();
 function pinKeys(part: Part): string[] {
   let k = pinKeyCache.get(part);
@@ -284,6 +606,26 @@ function spriteState(part: Part, snap: Snapshot | null): string {
   else if (part.type === 'clock') key = snap?.clock ? '1' : '0';
   if (snap) for (const k of pinKeys(part)) key += bucketOf(snap.pins[k]);
   return key;
+}
+
+/**
+ * Everything static that changes a part's drawing besides type, rotation,
+ * flip and lock: widths and other props, and for chips the definition
+ * (id, version, color). Live values (switch numbers, displays) are overlays.
+ */
+const looksCache = new WeakMap<Part, string>();
+export function looksKey(part: Part): string {
+  if (part.type === 'chip') {
+    const def = getChipRegistry()[part.chip ?? ''];
+    return `${part.chip ?? ''}@${def?.version ?? 0}${def?.deleted ? 'x' : ''}${def?.color ?? ''}${def?.name ?? ''}`;
+  }
+  let k = looksCache.get(part);
+  if (k === undefined) {
+    const pr = part.props;
+    k = pr ? `${pr.width ?? ''},${pr.chunk ?? ''},${pr.selectBits ?? ''},${pr.addrWidth ?? ''},${part.type === 'const' ? (pr.value ?? '') : ''}` : '';
+    looksCache.set(part, k);
+  }
+  return k;
 }
 
 /** A minimal snapshot that reproduces a sprite state for a sprite clone. */
@@ -418,6 +760,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
   let settling = false;
   let lastK = 0;
   let lastKChange = 0;
+  let atlasResetAt = -Infinity;
   const chunks = new Map<string, { canvas: HTMLCanvasElement; sig: number; used: number }>();
   const pool: HTMLCanvasElement[] = [];
   let chunkK = 0;
@@ -609,65 +952,189 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
     }
   }
 
+  /** Bus stroke width in cells at this zoom. */
+  const busWidth = (F: Frame): number => Math.max(BUS_W, MIN_BUS_PX / F.s, F.wireW * 1.8);
+
   function drawWires(F: Frame, scene: Scene): void {
     const { index, selection, overlay } = scene;
     const ctx = F.ctx;
     const p = F.p;
     const wires = F.snap?.wires;
-    const groups: (readonly Pt[])[][] = [[], [], [], []];
-    for (const [id, path] of index.paths) groups[wires ? bucketOf(wires[id]) : 0]!.push(path);
+    const { widths } = wireWidths(index);
+    // Buckets 0-3: 1-bit wires (none, 0, 1, X); 4-7: buses.
+    const groups: (readonly Pt[])[][] = [[], [], [], [], [], [], [], []];
+    for (const [id, path] of index.paths) groups[(wires ? bucketOf(wires[id]) : 0) + (widths.has(id) ? 4 : 0)]!.push(path);
     device(F);
     const w = F.wireW;
+    const bw = busWidth(F);
+    const widthOf = (id: string): number => (widths.has(id) ? bw : w);
 
     // Halos under wires: hover, selection (opaque pre-mixed so overlaps stay even).
     const hp = overlay.hoverId && !selection.has(overlay.hoverId) ? index.paths.get(overlay.hoverId) : undefined;
     if (hp) {
       ctx.fillStyle = mix(p.board, p.accent, 0.3);
-      fillPath(F, hp, w + 6 / F.s);
+      fillPath(F, hp, widthOf(overlay.hoverId!) + 6 / F.s);
     }
     if (selection.size) {
       ctx.fillStyle = mix(p.board, p.accent, 0.5);
       for (const id of selection) {
         const path = index.paths.get(id);
-        if (path) fillPath(F, path, w + 8 / F.s);
+        if (path) fillPath(F, path, widthOf(id) + 8 / F.s);
       }
     }
 
     // Glow under every wire carrying 1 (once it is wide enough to see), then the cores.
-    if (groups[2]!.length && F.s >= LOD.pins) {
+    if ((groups[2]!.length || groups[6]!.length) && F.s >= LOD.pins) {
       ctx.fillStyle = mix(p.board, p.sig1, p.glowAlpha);
       for (const path of groups[2]!) fillPath(F, path, w * 3.2);
+      for (const path of groups[6]!) fillPath(F, path, bw * 2.1);
     }
-    const colors = [p.wire, p.sig0, p.sig1];
-    const wd = Math.max(1, Math.round(w * F.k));
-    for (let b = 0; b < 3; b++) {
-      if (!groups[b]!.length) continue;
+    const colors = [p.wire, p.sig0, p.sig1, p.sigX];
+    for (let b = 0; b < 8; b++) {
+      const list = groups[b]!;
+      if (!list.length) continue;
+      const bus = b >= 4;
+      const color = colors[b & 3]!;
+      const ww = bus ? bw : w;
+      const wd = Math.max(1, Math.round(ww * F.k));
+      const x = (b & 3) === 3;
       if (wd <= 4) {
-        hairlines(F, groups[b]!, wd, colors[b]!);
+        hairlines(F, list, wd, color, x);
         continue;
       }
-      ctx.fillStyle = colors[b]!;
-      for (const path of groups[b]!) fillPath(F, path, w);
-    }
-    if (groups[3]!.length) {
-      if (wd <= 4) hairlines(F, groups[3]!, wd, p.sigX, true);
-      else {
-        ctx.fillStyle = p.sigX;
-        for (const path of groups[3]!) dashPath(F, path, w);
+      ctx.fillStyle = color;
+      if (x) for (const path of list) dashPath(F, path, ww);
+      else for (const path of list) fillPath(F, path, ww);
+      // Buses: a darker core line down the middle (Turing Complete style), solid states only.
+      if (bus && !x && wd >= 6) {
+        ctx.fillStyle = busCore(p, color);
+        for (const path of list) fillPath(F, path, ww * BUS_CORE);
       }
     }
 
     // Junction dots, once they are big enough to read.
     if (F.s < LOD.pins) return;
     const v = F.view;
-    const dots: number[][] = [[], [], [], []];
+    const dots: number[][] = [[], [], [], [], [], [], [], []];
     for (const j of junctionsOf(index)) {
       if (!inView(v, j.x, j.y)) continue;
-      dots[wires ? bucketOf(wires[j.wire]) : 0]!.push(j.x, j.y);
+      dots[(wires ? bucketOf(wires[j.wire]) : 0) + (widths.has(j.wire) ? 4 : 0)]!.push(j.x, j.y);
     }
     const r = Math.max(w * 1.75, 2.5 / F.s);
+    const rb = Math.max(bw * 0.95, r);
     const dotColors = [p.wire, p.sig0, p.sig1, p.sigX];
-    for (let b = 0; b < 4; b++) if (dots[b]!.length) stampDots(F, dots[b]!, r, dotColors[b]!, null);
+    for (let b = 0; b < 8; b++) if (dots[b]!.length) stampDots(F, dots[b]!, b >= 4 ? rb : r, dotColors[b & 3]!, null);
+  }
+
+  /**
+   * Bus annotations in screen space: a schematic width marker (a slash and
+   * the bit count) near the start of every bus, and once zoomed in, the live
+   * value in a pill at the middle of its longest run.
+   */
+  function drawBusText(F: Frame, scene: Scene): void {
+    if (F.s < LOD.labels) return;
+    const { buses } = wireWidths(scene.index);
+    if (!buses.length) return;
+    const ctx = F.ctx;
+    const p = F.p;
+    const v = F.view;
+    const snap = F.snap;
+    screen(F);
+    const seen: BusInfo[] = [];
+    const markers: BusInfo[] = [];
+    const at = new Set<string>();
+    for (const b of buses) {
+      if (b.box.x > v.x + v.w || b.box.x + b.box.w < v.x || b.box.y > v.y + v.h || b.box.y + b.box.h < v.y) continue;
+      seen.push(b);
+      // Fan-out from one pin: one marker.
+      const key = `${b.mx},${b.my}`;
+      if (!at.has(key)) {
+        at.add(key);
+        markers.push(b);
+      }
+    }
+    if (!seen.length) return;
+
+    // Width markers.
+    const slash = new Path2D();
+    const half = Math.max(3.5, Math.min(7, 0.3 * F.s));
+    for (const b of markers) {
+      const x = sx(F, b.mx);
+      const y = sy(F, b.my);
+      slash.moveTo(x - half * 0.6, y + half);
+      slash.lineTo(x + half * 0.6, y - half);
+    }
+    ctx.strokeStyle = p.label;
+    ctx.lineWidth = 1.5;
+    ctx.lineCap = 'round';
+    ctx.stroke(slash);
+    ctx.fillStyle = p.label;
+    ctx.font = `600 ${Math.round(Math.max(9, Math.min(12, 0.42 * F.s)))}px ${MONO}`;
+    for (const b of markers) {
+      const x = sx(F, b.mx);
+      const y = sy(F, b.my);
+      if (b.mh) {
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(String(b.w), x + half * 0.6 + 1, y - 2);
+      } else {
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(b.w), x + half + 2, y - half * 0.4);
+      }
+    }
+
+    // Live values.
+    if (!snap || F.s < LOD.values) return;
+    const px = Math.round(Math.max(10, Math.min(13, 0.48 * F.s)));
+    ctx.font = `700 ${px}px ${MONO}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const pills: { x: number; y: number; w: number; text: string; state: number }[] = [];
+    for (const b of seen) {
+      const val = snap.buses[b.id];
+      if (!val) continue;
+      const text = formatValue(val.v, val.x, b.w, 'hex');
+      const tw = text.length * px * 0.62 + 10;
+      const need = (b.lh ? tw : px + 6) / 2 + 4;
+      let x = sx(F, b.lx);
+      let y = sy(F, b.ly);
+      if (b.first) {
+        // Sharing the first segment with the width marker: center the pill
+        // between the marker and the segment's far end, or skip it.
+        const mx = sx(F, b.mx);
+        const my = sy(F, b.my);
+        const ex = sx(F, b.first.x);
+        const ey = sy(F, b.first.y);
+        const room = Math.abs(ex - mx) + Math.abs(ey - my) - 14;
+        if (room < 2 * need) continue;
+        const t = (14 + room / 2) / (room + 14);
+        x = mx + (ex - mx) * t;
+        y = my + (ey - my) * t;
+      } else if (b.ll * F.s < 2 * need + 8) continue;
+      pills.push({ x, y, w: tw, text, state: val.x ? 3 : val.v ? 2 : 1 });
+    }
+    const colors = [p.wire, p.sig0, p.sig1, p.sigX];
+    const ph = px + 6;
+    for (let st = 1; st <= 3; st++) {
+      const path = new Path2D();
+      let any = false;
+      for (const q of pills) {
+        if (q.state !== st) continue;
+        any = true;
+        path.roundRect(Math.round(q.x - q.w / 2) + 0.5, Math.round(q.y - ph / 2) + 0.5, Math.round(q.w), ph, ph / 2);
+      }
+      if (!any) continue;
+      ctx.fillStyle = p.board;
+      ctx.fill(path);
+      ctx.strokeStyle = colors[st]!;
+      ctx.lineWidth = 1.5;
+      if (st === 3) ctx.setLineDash([3, 2]);
+      ctx.stroke(path);
+      ctx.setLineDash([]);
+      ctx.fillStyle = st === 1 ? p.label : colors[st]!;
+      for (const q of pills) if (q.state === st) ctx.fillText(q.text, q.x, q.y + 0.5);
+    }
   }
 
   /* ---------------- dots (pins, junctions) ---------------- */
@@ -789,26 +1256,47 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
     const clockOff = new Path2D();
     const locks = new Path2D();
     const shackles = new Path2D();
+    const bars = new Path2D();
+    const lcds = new Path2D();
+    const lcdX = new Path2D();
+    const missing = new Path2D();
+    const blocks = new Path2D();
+    const blockInk = new Path2D();
+    const chipFills = new Map<string, Path2D>();
     let anyLocked = false;
     let anyHalo = false;
     let anyStriped = false;
+    let anyLcdX = false;
 
     const radius = 0.2;
     const inset = 0.08;
 
+    /** Rounded rectangle from local corners, added to `path` in world cells. */
+    const box = (path: Path2D, x0: number, y0: number, x1: number, y1: number, r: number): void => {
+      const ax = P.X(x0, y0);
+      const ay = P.Y(x0, y0);
+      const bx = P.X(x1, y1);
+      const by = P.Y(x1, y1);
+      path.roundRect(Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay), r);
+    };
+
     for (const part of parts) {
       const body = bodyRectWith(P, part);
+      const thin = part.type === 'splitter' || part.type === 'joiner';
       const x = body.x + inset;
       const y = body.y + inset;
       const w = body.w - 2 * inset;
       const h = body.h - 2 * inset;
 
-      shadow.roundRect(x, y + 0.12, w, h, radius);
-      tiles.roundRect(x, y, w, h, radius);
+      if (!thin) {
+        shadow.roundRect(x, y + 0.12, w, h, radius);
+        tiles.roundRect(x, y, w, h, radius);
+      }
       if (part.locked) {
         anyLocked = true;
-        lockedEdge.roundRect(x, y, w, h, radius);
-        if (s >= LOD.captions) {
+        if (thin) box(lockedEdge, BAR0 - 0.12, body.y + 0.2, BAR1 + 0.12, body.y + body.h - 0.2, 0.12);
+        else lockedEdge.roundRect(x, y, w, h, radius);
+        if (s >= LOD.captions && !thin) {
           // Small padlock in the top-right corner, always upright.
           const lx = x + w - 0.42;
           const ly = y + 0.2;
@@ -821,6 +1309,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
       }
 
       P.t = sym;
+      const wide = (geomOf(part).pins[0]?.width ?? 1) > 1;
       switch (part.type) {
         case 'and':
         case 'nand':
@@ -839,6 +1328,10 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
         case 'not':
           notShape(P);
           break;
+        case 'buffer':
+        case 'tristate':
+          P.M(0.42, 0.28).L(BUF_TIP, 1).L(0.42, 1.72).Z();
+          break;
         case 'dff': {
           P.M(0.55, -0.22).L(2.3, -0.22).L(2.3, 2.22).L(0.55, 2.22).Z();
           P.t = inkLine;
@@ -846,6 +1339,11 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
           break;
         }
         case 'switch': {
+          if (wide) {
+            // Number input: a value well; the digits are drawn live on top.
+            box(insets, 0.24, 0.5, 1.62, 1.5, 0.14);
+            break;
+          }
           const on = snap ? switchesOn(snap).has(part.id) : !!part.on;
           P.t = on ? lit : insets;
           P.M(0.74, 0.64).L(1.26, 0.64).A(1.26, 1, 0.36, -HALF_PI, HALF_PI).L(0.74, 1.36).A(0.74, 1, 0.36, HALF_PI, 3 * HALF_PI).Z();
@@ -853,8 +1351,35 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
           P.O(on ? 1.26 : 0.74, 1, 0.27);
           break;
         }
+        case 'const':
+          box(insets, 0.3, 0.56, 1.62, 1.44, 0.12);
+          break;
+        case 'button': {
+          const down = snap?.pins[pinKeys(part)[0]!] === 1;
+          P.t = insets;
+          P.O(1, 1, 0.6);
+          if (down) {
+            P.t = halo;
+            P.O(1, 1, 0.9);
+            anyHalo = true;
+            P.t = lit;
+            P.O(1, 1, 0.38);
+          } else {
+            P.t = knobs;
+            P.O(1, 1, 0.44);
+          }
+          break;
+        }
         case 'lamp': {
           const v = snap?.pins[pinKeys(part)[0]!];
+          if (wide) {
+            box(lcds, 0.4, 0.34, 1.86, 1.66, 0.12);
+            if (v === 2) {
+              anyLcdX = true;
+              box(lcdX, 0.4, 0.34, 1.86, 1.66, 0.12);
+            }
+            break;
+          }
           if (v === 1) {
             P.t = halo;
             P.O(1, 1, 0.92);
@@ -871,6 +1396,46 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
           P.t = snap?.clock ? clockOn : clockOff;
           P.M(0.36, 1.28).L(0.68, 1.28).L(0.68, 0.72).L(1.0, 0.72).L(1.0, 1.28).L(1.32, 1.28).L(1.32, 0.72).L(1.62, 0.72);
           break;
+        }
+        case 'splitter':
+        case 'joiner': {
+          const g = geomOf(part);
+          const ys = g.pins.map((q) => q.y);
+          box(bars, BAR0, Math.min(...ys) - 0.4, BAR1, Math.max(...ys) + 0.4, 0.08);
+          break;
+        }
+        default: {
+          if (!BLOCKS.has(part.type)) break;
+          const L = blockLayout(part);
+          const def = part.type === 'chip' ? getChipRegistry()[part.chip ?? ''] : undefined;
+          P.t = blocks;
+          if (part.type === 'chip') {
+            if (!def || def.deleted) P.t = missing;
+            else {
+              const c = def.color ?? p.chip;
+              let path = chipFills.get(c);
+              if (!path) chipFills.set(c, (path = new Path2D()));
+              P.t = path;
+            }
+          }
+          if (L.shape === 'rect') box(P.t, L.x0, L.y0, L.x1, L.y1, part.type === 'chip' ? 0.22 : 0.08);
+          else if (L.shape === 'mux') {
+            const t = Math.min(0.7, (L.y1 - L.y0) * 0.2);
+            P.M(L.x0, L.y0).L(L.x1, L.y0 + t).L(L.x1, L.y1 - t).L(L.x0, L.y1).Z();
+          } else {
+            // ALU: classic chevron with a notch between the two operands.
+            const t = 0.4;
+            const ny = 0.5;
+            P.M(L.x0, L.y0).L(L.x1, L.y0 + t).L(L.x1, L.y1 - t).L(L.x0, L.y1).L(L.x0, ny + 0.32).L(L.x0 + 0.42, ny).L(L.x0, ny - 0.32).Z();
+          }
+          if (L.lcd) box(lcds, L.lcd.x0, L.lcd.y0, L.lcd.x1, L.lcd.y1, 0.1);
+          if (CLOCKED.has(part.type)) {
+            const clk = geomOf(part).pins.find((q) => q.name === 'clk');
+            if (clk) {
+              P.t = blockInk;
+              P.M(L.x0, clk.y - 0.3).L(L.x0 + 0.38, clk.y).L(L.x0, clk.y + 0.3);
+            }
+          }
         }
       }
       if (INVERTED.has(part.type)) {
@@ -909,11 +1474,35 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
 
     ctx.fillStyle = p.symbolFill;
     ctx.fill(sym);
+    ctx.fill(bars);
     ctx.strokeStyle = p.symbolStroke;
     ctx.lineWidth = Math.max(0.07, 1.25 / s);
     ctx.stroke(sym);
     ctx.lineWidth = Math.max(0.1, 1.5 / s);
     ctx.stroke(symLine);
+
+    ctx.fillStyle = p.blockFill;
+    ctx.fill(blocks);
+    ctx.strokeStyle = p.blockStroke;
+    ctx.lineWidth = Math.max(0.06, 1.25 / s);
+    ctx.stroke(blocks);
+    ctx.strokeStyle = p.blockText;
+    ctx.stroke(blockInk);
+
+    for (const [c, path] of chipFills) {
+      ctx.fillStyle = c;
+      ctx.fill(path);
+      ctx.strokeStyle = mix(c, '#000000', 0.3);
+      ctx.lineWidth = Math.max(0.06, 1.25 / s);
+      ctx.stroke(path);
+    }
+    ctx.fillStyle = p.inset;
+    ctx.fill(missing);
+    ctx.strokeStyle = p.danger;
+    ctx.setLineDash([0.25, 0.18]);
+    ctx.lineWidth = Math.max(0.06, 1.25 / s);
+    ctx.stroke(missing);
+    ctx.setLineDash([]);
 
     ctx.fillStyle = p.tile;
     ctx.fill(bubbles);
@@ -929,6 +1518,18 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
     ctx.strokeStyle = p.tileEdge;
     ctx.lineWidth = F.hair;
     ctx.stroke(insets);
+    ctx.fillStyle = p.lcd;
+    ctx.fill(lcds);
+    ctx.strokeStyle = p.lcdEdge;
+    ctx.stroke(lcds);
+    if (anyLcdX) {
+      ctx.strokeStyle = p.sigX;
+      ctx.lineWidth = Math.max(0.07, 1.5 / s);
+      ctx.setLineDash([0.2, 0.14]);
+      ctx.stroke(lcdX);
+      ctx.setLineDash([]);
+      ctx.lineWidth = F.hair;
+    }
     if (anyStriped) {
       ctx.fillStyle = stripes(ctx, p) ?? p.sigX;
       ctx.fill(striped);
@@ -949,21 +1550,72 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
     ctx.stroke(clockOff);
   }
 
+  /**
+   * Text that is part of a symbol (gate captions, block titles, pin names,
+   * splitter ranges, const values), upright in device pixels. Drawn into
+   * sprites, so it costs nothing per frame.
+   */
+  function drawStaticText(F: Frame, parts: readonly Part[]): void {
+    if (F.s < LOD.labels) return;
+    const ctx = F.ctx;
+    const p = F.p;
+    device(F);
+    let font = '';
+    for (const part of parts) {
+      const T = staticTexts(part);
+      if (!T.length) continue;
+      P.set(part);
+      let chipInk = '';
+      if (part.type === 'chip') chipInk = inkOn(getChipRegistry()[part.chip ?? '']?.color ?? p.chip);
+      for (const t of T) {
+        if (F.s < t.minS) continue;
+        const f = `${t.bold ? 700 : 500} ${(t.size * F.k).toFixed(1)}px ${MONO}`;
+        if (f !== font) ctx.font = font = f;
+        ctx.fillStyle = t.color === 'sym' ? p.symbolText : t.color === 'chip' ? chipInk : t.color === 'block' ? p.blockText : p.label;
+        const X = P.X(t.x, t.y) * F.k + F.tx;
+        const Y = P.Y(t.x, t.y) * F.k + F.ty;
+        if (t.dir) {
+          // Align against the edge the pin is on, whatever the rotation.
+          const dx = P.a * t.dir[0] + P.c * t.dir[1];
+          const dy = P.b * t.dir[0] + P.d * t.dir[1];
+          ctx.textAlign = dx > 0.5 ? 'left' : dx < -0.5 ? 'right' : 'center';
+          ctx.textBaseline = dy > 0.5 ? 'top' : dy < -0.5 ? 'bottom' : 'middle';
+        } else {
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+        }
+        ctx.fillText(t.text, X, Y + 0.5);
+      }
+    }
+  }
+
   /* ---------------- parts: sprites ---------------- */
 
   function spriteFor(F: Frame, part: Part): Slot | null {
     const a = atlas!;
     const state = spriteState(part, F.snap);
-    const key = `${part.type}|${part.rot}|${part.flip ? 1 : 0}|${part.locked ? 1 : 0}|${state}`;
+    const key = `${part.type}|${part.rot}|${part.flip ? 1 : 0}|${part.locked ? 1 : 0}|${looksKey(part)}|${state}`;
     const hit = a.slots.get(key);
     if (hit) return hit;
     if (a.full) return null;
-    const clone: Part = { id: SPRITE_ID, type: part.type, x: 0, y: 0, rot: part.rot, flip: part.flip, locked: part.locked };
-    const body = bodyRectWith(P, clone);
-    const ox = body.x - SPRITE_MARGIN;
-    const oy = body.y - SPRITE_MARGIN;
-    const w = Math.ceil((body.w + 2 * SPRITE_MARGIN) * F.k) + 2;
-    const h = Math.ceil((body.h + 2 * SPRITE_MARGIN) * F.k) + 2;
+    const clone: Part = {
+      id: SPRITE_ID,
+      type: part.type,
+      x: 0,
+      y: 0,
+      rot: part.rot,
+      flip: part.flip,
+      locked: part.locked,
+      props: part.props,
+      chip: part.chip,
+    };
+    const ext = spriteExtent(clone);
+    const ox = ext.x;
+    const oy = ext.y;
+    const w = Math.ceil(ext.w * F.k) + 2;
+    const h = Math.ceil(ext.h * F.k) + 2;
+    // Huge sprites (big blocks, close up) would crowd out everything else: draw those as vectors.
+    if (w > MAX_SPRITE_PX || h > MAX_SPRITE_PX) return null;
     const at = a.alloc(w, h);
     if (!at) return null;
     const SF: Frame = {
@@ -977,25 +1629,59 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
     drawPartBodies(SF, [clone]);
     drawLeads(SF, [clone]);
     drawPins(SF, [clone]);
+    drawStaticText(SF, [clone]);
     const slot = { x: at.x, y: at.y, w, h, ox, oy };
     a.slots.set(key, slot);
     return slot;
   }
 
+  /** World rectangle (relative to the part origin) a part's sprite covers: body, pins and side labels. */
+  function spriteExtent(part: Part): Rect {
+    const g = geomOf(part);
+    let x0 = g.body.x;
+    let y0 = g.body.y;
+    let x1 = g.body.x + g.body.w;
+    let y1 = g.body.y + g.body.h;
+    for (const q of g.pins) {
+      x0 = Math.min(x0, q.x);
+      x1 = Math.max(x1, q.x);
+      y0 = Math.min(y0, q.y);
+      y1 = Math.max(y1, q.y);
+    }
+    if (part.type === 'splitter' || part.type === 'joiner') {
+      // Range labels overhang the pins.
+      x0 -= 0.3;
+      x1 += 0.3;
+    }
+    P.set(part);
+    const ax = P.X(x0, y0);
+    const ay = P.Y(x0, y0);
+    const bx = P.X(x1, y1);
+    const by = P.Y(x1, y1);
+    const m = SPRITE_MARGIN;
+    return { x: Math.min(ax, bx) - m, y: Math.min(ay, by) - m, w: Math.abs(bx - ax) + 2 * m, h: Math.abs(by - ay) + 2 * m };
+  }
+
   function drawParts(F: Frame, parts: readonly Part[], index: SpatialIndex): void {
     const ctx = F.ctx;
     if (F.s < LOD.symbols) {
-      // Far out: flat tiles only.
+      // Far out: flat tiles only (chips in their own color).
       world(F);
       ctx.fillStyle = F.p.tileEdge;
+      let special = false;
       for (const part of parts) {
+        if (part.locked || part.type === 'chip') {
+          special = true;
+          continue;
+        }
         const r = bodyRectWith(P, part);
         ctx.fillRect(r.x + 0.15, r.y + 0.15, r.w - 0.3, r.h - 0.3);
       }
-      const locked = parts.filter((q) => q.locked);
-      if (locked.length) {
-        ctx.fillStyle = F.p.locked;
-        for (const part of locked) {
+      if (special) {
+        const reg = getChipRegistry();
+        for (const part of parts) {
+          if (!part.locked && part.type !== 'chip') continue;
+          ctx.fillStyle = part.locked ? F.p.locked : (reg[part.chip ?? '']?.color ?? F.p.chip);
           const r = bodyRectWith(P, part);
           ctx.fillRect(r.x + 0.15, r.y + 0.15, r.w - 0.3, r.h - 0.3);
         }
@@ -1005,6 +1691,8 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
     if (F.k > SPRITE_MAX_K || !atlas) {
       drawPartBodies(F, parts);
       drawLeads(F, parts);
+      drawPins(F, parts);
+      drawStaticText(F, parts);
     } else {
       // During a zoom gesture keep stamping the sprites of a nearby zoom,
       // scaled, and re-render them crisply once the zoom settles.
@@ -1016,12 +1704,13 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
       const ratio = atlas.k ? F.k / atlas.k : 0;
       if (
         atlas.theme !== F.p.board ||
-        atlas.full ||
+        (atlas.full && now - atlasResetAt > FULL_RESET_MS) ||
         ratio < 0.8 ||
         ratio > 1.25 ||
         (ratio !== 1 && now - lastKChange > ZOOM_SETTLE_MS)
       ) {
         atlas.reset(F.k, F.p.board);
+        atlasResetAt = now;
       }
       const scale = F.k / atlas.k;
       settling = scale !== 1;
@@ -1029,9 +1718,10 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
       drawPartBodies(F, fallback);
       drawLeads(F, fallback);
       drawPins(F, fallback);
-      return;
+      drawStaticText(F, fallback);
+      // Keep frames coming so a full atlas gets rebuilt even on a still board.
+      if (atlas.full) settling = true;
     }
-    drawPins(F, parts);
   }
 
   /**
@@ -1142,31 +1832,42 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
     return canvas;
   }
 
-  /** Lead lines from pins to symbols, as pixel-snapped rectangles colored by the value each pin sees. */
+  /** Lead lines from pins to symbols, as pixel-snapped rectangles colored by the value each pin sees; bus pins get bus-thick leads. */
   function drawLeads(F: Frame, parts: readonly Part[]): void {
     if (!parts.length) return;
     const ctx = F.ctx;
     const p = F.p;
     const pins = F.snap?.pins;
-    const leads: number[][] = [[], [], [], []];
+    // Buckets 0-3 for 1-bit pins, 4-7 for buses.
+    const leads: number[][] = [[], [], [], [], [], [], [], []];
     for (const part of parts) {
       const g = geomOf(part);
       const keys = pinKeys(part);
+      const L = leadsOf(part);
       P.set(part);
-      for (const [name, x0, y0, x1, y1] of LEADS[part.type] ?? []) {
-        const i = name === g.pins[0]!.name ? 0 : name === g.pins[1]?.name ? 1 : 2;
-        const b = pins ? bucketOf(pins[keys[i]!]) : 0;
+      for (let j = 0; j < L.length; j += 5) {
+        const i = L[j]!;
+        const b = (pins ? bucketOf(pins[keys[i]!]) : 0) + (g.pins[i]!.width > 1 ? 4 : 0);
+        const x0 = L[j + 1]!;
+        const y0 = L[j + 2]!;
+        const x1 = L[j + 3]!;
+        const y1 = L[j + 4]!;
         leads[b]!.push(P.X(x0, y0), P.Y(x0, y0), P.X(x1, y1), P.Y(x1, y1));
       }
     }
     device(F);
     const colors = [p.wire, p.sig0, p.sig1, p.sigX];
-    for (let b = 0; b < 4; b++) {
+    const busW = busWidth(F);
+    for (let b = 0; b < 8; b++) {
       const L = leads[b]!;
       if (!L.length) continue;
-      ctx.fillStyle = colors[b]!;
+      const bus = b >= 4;
+      const color = colors[b & 3]!;
+      // Bus leads are short: solid and a little slimmer than the bus, no core line.
+      ctx.fillStyle = color;
+      const w = bus ? busW * 0.8 : F.wireW;
       for (let i = 0; i < L.length; i += 4) {
-        segRect(F, Math.min(L[i]!, L[i + 2]!), Math.min(L[i + 1]!, L[i + 3]!), Math.max(L[i]!, L[i + 2]!), Math.max(L[i + 1]!, L[i + 3]!), F.wireW, false);
+        segRect(F, Math.min(L[i]!, L[i + 2]!), Math.min(L[i + 1]!, L[i + 3]!), Math.max(L[i]!, L[i + 2]!), Math.max(L[i + 1]!, L[i + 3]!), w, false);
       }
     }
   }
@@ -1198,29 +1899,11 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
     if (s < LOD.labels) return;
     const ctx = F.ctx;
     screen(F);
-    ctx.textAlign = 'center';
     const p = F.p;
-
-    if (s >= LOD.captions) {
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = p.symbolText;
-      ctx.font = `700 ${Math.round(0.36 * s)}px ${MONO}`;
-      for (const part of parts) {
-        const cap = CAPTION[part.type];
-        if (!cap) continue;
-        P.set(part);
-        ctx.fillText(cap[0], sx(F, P.X(cap[1], GCY)), sy(F, P.Y(cap[1], GCY)) + 0.5);
-      }
-      ctx.font = `700 ${Math.round(0.5 * s)}px ${MONO}`;
-      for (const part of parts) {
-        if (part.type !== 'dff') continue;
-        P.set(part);
-        ctx.fillText('D', sx(F, P.X(0.92, 0.02)), sy(F, P.Y(0.92, 0.02)));
-        ctx.fillText('Q', sx(F, P.X(1.95, 1.02)), sy(F, P.Y(1.95, 1.02)));
-      }
-    }
+    if (s >= LOD.values) drawValues(F, parts);
 
     // Labels sit above the tile, upright, in monospace.
+    ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
     ctx.font = `600 ${Math.round(Math.min(15, Math.max(10, 0.55 * s)))}px ${MONO}`;
     for (const part of parts) {
@@ -1228,6 +1911,83 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
       const r = bodyRectWith(P, part);
       ctx.fillStyle = part.locked ? p.locked : p.label;
       ctx.fillText(part.label, sx(F, r.x + r.w / 2), sy(F, r.y) - 5);
+    }
+  }
+
+  /** Value of a pin as {w, v, x}: from busPins for buses, from pins for 1-bit pins. */
+  function pinValue(snap: Snapshot, key: string, width: number): BusValue | undefined {
+    if (width > 1) return snap.busPins[key];
+    const b = snap.pins[key];
+    return b === undefined ? undefined : { w: 1, v: b === 1 ? 1 : 0, x: b === 2 ? 1 : 0 };
+  }
+
+  /**
+   * Live values drawn over the sprites each frame (screen space): number
+   * inputs, multi-bit displays, register and memory readouts. Digits are
+   * colored by state and never by color alone: X shows as '?'.
+   */
+  function drawValues(F: Frame, parts: readonly Part[]): void {
+    const ctx = F.ctx;
+    const p = F.p;
+    const snap = F.snap;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    let font = '';
+    const put = (text: string, x0: number, y0: number, x1: number, y1: number, color: string, ghost: string | null, maxCells: number): void => {
+      // Fit the digits to the box (local corners mapped to screen).
+      const ax = P.X(x0, y0);
+      const ay = P.Y(x0, y0);
+      const bx = P.X(x1, y1);
+      const by = P.Y(x1, y1);
+      const bw = Math.abs(bx - ax) * F.s;
+      const bh = Math.abs(by - ay) * F.s;
+      const px = Math.min(bh * 0.66, maxCells * F.s, (bw - 4) / (text.length * 0.62));
+      if (px < 6) return;
+      const f = `700 ${px.toFixed(1)}px ${MONO}`;
+      if (f !== font) ctx.font = font = f;
+      const cx = sx(F, (ax + bx) / 2);
+      const cy = sy(F, (ay + by) / 2) + 0.5;
+      if (ghost) {
+        ctx.fillStyle = ghost;
+        ctx.fillText(text.replace(/[0-9A-F?]/g, '8'), cx, cy);
+      }
+      ctx.fillStyle = color;
+      ctx.fillText(text, cx, cy);
+    };
+    const digitColor = (v: BusValue | undefined, on: string, zero: string): string =>
+      !v ? zero : v.x ? p.sigX : v.v ? on : zero;
+
+    for (const part of parts) {
+      const t = part.type;
+      if (t !== 'switch' && t !== 'lamp' && t !== 'register' && t !== 'counter' && t !== 'ram' && t !== 'rom') continue;
+      const g = geomOf(part);
+      if ((t === 'switch' || t === 'lamp') && g.pins[0]!.width <= 1) continue;
+      P.set(part);
+      const keys = pinKeys(part);
+      if (t === 'switch') {
+        const w = g.pins[0]!.width;
+        const v = (snap?.switchValues[part.id] ?? part.props?.value ?? 0) >>> 0;
+        put(formatValue(v, 0, w, 'hex'), 0.24, 0.5, 1.62, 1.5, v ? p.label : mix(p.label, p.tile, 0.35), null, 0.5);
+      } else if (t === 'lamp') {
+        const w = g.pins[0]!.width;
+        const v = snap ? pinValue(snap, keys[0]!, w) : undefined;
+        const text = v ? formatValue(v.v, v.x, w, part.props?.format ?? 'hex') : '–';
+        put(text, 0.4, 0.34, 1.86, 1.66, digitColor(v, p.lcdOn, p.lcdZero), v ? p.lcdGhost : null, 0.62);
+      } else {
+        const L = blockLayout(part);
+        if (!L.lcd) continue;
+        const qi = g.pins.findIndex((q) => q.name === 'q');
+        const q = g.pins[qi];
+        if (!q) continue;
+        const v = snap ? pinValue(snap, keys[qi]!, q.width) : undefined;
+        let text = v ? formatValue(v.v, v.x, q.width, 'hex') : '–';
+        if (v && (t === 'ram' || t === 'rom')) {
+          const ai = g.pins.findIndex((r) => r.name === 'addr');
+          const av = pinValue(snap!, keys[ai]!, g.pins[ai]!.width);
+          text = `${av ? formatValue(av.v, av.x, g.pins[ai]!.width, 'hex').slice(2) : '?'}: ${text}`;
+        }
+        put(text, L.lcd.x0, L.lcd.y0, L.lcd.x1, L.lcd.y1, digitColor(v, p.lcdOn, p.lcdZero), null, 0.5);
+      }
     }
   }
 
@@ -1339,6 +2099,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
       drawPartBodies(GF, [ghost]);
       drawLeads(GF, [ghost]);
       drawPins(GF, [ghost]);
+      drawStaticText(GF, [ghost]);
       drawPartText(GF, [ghost]);
       ctx.globalAlpha = 1;
     }
@@ -1500,6 +2261,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
       const visible = scene.index.partsIn(F.view);
       drawWires(F, scene);
       drawParts(F, visible, scene.index);
+      drawBusText(F, scene);
       drawPartText(F, visible);
       drawSelection(F, scene);
       const flashing = drawFlashes(F, scene, reduce);

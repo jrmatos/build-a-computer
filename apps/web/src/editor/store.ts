@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { PART_TYPES, type Board, type ChipMap, type Level, type PartType } from '@ground-up/schema';
-import type { CaseResult } from '@ground-up/sim-logic';
+import type { CaseResult, Diagnostic } from '@ground-up/sim-logic';
 import type { Snapshot } from '@ground-up/worker';
 
 /** Grid cell size in CSS pixels at 100% zoom. */
@@ -61,6 +61,10 @@ export interface EditorState {
   editingLabel: string | null;
   /** Custom chips available to every level (global library), by id. */
   chips: ChipMap;
+  /** Compile diagnostics from the last load (diagnostics panel, EDIT-10). */
+  diagnostics?: Diagnostic[];
+  /** Ids the canvas flashes, e.g. after clicking a diagnostic; Canvas copies them into Overlay.flashIds. */
+  flashIds?: string[];
   /**
    * Breadcrumbs when editing inside a chip (double-click enters, plan: Custom chips).
    * Empty at the level's board. While non-empty, `board` is the innermost chip's

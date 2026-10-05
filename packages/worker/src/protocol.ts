@@ -31,6 +31,12 @@ export interface BusValue {
   x: number;
 }
 
+/** How a board is loaded: the level's power-on mode (E-SIM-07) and seed. */
+export interface LoadOptions {
+  power?: 'zero' | 'random';
+  seed?: number;
+}
+
 export interface LoadResult {
   ok: boolean;
   error?: string;
@@ -40,7 +46,7 @@ export interface LoadResult {
 /** Commands the UI sends to the simulation worker (see plan: Worker protocol). */
 export interface SimApi {
   /** Compile the board with its custom chips (flattened in the worker) and power on. */
-  load(board: Board, chips?: ChipMap): LoadResult;
+  load(board: Board, chips?: ChipMap, opts?: LoadOptions): LoadResult;
   setSwitch(partId: string, on: boolean): void;
   /** Set a multi-bit switch (number input) to an unsigned value. */
   setValue(partId: string, value: number): void;
@@ -58,6 +64,12 @@ export interface SimApi {
   power(on: boolean): void;
   reset(): void;
   /** Resolves only after every onCase callback has been delivered (each one is awaited). */
-  runTests(level: Level, onCase: (r: CaseResult) => void | Promise<void>): Promise<{ passed: number; total: number }>;
+  /** `board` defaults to the last loaded board (program tests patch its ROM); `budgetMs` is per test. */
+  runTests(
+    level: Level,
+    onCase: (r: CaseResult) => void | Promise<void>,
+    board?: Board,
+    budgetMs?: number,
+  ): Promise<{ passed: number; total: number }>;
   subscribe(onSnapshot: (s: Snapshot) => void): void;
 }

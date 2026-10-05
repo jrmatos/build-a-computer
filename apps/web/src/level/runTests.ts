@@ -4,10 +4,11 @@ import { useEditor } from '../editor/store';
 import { sim } from '../sim/client';
 import { t } from '../i18n';
 import { markCompleted } from './persist';
+import { plannedTotal } from './testStripModel';
 import { useLevelUi } from './ui';
 
-export const totalCases = (level: Level | null): number =>
-  level?.tests.reduce((n, test) => n + (test.kind === 'truth-table' ? test.rows.length : 0), 0) ?? 0;
+/** Cases the level's tests will run (truth rows, vectors, sequence checks, programs). */
+export const totalCases = (level: Level | null): number => plannedTotal(level);
 
 export const canRunTests = (level: Level | null): boolean => !!level && level.track !== 'sandbox' && totalCases(level) > 0;
 
@@ -21,7 +22,7 @@ let running = false;
 export async function runLevelTests(): Promise<void> {
   const st = useEditor.getState();
   const level = st.level;
-  if (running || !level || !canRunTests(level)) return;
+  if (running || !level || !canRunTests(level) || st.editStack.length > 0) return;
   running = true;
   const total = totalCases(level);
   const cases: CaseResult[] = [];
@@ -67,4 +68,29 @@ export async function runLevelTests(): Promise<void> {
   } finally {
     running = false;
   }
+}
+
+/**
+ * Put a test case's inputs on the board's labelled switches so the player can
+ * watch the circuit with exactly those values (Turing Complete style).
+ * Returns the labels that have no switch on the board.
+ */
+export async function loadCaseInputs(inputs: Record<string, number>): Promise<string[]> {
+  const { board, snapshot } = useEditor.getState();
+  // Switches only respond while the board is powered: power on to show the case.
+  if (snapshot && !snapshot.powered) await sim.power(true);
+  const missed: string[] = [];
+  const jobs: Promise<unknown>[] = [];
+  for (const [label, value] of Object.entries(inputs)) {
+    const part = board.parts.find((p) => p.label === label && (p.type === 'switch' || p.type === 'button'));
+    if (!part) {
+      missed.push(label);
+      continue;
+    }
+    if (part.type === 'button') jobs.push(sim.press(part.id, value === 1));
+    else if ((part.props?.width ?? 1) <= 1) jobs.push(sim.setSwitch(part.id, value === 1));
+    else jobs.push(sim.setValue(part.id, value));
+  }
+  await Promise.all(jobs);
+  return missed;
 }

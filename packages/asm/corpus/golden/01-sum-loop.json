@@ -1,0 +1,11 @@
+{
+  "source": "01-sum-loop.s",
+  "tool": "GNU as/ld 2.40, -march=rv32ima_zicsr_zifencei -mabi=ilp32 -mno-relax, base 0x80000000",
+  "size": 28,
+  "image": ["13050000930210001303a0003305550093821200e35c53fe6f000000"],
+  "symbols": {
+    "_start": "0x80000000",
+    "loop": "0x8000000c",
+    "done": "0x80000018"
+  }
+}

@@ -1,0 +1,155 @@
+/* Wire probe tooltip (EDIT-09) and the multi-bit switch number input. */
+
+.gu-probe {
+  position: absolute;
+  z-index: 30;
+  min-width: 180px;
+  max-width: 260px;
+  padding: 8px 10px;
+  pointer-events: none;
+  font-size: 12px;
+  animation: gu-probe-in 0.08s ease-out;
+}
+@keyframes gu-probe-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gu-probe,
+  .gu-numpop {
+    animation: none;
+  }
+}
+.gu-probe__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.gu-probe__title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gu-probe__width {
+  flex: none;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.gu-probe__rows {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 0;
+}
+.gu-probe__rows dt {
+  color: var(--text-muted);
+}
+.gu-probe__rows dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  word-break: break-all;
+}
+.gu-probe__x {
+  color: var(--sig-x);
+}
+.gu-probe__none {
+  color: var(--text-muted);
+}
+
+/* ---------- Number input popover ---------- */
+.gu-numpop {
+  position: absolute;
+  z-index: 25;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: gu-probe-in 0.1s ease-out;
+}
+.gu-numpop__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.gu-numpop__width {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.gu-numpop__input {
+  flex: 1;
+  text-align: center;
+  font-size: 15px;
+}
+.gu-numpop__error {
+  font-size: 11px;
+  color: var(--danger);
+}
+.gu-numpop__hint {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.gu-input--error,
+.gu-input--error:focus {
+  border-color: var(--danger);
+}
+
+.gu-seg {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--hover);
+}
+.gu-seg__btn {
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font: 500 12px var(--font-ui);
+  cursor: pointer;
+}
+.gu-seg__btn[aria-checked='true'] {
+  background: var(--island);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+.gu-seg__btn:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
+.gu-bits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  justify-content: center;
+}
+.gu-bit {
+  width: 16px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--island-border);
+  border-radius: 3px;
+  background: var(--bg);
+  color: var(--text-muted);
+  font: 12px var(--font-mono);
+  cursor: pointer;
+}
+.gu-bit--on {
+  border-color: var(--sig-1);
+  background: color-mix(in srgb, var(--sig-1) 22%, var(--bg));
+  color: var(--text);
+  font-weight: 700;
+}
+.gu-bit--gap {
+  margin-right: 5px;
+}
+.gu-bit:focus-visible {
+  outline: 2px solid var(--accent);
+}

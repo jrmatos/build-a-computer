@@ -7,13 +7,15 @@
 import { LEVELS, levelById } from '@ground-up/content';
 import type { Board, Level, Progress } from '@ground-up/schema';
 import { zoomToFit } from '../editor/camera';
+import { exitChip, rootBoard, setChips, startChipLibrary } from '../editor/chips';
+import { pruneChipWires } from '../ui/chips/logic';
 import { useEditor } from '../editor/store';
 import { t } from '../i18n';
 import { memoryStorage, openIndexedDb, type Storage } from './db';
 import { downloadJson } from './download';
 import { acquireLock, lockName, releaseLock } from './lock';
 import { completedIds, emptyProgress, exportProgress, importProgress, ImportError, isUnlocked, withCompleted } from './progress';
-import { decodeProgress, decodeSave, makeSave } from './saves';
+import { adoptSaveChips, decodeProgress, decodeSave, makeSave } from './saves';
 import { useLevelUi } from './ui';
 
 const AUTOSAVE_MS = 1000;
@@ -35,6 +37,8 @@ let writes: Promise<void> = Promise.resolve();
 let openToken = 0;
 let started = false;
 let channel: BroadcastChannel | null = null;
+let chipsReady = false;
+let chipsLoading: Promise<void> = Promise.resolve();
 
 const editor = () => useEditor.getState();
 const toast = (key: string, tone: 'info' | 'error' | 'success' = 'info', vars?: Record<string, string | number>) =>
@@ -67,10 +71,12 @@ async function write(fn: (s: Storage) => Promise<void>): Promise<void> {
 export function flushSave(): Promise<void> {
   clearTimeout(timer);
   timer = undefined;
-  const { level, board, readOnly } = editor();
+  const { level, readOnly, chips } = editor();
+  // Inside a chip the editor shows the chip's board; the level's own board is saved.
+  const board = rootBoard();
   if (!level || level.id !== currentId || readOnly || board === savedBoard || blocked.has(level.id)) return writes;
   savedBoard = board;
-  const save = makeSave(level, board);
+  const save = makeSave(level, board, chips);
   writes = writes.then(() => write((s) => s.putSave(level.id, save))).catch((e) => console.error(e));
   return writes;
 }
@@ -124,9 +130,9 @@ export async function importProgressFile(file: File): Promise<boolean> {
 
 /** Download the current board as a save file (memory-mode banner, E-DATA-02). */
 export function exportBoardFile(): void {
-  const { level, board } = editor();
+  const { level, chips } = editor();
   if (!level) return;
-  downloadJson(`ground-up-${level.id}.json`, JSON.stringify(makeSave(level, board), null, 2));
+  downloadJson(`ground-up-${level.id}.json`, JSON.stringify(makeSave(level, rootBoard(), chips), null, 2));
 }
 
 // ---------------------------------------------------------------- level opening
@@ -140,8 +146,9 @@ async function loadBoard(level: Level): Promise<{ board: Board; newer: boolean }
     toMemory('unavailable');
   }
   if (raw === undefined || raw === null) return { board: level.starter, newer: false };
+  if (!chipsReady) await chipsLoading;
   const d = decodeSave(raw, level.id);
-  if (d.kind === 'ok') return { board: d.save.board, newer: false };
+  if (d.kind === 'ok') return { board: adoptBoard(d.save), newer: false };
   if (d.kind === 'newer') {
     blocked.add(level.id);
     toast('level.save.newer', 'error');
@@ -152,6 +159,21 @@ async function loadBoard(level: Level): Promise<{ board: Board; newer: boolean }
   await write((s) => s.putSave(`${level.id}~unreadable-${Date.now()}`, raw)).catch(() => undefined);
   toast('level.save.invalid', 'error');
   return { board: level.starter, newer: false };
+}
+
+/**
+ * Chips embedded in a save join the library (never downgrading a local chip);
+ * wires to chip pins that no longer exist are dropped with a toast.
+ */
+export function adoptBoard(save: Parameters<typeof adoptSaveChips>[1]): Board {
+  const a = adoptSaveChips(editor().chips, save);
+  if (a.chips !== editor().chips) setChips(a.chips);
+  const pruned = pruneChipWires(a.board, a.chips);
+  if (pruned.dropped.length) {
+    const ends = [...new Set(pruned.dropped.map((d) => d.end))];
+    editor().toast(t('chips.wiresDropped', { count: pruned.dropped.length, list: ends.slice(0, 6).join(', ') }), 'info');
+  }
+  return pruned.board;
 }
 
 function rememberLast(id: string): void {
@@ -225,6 +247,8 @@ export async function openLevel(id: string): Promise<void> {
     }
     level = levelById(SANDBOX)!;
   }
+  // Leave any chip being edited so its changes land and the level's board is current.
+  if (editor().editStack.length) exitChip(0);
   await flushSave();
   if (token !== openToken) return;
   releaseLock();
@@ -263,6 +287,7 @@ export async function takeOver(): Promise<void> {
   if (!ok || currentId !== id) return;
   const level = levelById(id);
   if (!level) return;
+  if (editor().editStack.length) exitChip(0);
   const { board, newer } = await loadBoard(level);
   if (currentId !== id) return;
   savedBoard = board;
@@ -275,6 +300,12 @@ export async function takeOver(): Promise<void> {
 export async function startPersistence(): Promise<void> {
   if (started) return;
   started = true;
+  // The chip library loads before the first board, so chip parts get their pins.
+  chipsLoading = startChipLibrary()
+    .catch((e) => console.error(e))
+    .finally(() => {
+      chipsReady = true;
+    });
   try {
     storage = await openIndexedDb();
     editor().set({ storageMode: 'indexeddb' });
@@ -299,7 +330,8 @@ export async function startPersistence(): Promise<void> {
 
   // Autosave 1 s after the last change, and right away when the tab hides or unloads.
   useEditor.subscribe((s, prev) => {
-    if (s.board !== prev.board && s.level?.id === currentId && s.board !== savedBoard && !s.readOnly) scheduleSave();
+    const board = rootBoard(s);
+    if (board !== rootBoard(prev) && s.level?.id === currentId && board !== savedBoard && !s.readOnly) scheduleSave();
   });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') void flushSave();
@@ -317,6 +349,7 @@ export async function startPersistence(): Promise<void> {
     };
   }
 
+  await chipsLoading;
   const wanted = levelFromUrl(location.href) ?? lastLevel() ?? SANDBOX;
   const ok = levelById(wanted) && isUnlocked(levelById(wanted)!, editor().completed);
   await openLevel(ok || levelFromUrl(location.href) ? wanted : SANDBOX);

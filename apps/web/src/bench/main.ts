@@ -7,32 +7,63 @@
  * simulation values), diag (contention rings), flush (read back a pixel each
  * frame so draw time includes GPU raster), sel (select a few parts), only
  * (parts|wires: draw a single layer), dpr (force a device pixel ratio),
- * ov (show every overlay kind), cx / cy (camera center in cells).
+ * ov (show every overlay kind), cx / cy (camera center in cells),
+ * board (gates: the classic 1-bit board; mixed: CPU-ish clusters of blocks,
+ * custom chips, buses and splitters; show: one of every part, for review).
  */
 import '../styles/tokens.css';
 import { SpatialIndex } from '../editor/hit';
+import { geomOf, setChipRegistry } from '../editor/parts';
 import { createRenderer } from '../editor/renderer';
 import type { Scene } from '../editor/render-types';
 import { GRID, type Theme } from '../editor/store';
-import { benchBoard, benchSnapshot, PITCH_X, PITCH_Y } from './board';
+import type { Board } from '@ground-up/schema';
+import type { Snapshot } from '@ground-up/worker';
+import { BENCH_CHIPS, benchBoard, benchSnapshot, mixedBoard, mixedSnapshot, PITCH_X, PITCH_Y } from './board';
+import { showcaseBoard, showcaseSnapshot } from './showcase';
 import './bench.css';
 
 const q = new URLSearchParams(location.search);
 const count = Number(q.get('n') ?? 2000);
 let theme: Theme = q.get('theme') === 'light' ? 'light' : 'dark';
-let moving = !q.has('still');
+const kind = q.get('board') ?? 'gates';
+let moving = !q.has('still') && kind !== 'show';
 let simulate = !q.has('nosnap');
 const diag = q.has('diag');
 const flush = q.has('flush');
 const fixedZoom = q.has('zoom') ? Number(q.get('zoom')) : undefined;
 
-const { board, cols, rows } = benchBoard(count);
+if (kind !== 'gates') setChipRegistry(BENCH_CHIPS);
+let board: Board;
+let cols: number;
+let rows: number;
+let worldW: number;
+let worldH: number;
+if (kind === 'mixed') {
+  const m = mixedBoard(count);
+  ({ board, cols, rows } = m);
+  worldW = m.w;
+  worldH = m.h;
+} else if (kind === 'show') {
+  board = showcaseBoard();
+  cols = rows = 1;
+  worldW = 50;
+  worldH = 50;
+} else {
+  ({ board, cols, rows } = benchBoard(count));
+  worldW = cols * PITCH_X;
+  worldH = rows * PITCH_Y;
+}
 const index = new SpatialIndex(board);
+const pinWidth = (ref: { part: string; pin: string }): number => {
+  const p = index.parts.get(ref.part);
+  return p ? (geomOf(p).pins.find((x) => x.name === ref.pin)?.width ?? 1) : 1;
+};
+const makeSnapshot = (seed: number): Snapshot =>
+  kind === 'mixed' ? mixedSnapshot(board, seed, pinWidth) : kind === 'show' ? showcaseSnapshot(board) : benchSnapshot(board, seed, diag);
 // Diagnostic: ?only=parts or ?only=wires draws one layer, to tell which one costs.
 if (q.get('only') === 'parts') index.paths.clear();
 if (q.get('only') === 'wires') index.partsIn = () => [];
-const worldW = cols * PITCH_X;
-const worldH = rows * PITCH_Y;
 
 const canvas = document.getElementById('board') as HTMLCanvasElement;
 const hud = document.getElementById('hud')!;
@@ -75,10 +106,10 @@ if (q.has('ov')) {
 }
 
 let snapSeed = 1;
-let snapshot = simulate ? benchSnapshot(board, snapSeed, diag) : null;
+let snapshot = simulate ? makeSnapshot(snapSeed) : null;
 setInterval(() => {
   if (!simulate) return;
-  snapshot = benchSnapshot(board, ++snapSeed, diag);
+  snapshot = makeSnapshot(++snapSeed);
 }, 500);
 
 const drawTimes: number[] = [];
@@ -88,7 +119,7 @@ let visible = 0;
 let t0 = performance.now();
 
 function camera(t: number): Scene['camera'] {
-  const margin = 2;
+  const margin = kind === 'show' ? 1 : 2;
   const fit = Math.min(width / ((worldW + margin * 2) * GRID), height / ((worldH + margin * 2) * GRID));
   const zoom = (fixedZoom ?? fit) * (moving && fixedZoom === undefined ? 1 + 0.04 * Math.sin(t / 1300) : 1);
   const s = zoom * GRID;
@@ -182,10 +213,11 @@ hud.addEventListener('click', (e) => {
     t0 = performance.now();
   } else if (act === 'sim') {
     simulate = !simulate;
-    snapshot = simulate ? benchSnapshot(board, snapSeed, diag) : null;
+    snapshot = simulate ? makeSnapshot(snapSeed) : null;
   }
   render();
 });
 document.documentElement.dataset.theme = theme;
+if (q.has('nohud')) hud.hidden = true;
 setInterval(render, 500);
 render();

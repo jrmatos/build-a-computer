@@ -6,11 +6,13 @@
  * tool lock), Turing Complete for the content (drag from a pin to wire, click
  * a switch to flip it, everything snaps to the grid).
  */
-import type { Board, PartType, PinRef } from '@ground-up/schema';
+import type { Board, Part, PartType, PinRef } from '@ground-up/schema';
 import { panBy, scaleOf, screenToWorld, zoomBy } from './camera';
 import { normRect, pinPos, routeWire, type Pt } from './geometry';
 import { SpatialIndex, type Hit } from './hit';
+import { enterChip } from './chips';
 import { addPart, addWire, duplicateIds, moveIds } from './ops';
+import { canPlaceChip, defaultProps, numProp } from './partProps';
 import { geomOf, geomOfType } from './parts';
 import type { Overlay } from './render-types';
 import { useEditor, type Tool } from './store';
@@ -75,8 +77,8 @@ export const snap = (p: Pt): Pt => ({ x: Math.round(p.x), y: Math.round(p.y) });
 export const snapDelta = (from: Pt, to: Pt): Pt => ({ x: Math.round(to.x - from.x), y: Math.round(to.y - from.y) });
 
 /** Part origin that centers the part body on the cursor, on whole cells. */
-export function ghostOrigin(type: PartType, world: Pt): Pt {
-  const b = geomOfType(type).body;
+export function ghostOrigin(type: PartType | Part, world: Pt): Pt {
+  const b = (typeof type === 'string' ? geomOfType(type) : geomOf(type)).body;
   return { x: Math.round(world.x - b.x - b.w / 2), y: Math.round(world.y - b.y - b.h / 2) };
 }
 
@@ -87,12 +89,26 @@ export function placeType(tool: Tool): PartType | null {
 
 type PinHit = Extract<Hit, { kind: 'pin' }>;
 
+/** What a plain click on a part does besides selecting it. */
+export type ClickAction = 'toggle' | 'number' | null;
+
+/** Click behavior of a part: 1-bit switches toggle, wider switches open a number input. */
+export function clickActionOf(part: Part | undefined): ClickAction {
+  if (part?.type !== 'switch') return null;
+  return numProp(part, 'width') > 1 ? 'number' : 'toggle';
+}
+
+/** Thing under the pointer the probe can show: a wire, or a pin while Alt is held. */
+export type ProbeTarget = { kind: 'wire'; id: string } | { kind: 'pin'; ref: PinRef };
+
 type Mode =
   | { kind: 'idle' }
   | { kind: 'pan'; pointer: number; last: Pt }
   | { kind: 'pinch' }
   /** Pressed on a part or wire; becomes a move once dragged. */
-  | { kind: 'press'; pointer: number; start: Pt; startWorld: Pt; id: string; shift: boolean; alt: boolean; wasSelected: boolean; isSwitch: boolean }
+  | { kind: 'press'; pointer: number; start: Pt; startWorld: Pt; id: string; shift: boolean; alt: boolean; wasSelected: boolean; click: ClickAction }
+  /** Holding a momentary button down. A selected button can still be dragged away. */
+  | { kind: 'button'; pointer: number; start: Pt; startWorld: Pt; id: string; wasSelected: boolean }
   | { kind: 'move'; pointer: number; startWorld: Pt; ids: Set<string>; base: Board; delta: Pt }
   | { kind: 'box'; pointer: number; start: Pt; startWorld: Pt; base: string[]; dragging: boolean }
   /** Pressed on a pin; dragging draws a wire. */
@@ -102,6 +118,12 @@ type Mode =
 
 export interface InteractionDeps {
   toggleSwitch: (partId: string) => void;
+  /** Momentary button: true on press, false on release. */
+  press?: (partId: string, down: boolean) => void;
+  /** Open the number input for a multi-bit switch. */
+  openNumberInput?: (partId: string) => void;
+  /** Double-click on a chip instance. Defaults to chips.enterChip. */
+  enterChip?: (partId: string) => void;
 }
 
 const sameRef = (a: PinRef, b: PinRef) => a.part === b.part && a.pin === b.pin;
@@ -123,6 +145,10 @@ export class Interaction {
   private pinchPrev: { mid: Pt; dist: number } | null = null;
   /** Set when a right-click cancelled routing, so no context menu opens. */
   private swallowMenu = false;
+  /** Alt is held (Alt+hover probes pins). */
+  altHeld = false;
+  /** Wire or pin under the pointer for the probe tooltip, with its screen point. */
+  probe: { target: ProbeTarget; x: number; y: number } | null = null;
 
   constructor(private readonly deps: InteractionDeps) {}
 
@@ -210,6 +236,12 @@ export class Interaction {
         st.setSelection([id]);
       }
       const part = this.index().parts.get(id);
+      if (part?.type === 'button' && !e.shift && !e.alt && hit?.kind === 'part') {
+        this.deps.press?.(id, true);
+        this.mode = { kind: 'button', pointer: e.id, start: p, startWorld: world, id, wasSelected };
+        this.update();
+        return;
+      }
       this.mode = {
         kind: 'press',
         pointer: e.id,
@@ -219,7 +251,7 @@ export class Interaction {
         shift: e.shift,
         alt: e.alt,
         wasSelected,
-        isSwitch: part?.type === 'switch',
+        click: hit?.kind === 'part' ? clickActionOf(part) : null,
       };
       this.update();
       return;
@@ -262,6 +294,14 @@ export class Interaction {
       case 'press': {
         if (e.id !== m.pointer || dist(m.start, p) < threshold) return;
         this.startMove(m);
+        this.move(e);
+        return;
+      }
+      case 'button': {
+        // Only an already-selected button turns into a move when dragged.
+        if (e.id !== m.pointer || !m.wasSelected || dist(m.start, p) < threshold) return;
+        this.deps.press?.(m.id, false);
+        this.startMove({ kind: 'press', pointer: m.pointer, start: m.start, startWorld: m.startWorld, id: m.id, shift: false, alt: false, wasSelected: true, click: null });
         this.move(e);
         return;
       }
@@ -323,10 +363,15 @@ export class Interaction {
           if (m.wasSelected) st.setSelection(st.selection.filter((id) => id !== m.id));
         } else {
           st.setSelection([m.id]);
-          if (m.isSwitch) this.deps.toggleSwitch(m.id);
+          if (m.click === 'toggle') this.deps.toggleSwitch(m.id);
+          else if (m.click === 'number') this.deps.openNumberInput?.(m.id);
         }
         break;
       }
+      case 'button':
+        this.deps.press?.(m.id, false);
+        st.setSelection([m.id]);
+        break;
       case 'move':
         st.endTransient();
         break;
@@ -374,12 +419,21 @@ export class Interaction {
     st.set({ contextMenu: { x: clientX, y: clientY, world: this.world(x, y) } });
   }
 
-  /** Double-click: edit the label of the part under the pointer. */
+  /** Double-click: enter a chip, or edit the label of the part under the pointer. */
   doubleClick(x: number, y: number): void {
     const st = useEditor.getState();
-    if (st.readOnly || placeType(st.tool) || this.panning()) return;
+    if (placeType(st.tool) || this.panning()) return;
     const hit = this.hitAt(x, y);
     if (hit?.kind !== 'part') return;
+    const part = this.index().parts.get(hit.id);
+    // Double-clicking inputs is just two quick clicks on them.
+    if (part?.type === 'switch' || part?.type === 'button') return;
+    if (part?.type === 'chip') {
+      this.cancel();
+      (this.deps.enterChip ?? enterChip)(hit.id);
+      return;
+    }
+    if (st.readOnly) return;
     this.cancel();
     st.setSelection([hit.id]);
     st.set({ editingLabel: hit.id });
@@ -395,9 +449,21 @@ export class Interaction {
 
   /** Pointer left the canvas: drop hover feedback but keep any active gesture. */
   leave(): void {
+    const m = this.mode;
+    if (m.kind === 'button') {
+      this.deps.press?.(m.id, false);
+      this.mode = { kind: 'idle' };
+    }
+    this.setProbe(null);
     if (this.mode.kind !== 'idle') return;
     this.lastScreen = null;
     this.setOverlay({});
+  }
+
+  setAlt(held: boolean): void {
+    if (this.altHeld === held) return;
+    this.altHeld = held;
+    if (this.mode.kind === 'idle') this.update();
   }
 
   setSpace(held: boolean): void {
@@ -413,6 +479,7 @@ export class Interaction {
     const m = this.mode;
     this.mode = { kind: 'idle' };
     this.pinchPrev = null;
+    if (m.kind === 'button') this.deps.press?.(m.id, false);
     if (m.kind === 'move') {
       const st = useEditor.getState();
       if (st.transientBase) st.setTransient(st.transientBase);
@@ -423,12 +490,18 @@ export class Interaction {
     return m.kind !== 'idle';
   }
 
-  /** Place a part from the library (drop) or the place tool, and select it. */
-  place(type: PartType, world: Pt): string | null {
+  /**
+   * Place a part from the library (drop) or the place tool, and select it.
+   * New parts get their type's default props; chip instances need `chip`.
+   */
+  place(type: PartType, world: Pt, chip?: string): string | null {
     const st = useEditor.getState();
-    if (st.readOnly || !isPartAllowed(st.level, type)) return null;
-    const o = ghostOrigin(type, world);
-    const [board, part] = addPart(st.board, type, o.x, o.y);
+    if (st.readOnly) return null;
+    if (type === 'chip' ? !chip || !canPlaceChip(st.chips, chip, st.editStack.map((f) => f.chipId)) : !isPartAllowed(st.level, type)) return null;
+    const extra: Partial<Part> = type === 'chip' ? { chip } : { props: defaultProps(type) };
+    const sample: Part = { id: 'ghost', type, x: 0, y: 0, rot: 0, flip: false, ...extra };
+    const o = ghostOrigin(sample, world);
+    const [board, part] = addPart(st.board, type, o.x, o.y, extra);
     st.commit(() => board, [part.id]);
     if (!useEditor.getState().toolLocked) useEditor.getState().setTool('select');
     this.update();
@@ -525,6 +598,25 @@ export class Interaction {
     this.onChange();
   }
 
+  private setProbe(target: ProbeTarget | null, at?: Pt): void {
+    const prev = this.probe;
+    if (!target || !at) {
+      if (prev) {
+        this.probe = null;
+        this.onChange();
+      }
+      return;
+    }
+    const same =
+      prev &&
+      prev.target.kind === target.kind &&
+      (target.kind === 'wire'
+        ? (prev.target as { id: string }).id === target.id
+        : prev.target.kind === 'pin' && sameRef(prev.target.ref, target.ref));
+    this.probe = { target, x: at.x, y: at.y };
+    if (!same) this.onChange();
+  }
+
   private setCursor(c: string): void {
     if (c === this.cursor) return;
     this.cursor = c;
@@ -537,6 +629,7 @@ export class Interaction {
     const m = this.mode;
     const p = this.lastScreen;
     const keep = { flashIds: this.overlay.flashIds };
+    if (m.kind !== 'idle' || !p || this.panning() || placeType(st.tool)) this.setProbe(null);
     switch (m.kind) {
       case 'pan':
         this.setCursor('grabbing');
@@ -560,7 +653,10 @@ export class Interaction {
         return;
       }
       case 'press':
-        this.setCursor(m.isSwitch ? 'pointer' : 'move');
+        this.setCursor(m.click ? 'pointer' : 'move');
+        return;
+      case 'button':
+        this.setCursor('pointer');
         return;
     }
     if (this.panning()) {
@@ -581,6 +677,9 @@ export class Interaction {
       return;
     }
     const hit = this.hitAt(p.x, p.y);
+    if (hit?.kind === 'wire') this.setProbe({ kind: 'wire', id: hit.id }, p);
+    else if (hit?.kind === 'pin' && this.altHeld) this.setProbe({ kind: 'pin', ref: hit.ref }, p);
+    else this.setProbe(null);
     if (hit?.kind === 'pin') {
       if (st.readOnly) {
         const isSwitch = this.index().parts.get(hit.ref.part)?.type === 'switch';
@@ -593,8 +692,9 @@ export class Interaction {
       return;
     }
     if (hit?.kind === 'part') {
-      const isSwitch = this.index().parts.get(hit.id)?.type === 'switch';
-      this.setCursor(isSwitch ? 'pointer' : st.readOnly ? 'default' : 'move');
+      const type = this.index().parts.get(hit.id)?.type;
+      const clickable = type === 'switch' || type === 'button';
+      this.setCursor(clickable ? 'pointer' : st.readOnly ? 'default' : 'move');
       this.setOverlay({ ...keep, hoverId: hit.id });
       return;
     }

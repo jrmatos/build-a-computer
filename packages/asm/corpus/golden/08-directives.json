@@ -1,0 +1,26 @@
+{
+  "source": "08-directives.s",
+  "tool": "GNU as/ld 2.40, -march=rv32ima_zicsr_zifencei -mabi=ilp32 -mno-relax, base 0x80000000",
+  "size": 165,
+  "image": [
+    "17050000130505069305000137060100130606a0b7060100938606a06ff05ffe",
+    "0102ff80410a193412ffffffff0700080000000078563412ffffffff04000000",
+    "10000000010000000200000003000000efcdab8967452301feffffffffffffff",
+    "2000008027000080340000805000008064000080140000001000040000000000",
+    "aaaaaaaaaa000000000000003412341234120df0feca0df0feca000061626364",
+    "6566006700"
+  ],
+  "symbols": {
+    "_start": "0x80000000",
+    "bytes": "0x80000020",
+    "halfs": "0x80000027",
+    "words": "0x80000034",
+    "quad": "0x80000050",
+    "table": "0x80000060",
+    "filled": "0x80000080",
+    "text": "0x8000009c",
+    "end_of_data": "0x800000a5",
+    "heap_ptr": "0x800000a8",
+    "scratch": "0x800000ac"
+  }
+}

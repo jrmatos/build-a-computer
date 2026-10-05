@@ -1,0 +1,495 @@
+/* Test strip: Turing Complete style case columns on a dark panel, in both themes. */
+.ts-section,
+.ts-float {
+  --ts-bg: #17181c;
+  --ts-bg-2: #1f2126;
+  --ts-line: #2c2f36;
+  --ts-label: #f0a540;
+  --ts-text: #d9dce3;
+  --ts-faint: #6c7280;
+  --ts-one: #2e8b3e;
+  --ts-one-hi: #43b057;
+  --ts-zero: #e8445a;
+  --ts-zero-hi: #ff6b7d;
+  --ts-x: #7a808c;
+  --ts-active: rgba(240, 165, 64, 0.16);
+  --ts-select: rgba(255, 255, 255, 0.1);
+  --ts-fail: #ff4d63;
+  --ts-pass: #4cc46a;
+}
+:root[data-theme='light'] .ts-section,
+:root[data-theme='light'] .ts-float {
+  --ts-bg: #1d1f24;
+  --ts-bg-2: #262930;
+  --ts-line: #353943;
+}
+
+.ts-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ts-section-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.ts-toggle {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px 4px 2px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.ts-toggle svg {
+  transition: transform 0.15s ease;
+}
+.ts-toggle:hover,
+.ts-icon-btn:hover {
+  background: var(--hover);
+}
+.ts-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.ts-icon-btn[aria-pressed='true'] {
+  background: var(--active);
+  color: var(--accent-strong);
+}
+.ts-toggle:focus-visible,
+.ts-icon-btn:focus-visible,
+.ts-link:focus-visible,
+.ts-radix button:focus-visible,
+.ts-resize:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ---------- the strip ---------- */
+.ts {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--ts-line);
+  border-radius: 8px;
+  background: var(--ts-bg);
+  color: var(--ts-text);
+  font-family: var(--font-mono);
+}
+.ts-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 4px 6px 4px 10px;
+  background: var(--ts-bg-2);
+  border-bottom: 1px solid var(--ts-line);
+  font-size: 12px;
+}
+.ts-counts {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.ts-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.ts-count.pass {
+  color: var(--ts-pass);
+}
+.ts-count.fail {
+  color: var(--ts-fail);
+}
+.ts-count.zero {
+  color: var(--ts-faint);
+}
+.ts-count.total {
+  color: var(--ts-faint);
+}
+.ts-radix {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 6px;
+  background: var(--ts-bg);
+}
+.ts-radix button {
+  height: 20px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ts-faint);
+  font: 600 11px var(--font-mono);
+  cursor: pointer;
+}
+.ts-radix button[aria-pressed='true'] {
+  background: var(--ts-line);
+  color: var(--ts-label);
+}
+
+.ts-progress {
+  height: 3px;
+  background: var(--ts-line);
+}
+.ts-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--ts-label);
+  transition: width 0.12s linear;
+}
+.ts-progress.has-fail > span {
+  background: var(--ts-fail);
+}
+.ts-progress.is-done > span {
+  background: var(--ts-pass);
+}
+
+.ts-panel {
+  display: flex;
+  align-items: flex-start;
+  padding: 6px 0 8px;
+}
+.ts-labels {
+  flex: none;
+  padding: 0 10px 0 10px;
+  border-right: 1px solid var(--ts-line);
+}
+.ts-label {
+  display: flex;
+  align-items: center;
+  height: var(--ts-row);
+  color: var(--ts-label);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ts-label.cur {
+  color: color-mix(in srgb, var(--ts-label) 70%, var(--ts-text));
+}
+.ts-label.sep,
+.ts-cell.sep {
+  margin-top: 6px;
+}
+.ts-head-cell {
+  display: grid;
+  place-items: center;
+  height: var(--ts-head);
+  font-size: 9px;
+  color: var(--ts-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.ts-viewport {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ts-line) transparent;
+}
+.ts-viewport:focus-visible {
+  outline: 2px solid var(--ts-label);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+.ts-track {
+  position: relative;
+  height: 100%;
+  min-height: 1px;
+}
+
+.ts-col {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.ts-col::after {
+  /* Outline drawn inside the column so neighbours never shift. */
+  content: '';
+  position: absolute;
+  inset: 0 2px;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  pointer-events: none;
+}
+.ts-col:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.ts-col.is-active {
+  background: var(--ts-active);
+}
+.ts-col.is-active::after {
+  border-color: color-mix(in srgb, var(--ts-label) 55%, transparent);
+}
+.ts-col.is-selected {
+  background: var(--ts-select);
+}
+.ts-col.is-selected::after {
+  border-color: var(--ts-text);
+}
+.ts-col.is-fail::after {
+  border-color: var(--ts-fail);
+}
+.ts-col.is-fail.is-selected::after {
+  border-color: var(--ts-fail);
+  box-shadow: 0 0 0 1px var(--ts-text) inset;
+}
+.ts-col.is-first-fail {
+  background: rgba(255, 77, 99, 0.12);
+}
+.ts-col.is-shaking {
+  animation: ts-shake 0.42s ease-in-out;
+}
+@keyframes ts-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-3px);
+  }
+  40% {
+    transform: translateX(3px);
+  }
+  60% {
+    transform: translateX(-2px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ts-col.is-shaking {
+    animation: none;
+  }
+}
+.ts-col .ts-head-cell .ts-mark.pass {
+  color: var(--ts-pass);
+}
+.ts-col .ts-head-cell .ts-mark.fail {
+  color: var(--ts-fail);
+}
+
+.ts-col > * {
+  flex: none;
+}
+.ts-cell {
+  display: grid;
+  place-items: center;
+  height: var(--ts-row);
+}
+.ts-ticks {
+  font-size: 10px;
+  color: var(--ts-faint);
+  white-space: nowrap;
+}
+.ts-col.is-program .ts-ticks {
+  font-size: 11px;
+  color: var(--ts-text);
+}
+
+/* Leaves: a rounded square with one sharp corner. 1 = green, sharp top-left; 0 = red, sharp top-right. */
+.ts-leaf {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 6px;
+}
+.ts-leaf.b1 {
+  border-top-left-radius: 0;
+  background: linear-gradient(160deg, var(--ts-one-hi), var(--ts-one) 70%);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.18);
+}
+.ts-leaf.b0 {
+  border-top-right-radius: 0;
+  background: linear-gradient(200deg, var(--ts-zero-hi), var(--ts-zero) 70%);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.18);
+}
+.ts-leaf.x {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  background: repeating-linear-gradient(45deg, var(--ts-x) 0 2px, #3b3f48 2px 4.5px);
+}
+.ts-leaf.empty {
+  border: 1.5px solid rgba(255, 255, 255, 0.13);
+}
+
+.ts-pill {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 5px;
+  background: #2b2e35;
+  color: var(--ts-text);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.ts-cell.cur .ts-pill {
+  background: #33373f;
+}
+.ts-pill.empty {
+  width: 22px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.13);
+}
+.ts-pill.x {
+  background: repeating-linear-gradient(45deg, #4a4f5a 0 2px, #33363e 2px 4.5px);
+}
+.ts-cell .ts-pill.wrong {
+  background: color-mix(in srgb, var(--ts-fail) 30%, #2b2e35);
+  color: #fff;
+  box-shadow: inset 0 0 0 1.5px var(--ts-fail);
+}
+
+/* ---------- under the strip ---------- */
+.ts-detail {
+  padding: 8px 10px;
+  border-top: 1px solid var(--ts-line);
+  font-size: 12px;
+  line-height: 1.45;
+  animation: lv-in 0.15s ease-out;
+}
+.ts-detail.fail {
+  background: rgba(255, 77, 99, 0.1);
+}
+.ts-detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.ts-detail-head strong {
+  color: var(--ts-text);
+}
+.ts-detail.fail .ts-detail-head strong,
+.ts-detail .ts-mark.fail {
+  color: var(--ts-fail);
+}
+.ts-detail .ts-mark.pass {
+  color: var(--ts-pass);
+}
+.ts-detail-head code {
+  color: var(--ts-label);
+  font-family: var(--font-mono);
+}
+.ts-detail-line {
+  display: flex;
+  flex-direction: column;
+  margin: 4px 0 0;
+  font-family: var(--font-ui);
+  color: var(--ts-text);
+}
+.ts-detail-line.muted {
+  color: var(--ts-faint);
+}
+.ts-note {
+  margin: 0;
+  padding: 6px 10px 8px;
+  border-top: 1px solid var(--ts-line);
+  font: 12px var(--font-ui);
+  color: var(--ts-faint);
+}
+
+.ts-floating-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.ts-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-strong);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ---------- popped-out island ---------- */
+.ts-float-wrap {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+.ts-float {
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 8px 8px;
+  pointer-events: auto;
+  animation: lv-in 0.18s ease-out;
+}
+.ts-float .ts-section-head {
+  padding-right: 2px;
+}
+.ts-resize {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  width: 8px;
+  cursor: ew-resize;
+  border-radius: 4px;
+  z-index: 1;
+}
+.ts-resize.left {
+  left: -4px;
+}
+.ts-resize.right {
+  right: -4px;
+}
+.ts-resize:hover,
+.ts-resize:focus-visible {
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* Note in the level panel while a custom chip is open (tests need the level board). */
+.lp-chip-note {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--hover);
+  color: var(--text-muted);
+  font-size: 12px;
+}

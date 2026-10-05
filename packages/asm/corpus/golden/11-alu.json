@@ -1,0 +1,14 @@
+{
+  "source": "11-alu.s",
+  "tool": "GNU as/ld 2.40, -march=rv32ima_zicsr_zifencei -mabi=ilp32 -mno-relax, base 0x80000000",
+  "size": 116,
+  "image": [
+    "b300310033826240b313940033a5c500b336f70033c82801b3595a0133db8b41",
+    "b36cbd0133feee013385c502b316f70233a82803b3395a0333cb8b03b35cbd03",
+    "33eeee03b37f10021381018013a2f27f13b3f3ff1344f47f936405809375f60f",
+    "931607009357f80193581941b7f9ffff171a0000"
+  ],
+  "symbols": {
+    "_start": "0x80000000"
+  }
+}

@@ -14,7 +14,12 @@ export interface BlockModel<S = unknown> {
   init(part: Part, mode: 'zero' | 'random', rng: { nextU32(): number }): S;
   /** Outputs from the current inputs and state (combinational read). */
   outputs(inputs: readonly Signal[], state: S, part: Part): Signal[];
-  /** Rising edge of `clk` (clocked parts only): returns the next state. Inputs are sampled before the edge. */
+  /**
+   * Rising edge of `clk` (clocked parts only): returns the next state. Inputs are sampled before the edge.
+   * Models may update large state in place and return the same object (RAM does), so engines must
+   * not keep the old state expecting it to stay unchanged. `inputs` includes the `clk` pin, which
+   * models ignore: the engine decides when an edge happened (an X clock never fires).
+   */
   clock?(inputs: readonly Signal[], state: S, part: Part): S;
   /** State survives power off (ROM). */
   nonVolatile?: boolean;

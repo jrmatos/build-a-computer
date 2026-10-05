@@ -1,0 +1,15 @@
+{
+  "source": "10-relocs.s",
+  "tool": "GNU as/ld 2.40, -march=rv32ima_zicsr_zifencei -mabi=ilp32 -mno-relax, base 0x80000000",
+  "size": 88,
+  "image": [
+    "3705008083258504938515002324b504370600801306c6049706000003a70603",
+    "23a8e602938706031708000083487802b76234129382f2ff37030010b7f3ffff",
+    "170e00006ff0dffb2900000072656c6f636174696f6e7300"
+  ],
+  "symbols": {
+    "_start": "0x80000000",
+    "counter": "0x80000048",
+    "message": "0x8000004c"
+  }
+}

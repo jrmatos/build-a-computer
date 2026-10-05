@@ -87,5 +87,5 @@ export default tseslint.config(
     files: ['packages/*/src/**/*.test.ts'],
     rules: { 'no-restricted-imports': 'off' },
   },
-  { rules: { 'prefer-const': ['error', { destructuring: 'all' }], '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }] } },
+  { rules: { 'prefer-const': ['error', { destructuring: 'all' }], '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', destructuredArrayIgnorePattern: '^_' }] } },
 );

@@ -1,7 +1,8 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { compile } from './compile';
-import { acyclicCircuit, emptyStats, loopCircuit, runDiff, scenario, specToBoard } from './gen';
+import { BLOCKS } from './blocks/index';
+import { acyclicCircuit, busCircuit, emptyStats, loopCircuit, runDiff, scenario, specToBoard } from './gen';
 
 /**
  * Differential fuzzing: FastEngine against ReferenceEngine, every observable
@@ -51,5 +52,42 @@ describe('differential fuzz: fast engine vs reference', () => {
     expect(stats.unstable).toBeGreaterThan(0);
     expect(stats.contention).toBeGreaterThan(0);
     console.info('loop fuzz', stats);
+  }, 600_000);
+});
+
+describe('differential fuzz: multi-bit circuits (SIM-07)', () => {
+  const BUS_RUNS = FULL ? 10_000 : 600;
+
+  it(`SIM-07: matches the reference on ${BUS_RUNS.toLocaleString('en')} random bus circuits with tri-states, splitters, joiners, consts and blocks`, () => {
+    const stats = emptyStats();
+    let circuits = 0;
+    fc.assert(
+      fc.property(scenario(busCircuit()), (sc) => {
+        circuits++;
+        runDiff(sc, stats);
+      }),
+      { seed: SEED + 2, numRuns: BUS_RUNS },
+    );
+    expect(circuits).toBe(BUS_RUNS);
+    expect(stats.busCircuits).toBeGreaterThan(BUS_RUNS / 2);
+    expect(stats.triCircuits).toBeGreaterThan(BUS_RUNS / 4);
+    expect(stats.contention).toBeGreaterThan(0);
+    expect(stats.unstable).toBeGreaterThan(0);
+    expect(stats.fastSettles).toBeGreaterThan(0);
+    expect(stats.fallbacks).toBeGreaterThan(0);
+    if (Object.keys(BLOCKS).length) expect(stats.blockCircuits).toBeGreaterThan(BUS_RUNS / 4);
+    console.info('bus fuzz', stats);
+  }, 600_000);
+
+  it(`SIM-07: matches the reference on ${(BUS_RUNS / 2).toLocaleString('en')} acyclic bus circuits (fast path)`, () => {
+    const stats = emptyStats();
+    fc.assert(
+      fc.property(scenario(busCircuit(20, true)), (sc) => {
+        runDiff(sc, stats);
+      }),
+      { seed: SEED + 3, numRuns: BUS_RUNS / 2 },
+    );
+    expect(stats.fastSettles).toBeGreaterThan(stats.settles / 4);
+    console.info('acyclic bus fuzz', stats);
   }, 600_000);
 });

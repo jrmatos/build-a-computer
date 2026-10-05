@@ -1,19 +1,18 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { LEVELS } from '@ground-up/content';
 import type { Level } from '@ground-up/schema';
-import type { CaseResult } from '@ground-up/sim-logic';
-import { useEditor, type TestRun } from '../editor/store';
+import { useEditor } from '../editor/store';
 import { t } from '../i18n';
-import { BulbIcon, CheckIcon, ChevronIcon, CrossIcon, MapIcon } from './icons';
+import { BulbIcon, CheckIcon, ChevronIcon, MapIcon } from './icons';
 import { openLevel } from './persist';
 import { newlyUnlockedParts, nextLevel } from './progress';
 import { canRunTests, runLevelTests } from './runTests';
+import { TestStripSection } from './TestStrip';
 import { useLevelUi } from './ui';
 import './level.css';
+import { Markdown, inline } from './Markdown';
 
 const COLLAPSE_KEY = 'ground-up:level-panel-collapsed';
-/** Rows rendered at most; the first failure is always included. */
-const MAX_ROWS = 256;
 
 function readCollapsed(): boolean {
   try {
@@ -101,7 +100,8 @@ function LevelBody({ level }: { level: Level }) {
   const completed = useEditor((s) => s.completed.includes(level.id));
   const justCompleted = useLevelUi((s) => s.justCompleted === level.id);
   const [hints, setHints] = useState(0);
-  const runnable = canRunTests(level);
+  const inChip = useEditor((s) => s.editStack.length > 0);
+  const runnable = canRunTests(level) && !inChip;
   const running = !!testRun?.running;
 
   return (
@@ -116,14 +116,14 @@ function LevelBody({ level }: { level: Level }) {
         )}
       </h2>
       <p className="lp-goal">{level.goal}</p>
-      {level.tutorial && <p className="lp-tutorial">{level.tutorial}</p>}
+      {level.tutorial && <Markdown className="lp-tutorial" text={level.tutorial} />}
 
       {level.hints.length > 0 && (
         <div className="lp-hints">
           {level.hints.slice(0, hints).map((h, i) => (
             <p key={i} className="lp-hint">
               <BulbIcon />
-              <span>{h}</span>
+              <span>{inline(h)}</span>
             </p>
           ))}
           {hints < level.hints.length && (
@@ -134,8 +134,6 @@ function LevelBody({ level }: { level: Level }) {
           )}
         </div>
       )}
-
-      {justCompleted && <SuccessCard level={level} />}
 
       <div className="lp-tests">
         <button
@@ -148,8 +146,11 @@ function LevelBody({ level }: { level: Level }) {
           {running ? <span className="lv-spinner" aria-hidden="true" /> : null}
           {running ? t('level.tests.running') : t('level.tests.run')}
         </button>
-        {runnable && <ResultsTable level={level} run={testRun} />}
+        {inChip && <p className="lp-chip-note">{t('level.tests.inChip')}</p>}
+        {runnable && <TestStripSection level={level} run={testRun} />}
       </div>
+
+      {justCompleted && <SuccessCard level={level} />}
     </>
   );
 }
@@ -157,13 +158,15 @@ function LevelBody({ level }: { level: Level }) {
 function SuccessCard({ level }: { level: Level }) {
   const next = useMemo(() => nextLevel(level, LEVELS), [level]);
   const parts = newlyUnlockedParts(level, next);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => ref.current?.scrollIntoView?.({ block: 'nearest' }), []);
   return (
-    <div className="lp-success" role="status">
+    <div className="lp-success" role="status" ref={ref}>
       <div className="lp-success-badge" aria-hidden="true">
         <CheckIcon size={22} />
       </div>
       <h3>{t('level.success.title')}</h3>
-      {level.afterword && <p>{level.afterword}</p>}
+      {level.afterword && <Markdown text={level.afterword} />}
       {parts.length > 0 && (
         <p className="lp-unlocked">
           <span>{t('level.success.unlocked')}</span>
@@ -187,154 +190,5 @@ function SuccessCard({ level }: { level: Level }) {
         </button>
       </div>
     </div>
-  );
-}
-
-interface Row {
-  key: number;
-  inputs: Record<string, number>;
-  expect: Record<string, number>;
-  result?: CaseResult;
-}
-
-function ResultsTable({ level, run }: { level: Level; run: TestRun | null }) {
-  const [open, setOpen] = useState<Set<number>>(new Set());
-  const { rows, inputs, outputs } = useMemo(() => {
-    const rows: Row[] = [];
-    const ins = new Set<string>();
-    const outs = new Set<string>();
-    for (const test of level.tests)
-      for (const r of test.kind === 'truth-table' ? test.rows : []) {
-        Object.keys(r.inputs).forEach((k) => ins.add(k));
-        Object.keys(r.expect).forEach((k) => outs.add(k));
-        rows.push({ key: rows.length, inputs: r.inputs, expect: r.expect });
-      }
-    return { rows, inputs: [...ins], outputs: [...outs] };
-  }, [level]);
-
-  // Results arrive in order; pair them with rows by arrival position.
-  const results = run?.cases ?? [];
-  const firstFail = results.findIndex((c) => !c.pass);
-  const shown = rows.slice(0, MAX_ROWS);
-  if (firstFail >= MAX_ROWS && rows[firstFail]) shown.push(rows[firstFail]!);
-  const done = run && !run.running;
-
-  const toggle = (i: number) => {
-    const next = new Set(open);
-    if (next.has(i)) next.delete(i);
-    else next.add(i);
-    setOpen(next);
-  };
-
-  return (
-    <div className="lp-results">
-      {run && (
-        <p className={`lp-summary ${done ? (run.passed === run.total ? 'pass' : 'fail') : ''}`} role="status" aria-live="polite">
-          {done
-            ? t('level.tests.summary', { passed: run.passed, total: run.total })
-            : t('level.tests.progress', { done: results.length, total: run.total })}
-        </p>
-      )}
-      <div className="lp-table-wrap">
-        <table className="lp-table">
-          <thead>
-            <tr>
-              <th className="st" aria-label={t('level.tests.status')} />
-              {inputs.map((k) => (
-                <th key={`i${k}`} className="in">
-                  {k}
-                </th>
-              ))}
-              {outputs.map((k) => (
-                <th key={`o${k}`} className="out" title={t('level.tests.expectedActual')}>
-                  {k}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {shown.map((row) => {
-              const res = results[row.key];
-              const isFirst = row.key === firstFail;
-              const expanded = !!res && !res.pass && (open.has(row.key) !== isFirst);
-              const cls = res ? (res.pass ? 'pass' : 'fail') : 'pending';
-              const cells: ReactNode[] = [
-                <td key="st" className="st">
-                  {res ? res.pass ? <CheckIcon size={14} /> : <CrossIcon size={14} /> : <span className="dot" />}
-                  <span className="visually-hidden">{res ? (res.pass ? t('level.tests.pass') : t('level.tests.fail')) : ''}</span>
-                </td>,
-                ...inputs.map((k) => (
-                  <td key={`i${k}`} className="in">
-                    {row.inputs[k] ?? '–'}
-                  </td>
-                )),
-                ...outputs.map((k) => {
-                  const want = row.expect[k];
-                  const got = res?.actual[k];
-                  const wrong = res && got !== undefined && want !== undefined && got !== String(want);
-                  return (
-                    <td key={`o${k}`} className={`out ${wrong ? 'wrong' : ''}`}>
-                      {wrong ? (
-                        <>
-                          <span className="got">{got}</span>
-                          <span className="want">{t('level.tests.want', { v: want ?? '–' })}</span>
-                        </>
-                      ) : (
-                        <span className={res ? '' : 'exp'}>{want ?? '–'}</span>
-                      )}
-                    </td>
-                  );
-                }),
-              ];
-              return (
-                <RowView
-                  key={row.key}
-                  className={`${cls} ${isFirst ? 'first-fail' : ''}`}
-                  cells={cells}
-                  colSpan={1 + inputs.length + outputs.length}
-                  expanded={expanded}
-                  message={res?.message}
-                  onClick={res && !res.pass ? () => toggle(row.key) : undefined}
-                />
-              );
-            })}
-          </tbody>
-        </table>
-        {rows.length > shown.length && <p className="lp-muted small">{t('level.tests.more', { n: rows.length - shown.length })}</p>}
-      </div>
-    </div>
-  );
-}
-
-function RowView(props: {
-  className: string;
-  cells: ReactNode[];
-  colSpan: number;
-  expanded: boolean;
-  message?: string | undefined;
-  onClick?: (() => void) | undefined;
-}) {
-  return (
-    <>
-      <tr
-        className={props.className}
-        onClick={props.onClick}
-        tabIndex={props.onClick ? 0 : undefined}
-        aria-expanded={props.onClick ? props.expanded : undefined}
-        onKeyDown={(e) => {
-          if (props.onClick && (e.key === 'Enter' || e.key === ' ')) {
-            e.preventDefault();
-            props.onClick();
-          }
-        }}
-      >
-        {props.cells}
-      </tr>
-      {props.expanded && (
-        <tr className="detail">
-          <td colSpan={props.colSpan}>{props.message ?? t('level.tests.mismatch')}</td>
-        </tr>
-      )}
-    </>
   );
 }

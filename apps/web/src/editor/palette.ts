@@ -40,6 +40,19 @@ export interface Palette {
   accentFill: string;
   handleFill: string;
   danger: string;
+  /** Value displays (multi-bit lamps, register readouts): always a dark LCD, in both themes. */
+  lcd: string;
+  lcdEdge: string;
+  /** Lit digits, unlit "8" ghost segments behind them, and digits of a zero value. */
+  lcdOn: string;
+  lcdGhost: string;
+  lcdZero: string;
+  /** Block symbols (register, RAM, ALU...): panel, outline and text. */
+  blockFill: string;
+  blockStroke: string;
+  blockText: string;
+  /** Custom chip tile when its ChipDef has no color. */
+  chip: string;
 }
 
 export const PALETTES: Record<Theme, Palette> = {
@@ -67,6 +80,15 @@ export const PALETTES: Record<Theme, Palette> = {
     accentFill: 'rgba(168,165,255,0.10)',
     handleFill: '#16181d',
     danger: '#ff6b6b',
+    lcd: '#0b0d10',
+    lcdEdge: '#4a5262',
+    lcdOn: '#5ef38c',
+    lcdGhost: '#18231c',
+    lcdZero: '#8d96a6',
+    chip: '#5c7cfa',
+    blockFill: '#2f3541',
+    blockStroke: '#b9c0cc',
+    blockText: '#e8ebf0',
   },
   light: {
     board: '#fbfbfc',
@@ -92,6 +114,15 @@ export const PALETTES: Record<Theme, Palette> = {
     accentFill: 'rgba(105,101,219,0.10)',
     handleFill: '#ffffff',
     danger: '#e03131',
+    lcd: '#1d2129',
+    lcdEdge: '#11141a',
+    lcdOn: '#6cf59a',
+    lcdGhost: '#28322d',
+    lcdZero: '#a3abb8',
+    chip: '#4c6ef5',
+    blockFill: '#f3f5f8',
+    blockStroke: '#2b303a',
+    blockText: '#1b1e25',
   },
 };
 
@@ -118,4 +149,15 @@ const mixCache = new Map<string, string>();
 function parseHex(h: string): [number, number, number] {
   const n = parseInt(h.slice(1), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/** Readable text color (near-white or near-black) on a #rrggbb fill. */
+export function inkOn(fill: string): string {
+  const [r, g, b] = parseHex(fill).map((v) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  }) as [number, number, number];
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  // Contrast against white vs. against #15171c.
+  return (1.05) / (lum + 0.05) >= (lum + 0.05) / 0.0587 ? '#ffffff' : '#15171c';
 }

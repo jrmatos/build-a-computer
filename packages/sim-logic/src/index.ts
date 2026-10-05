@@ -7,6 +7,8 @@ export * from './levelize';
 export * from './fast-engine';
 export * from './parts-spec';
 export * from './flatten';
+export * from './chips';
+export * from './swap';
 export * from './blocks/types';
 export * from './blocks/index';
 export * from './blocks/references';

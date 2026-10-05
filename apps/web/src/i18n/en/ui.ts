@@ -1,4 +1,5 @@
 export const ui: Record<string, string> = {
+  'menu.leaveChipFirst': 'Leave the chip you are editing before opening a file.',
   // Toolbar
   'toolbar.label': 'Tools',
   'tool.lock': 'Keep selected tool active after placing',

@@ -1,0 +1,22 @@
+{
+  "name": "@ground-up/rv32",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests",
+    "bench": "vitest run --root ../../tools/isa-runner bench.test.ts",
+    "isa": "sh ../../tools/isa-runner/isa.sh"
+  },
+  "dependencies": {
+    "@ground-up/det": "workspace:*"
+  },
+  "devDependencies": {
+    "fast-check": "^4.10.2"
+  }
+}

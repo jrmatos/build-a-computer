@@ -1,0 +1,12 @@
+{
+  "source": "09-local-labels.s",
+  "tool": "GNU as/ld 2.40, -march=rv32ima_zicsr_zifencei -mabi=ilp32 -mno-relax, base 0x80000000",
+  "size": 56,
+  "image": [
+    "930230009382f2ffe39e02fe930230009382f2ff638402006ff09fff13035000",
+    "6f0040001303f3ffe34c60fe6f004000130000006ff0dfff"
+  ],
+  "symbols": {
+    "_start": "0x80000000"
+  }
+}

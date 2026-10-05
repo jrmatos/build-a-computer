@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
+import { NumberInputPopover, openNumberInput } from '../ui/NumberInputPopover';
+import { Probe, type ProbeState } from '../ui/Probe';
 import { PartType } from '@ground-up/schema';
 import { t } from '../i18n';
 import { sim } from '../sim/client';
 import { setPartLabel } from './actions';
 import { viewport, worldToScreen, zoomBy } from './camera';
 import { partRect } from './geometry';
-import { Interaction, type PointerInput } from './interaction';
+import { Interaction, type PointerInput, type ProbeTarget } from './interaction';
+import { placeChip } from './chips';
+import { canPlaceChip } from './partProps';
 import { createRenderer } from './renderer';
 import { installShortcuts } from './shortcuts';
 import { useEditor } from './store';
@@ -14,6 +18,13 @@ import './Canvas.css';
 
 /** MIME type the library sidebar uses when dragging a part onto the board. */
 const PART_MIME = 'application/x-ground-up-part';
+/** With part type 'chip': the ChipDef id being dragged. */
+const CHIP_MIME = 'application/x-ground-up-chip';
+/** Hover time before a wire probe appears (plan: Probe). Alt+hover on a pin shows at once. */
+const PROBE_DELAY_MS = 300;
+
+const probeKey = (p: ProbeTarget | undefined | null): string =>
+  !p ? '' : p.kind === 'wire' ? `w:${p.id}` : `p:${p.ref.part}:${p.ref.pin}`;
 
 // The canvas fills the window; seed the viewport before boot code calls zoomToFit,
 // which runs before the first ResizeObserver callback.
@@ -28,12 +39,17 @@ if (typeof window !== 'undefined') {
  */
 export function Canvas() {
   const ref = useRef<HTMLCanvasElement>(null);
+  const [probe, setProbe] = useState<ProbeState | null>(null);
 
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
     const renderer = createRenderer(canvas);
-    const ctrl = new Interaction({ toggleSwitch: (id) => void sim.toggleSwitch(id) });
+    const ctrl = new Interaction({
+      toggleSwitch: (id) => void sim.toggleSwitch(id),
+      press: (id, down) => void sim.press(id, down),
+      openNumberInput,
+    });
     let rect = canvas.getBoundingClientRect();
     let raf = 0;
     let selArr: string[] | null = null;
@@ -54,7 +70,8 @@ export function Canvas() {
         showGrid: s.showGrid,
         selection: selSet,
         snapshot: s.snapshot,
-        overlay: ctrl.overlay,
+        // Diagnostics panel flashes parts through the store; interaction owns the rest.
+        overlay: s.flashIds?.length ? { ...ctrl.overlay, flashIds: s.flashIds } : ctrl.overlay,
         width: viewport.width,
         height: viewport.height,
         time,
@@ -64,10 +81,48 @@ export function Canvas() {
     const request = () => {
       if (!raf) raf = requestAnimationFrame(frame);
     };
+    // Probe: show after the pointer rests on the same wire (or Alt+pin) for a moment.
+    let probeShown = '';
+    let probeTimer = 0;
+    let pendingKey = '';
+    const syncProbe = () => {
+      const p = ctrl.probe;
+      const key = probeKey(p?.target);
+      if (key === probeShown || (probeTimer && key === pendingKey)) return;
+      window.clearTimeout(probeTimer);
+      probeTimer = 0;
+      if (probeShown) {
+        probeShown = '';
+        setProbe(null);
+      }
+      pendingKey = key;
+      if (!p) return;
+      probeTimer = window.setTimeout(
+        () => {
+          probeTimer = 0;
+          const now = ctrl.probe;
+          if (!now || probeKey(now.target) !== key) return;
+          probeShown = key;
+          setProbe({ target: now.target, x: now.x + rect.left, y: now.y + rect.top });
+        },
+        p.target.kind === 'pin' ? 0 : PROBE_DELAY_MS,
+      );
+    };
     ctrl.onChange = () => {
       canvas.style.cursor = ctrl.cursor;
+      syncProbe();
       request();
     };
+    const onAltKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Alt') return;
+      // Keep Alt from focusing the browser menu bar while probing.
+      if (e.type === 'keyup' && ctrl.probe?.target.kind === 'pin') e.preventDefault();
+      ctrl.setAlt(e.type === 'keydown');
+    };
+    const onWinBlur = () => ctrl.setAlt(false);
+    window.addEventListener('keydown', onAltKey);
+    window.addEventListener('keyup', onAltKey);
+    window.addEventListener('blur', onWinBlur);
 
     const resize = () => {
       rect = canvas.getBoundingClientRect();
@@ -130,6 +185,7 @@ export function Canvas() {
       ctrl.down(input(e));
     };
     const onMove = (e: PointerEvent) => {
+      if (e.altKey !== ctrl.altHeld) ctrl.altHeld = e.altKey;
       const events = e.getCoalescedEvents?.() ?? [];
       const last = events.length ? events[events.length - 1]! : e;
       ctrl.move({ ...input(e), x: last.clientX - rect.left, y: last.clientY - rect.top });
@@ -200,6 +256,18 @@ export function Canvas() {
       const parsed = PartType.safeParse(e.dataTransfer?.getData(PART_MIME));
       if (!parsed.success) return;
       const st = useEditor.getState();
+      if (parsed.data === 'chip') {
+        // Handled here; keep the chips library's document-level drop from placing it twice.
+        e.stopPropagation();
+        const chipId = e.dataTransfer?.getData(CHIP_MIME) ?? '';
+        if (st.readOnly || !st.chips[chipId]) return;
+        if (!canPlaceChip(st.chips, chipId, st.editStack.map((f) => f.chipId))) {
+          st.toast(t('canvas.chipRecursive', { chip: st.chips[chipId]!.name }), 'error');
+          return;
+        }
+        if (placeChip(chipId, ctrl.lastWorld) && !st.toolLocked) st.setTool('select');
+        return;
+      }
       if (!isPartAllowed(st.level, parsed.data)) {
         st.toast(t('canvas.notAllowed', { part: t(`part.${parsed.data}`) }), 'error');
         return;
@@ -227,6 +295,10 @@ export function Canvas() {
 
     return () => {
       cancelAnimationFrame(raf);
+      window.clearTimeout(probeTimer);
+      window.removeEventListener('keydown', onAltKey);
+      window.removeEventListener('keyup', onAltKey);
+      window.removeEventListener('blur', onWinBlur);
       ro.disconnect();
       dprQuery?.removeEventListener('change', onDpr);
       unsub();
@@ -253,6 +325,8 @@ export function Canvas() {
     <>
       <canvas ref={ref} className="board-canvas" aria-label={t('canvas.aria')} role="application" tabIndex={-1} />
       <LabelEditor />
+      <Probe probe={probe} />
+      <NumberInputPopover />
     </>
   );
 }

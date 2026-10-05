@@ -1,0 +1,170 @@
+/* Properties panel settings (steppers, selects) and the ROM hex editor. */
+
+.gu-btn--sm {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+.gu-btn--primary {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.gu-btn--primary:hover {
+  background: var(--accent-strong);
+}
+.gu-btn--block {
+  width: 100%;
+}
+
+.gu-stepper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.gu-stepper .gu-input {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+.gu-stepper .gu-icon-btn {
+  flex: none;
+  font-size: 16px;
+}
+.gu-select {
+  height: 32px;
+  width: 100%;
+  padding: 0 8px;
+  border: 1px solid var(--island-border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font: 13px var(--font-ui);
+}
+.gu-select:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--active);
+}
+.gu-field__note {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.gu-field__error {
+  font-size: 11px;
+  color: var(--danger);
+}
+.gu-field__warn {
+  font-size: 11px;
+  color: var(--warning);
+}
+
+/* ---------- Hex editor ---------- */
+.gu-hex {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.gu-hex__bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.gu-hex__spacer {
+  flex: 1;
+}
+.gu-dialog__body p.gu-hex__help,
+.gu-dialog__body p.gu-hex__empty {
+  font-size: 12px;
+}
+.gu-hex__frame {
+  overflow-x: auto;
+  border: 1px solid var(--island-border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+.gu-hex__scroll {
+  position: relative;
+  overflow-y: auto;
+  overflow-x: hidden;
+  width: max-content;
+  min-width: 100%;
+  outline: none;
+  font: 13px/24px var(--font-mono);
+}
+.gu-hex__scroll:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.gu-hex__inner {
+  position: relative;
+}
+.gu-hex__row {
+  display: grid;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  column-gap: 2px;
+  font: 13px/24px var(--font-mono);
+  white-space: pre;
+}
+.gu-hex__inner .gu-hex__row {
+  position: absolute;
+  left: 0;
+  right: 0;
+}
+.gu-hex__row--head {
+  width: max-content;
+  min-width: 100%;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--island-border);
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.gu-hex__row--head span {
+  text-align: center;
+}
+.gu-hex__row--head span:first-child {
+  text-align: left;
+}
+.gu-hex__addr {
+  color: var(--text-faint);
+}
+.gu-hex__cell {
+  text-align: center;
+  border-radius: 3px;
+  cursor: text;
+  color: var(--text);
+}
+.gu-hex__cell--zero {
+  color: var(--text-faint);
+}
+.gu-hex__cell--active {
+  background: var(--active);
+  color: var(--text);
+}
+.gu-hex__cell--bad {
+  box-shadow: inset 0 -2px 0 var(--danger);
+}
+.gu-hex__nib {
+  border-bottom: 2px solid var(--accent);
+}
+.gu-hex__scroll:not(:focus) .gu-hex__nib {
+  border-bottom-color: transparent;
+}
+.gu-hex__ascii {
+  padding-left: 12px;
+  color: var(--text-muted);
+}
+.gu-hex__errors {
+  margin: 0;
+  padding: 0 0 0 18px;
+  font-size: 12px;
+  color: var(--danger);
+}
+.gu-hex__note {
+  list-style: none;
+  margin-left: -18px;
+  color: var(--text-muted);
+}

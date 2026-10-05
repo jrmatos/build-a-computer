@@ -233,7 +233,7 @@ const orBody = <path d="M8 4h5c5 0 9 4 11 8-2 4-6 8-11 8H8c2.5-5 2.5-11 0-16z" /
 const xorTail = <path d="M5 4c2.5 5 2.5 11 0 16" />;
 const bubble = (cx: number) => <circle cx={cx} cy="12" r="2" />;
 
-const SYMBOLS: Partial<Record<PartType, ReactNode>> = {
+const SYMBOLS: Record<PartType, ReactNode> = {
   nand: (
     <>
       {leads2}
@@ -303,9 +303,7 @@ const SYMBOLS: Partial<Record<PartType, ReactNode>> = {
       <path d="M12 8l8 8M20 8l-8 8" />
     </>
   ),
-  clock: (
-<path d="M3 16h4V8h5v8h5V8h5v8h5" />
-  ),
+  clock: <path d="M3 16h4V8h5v8h5V8h5v8h5" />,
   dff: (
     <>
       <rect x="8" y="3" width="16" height="18" rx="1.5" />
@@ -314,6 +312,112 @@ const SYMBOLS: Partial<Record<PartType, ReactNode>> = {
       <text x="12.5" y="10.5" fontSize="6" fill="currentColor" stroke="none" fontFamily="var(--font-mono)">
         D
       </text>
+    </>
+  ),
+  button: (
+    <>
+      <circle cx="14" cy="12" r="7" />
+      <circle cx="14" cy="12" r="3.25" fill="currentColor" />
+      <path d="M21 12h9" />
+    </>
+  ),
+  const: (
+    <>
+      <rect x="4" y="6" width="16" height="12" rx="2" />
+      <path d="M10.5 10l2-1.5v7.5" />
+      <path d="M20 12h10" />
+    </>
+  ),
+  buffer: (
+    <>
+      <path d="M2 12h7" />
+      <path d="M9 5l13 7-13 7z" />
+      <path d="M22 12h8" />
+    </>
+  ),
+  tristate: (
+    <>
+      <path d="M2 10h7" />
+      <path d="M9 3l13 7-13 7z" />
+      <path d="M22 10h8" />
+      <path d="M15.5 22v-8.5" />
+    </>
+  ),
+  splitter: (
+    <>
+      <path d="M2 12h9" strokeWidth={3.25} strokeLinecap="butt" />
+      <path d="M12 3v18" strokeWidth={3} />
+      <path d="M13.5 5h15M13.5 9.7h15M13.5 14.3h15M13.5 19h15" />
+    </>
+  ),
+  joiner: (
+    <>
+      <path d="M3.5 5h15M3.5 9.7h15M3.5 14.3h15M3.5 19h15" />
+      <path d="M20 3v18" strokeWidth={3} />
+      <path d="M21 12h9" strokeWidth={3.25} strokeLinecap="butt" />
+    </>
+  ),
+  register: (
+    <>
+      <rect x="7" y="3" width="18" height="18" rx="1.5" />
+      <path d="M2 7h5M2 12h5M25 12h5" />
+      <path d="M7 15.5l3 2.5-3 2.5" />
+      <rect x="11.5" y="9.5" width="10" height="5" rx="1" fill="currentColor" fillOpacity={0.25} />
+    </>
+  ),
+  counter: (
+    <>
+      <rect x="7" y="3" width="18" height="18" rx="1.5" />
+      <path d="M2 7h5M25 12h5" />
+      <path d="M7 15.5l3 2.5-3 2.5" />
+      <path d="M13 12h5M15.5 9.5v5M20 9l1.5-1v6.5" />
+    </>
+  ),
+  ram: (
+    <>
+      <rect x="7" y="3" width="18" height="18" rx="1.5" />
+      <path d="M7 9h18M7 15h18M16 3v18" />
+      <path d="M2 7h5M2 12h5M2 17h5M25 12h5" />
+    </>
+  ),
+  rom: (
+    <>
+      <rect x="7" y="3" width="18" height="18" rx="1.5" />
+      <path d="M7 7.5h18M7 12h18M7 16.5h18" />
+      <path d="M2 12h5M25 12h5" />
+    </>
+  ),
+  mux: (
+    <>
+      <path d="M9 2l13 4.5v11L9 22z" />
+      <path d="M2 8h7M2 16h7M22 12h8" />
+      <path d="M15.5 23v-3" />
+    </>
+  ),
+  decoder: (
+    <>
+      <path d="M9 6.5L22 2v20L9 17.5z" />
+      <path d="M2 12h7M22 5.5h8M22 10h8M22 14h8M22 18.5h8" />
+    </>
+  ),
+  adder: (
+    <>
+      <rect x="7" y="3" width="18" height="18" rx="1.5" />
+      <path d="M16 8v8M12 12h8" />
+      <path d="M2 7h5M2 17h5M25 12h5" />
+    </>
+  ),
+  alu: (
+    <>
+      <path d="M8 2l15 5v10L8 22v-7.5l3.5-2.5L8 9.5z" />
+      <path d="M2 6h6M2 18h6M23 12h7" />
+    </>
+  ),
+  chip: (
+    <>
+      <rect x="7" y="3" width="18" height="18" rx="3" fill="currentColor" fillOpacity={0.18} />
+      <path d="M2 7.5h5M2 12h5M2 16.5h5M25 9h5M25 15h5" />
+      <path d="M12 3v2.5M20 3v2.5" />
     </>
   ),
 };

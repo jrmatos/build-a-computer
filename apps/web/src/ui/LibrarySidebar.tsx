@@ -5,6 +5,7 @@ import { t } from '../i18n';
 import { IconClose, IconLock, IconSearch, PartSymbol } from './icons';
 import { isPartAllowed, paletteKeys } from './shortcuts';
 import { startPartDrag } from './Toolbar';
+import { MyChips } from './chips/MyChips';
 import './ui.css';
 
 /** Right sliding panel with every part, grouped. Parts outside the level palette are locked. */
@@ -71,6 +72,7 @@ export function LibrarySidebar() {
         />
       </div>
       <div className="gu-library__body">
+        <MyChips query={query} onPlaced={close} />
         {groups.length === 0 && <p className="gu-muted">{t('library.empty', { q: query })}</p>}
         {groups.map((g) => (
           <section key={g.key} className="gu-library__group">

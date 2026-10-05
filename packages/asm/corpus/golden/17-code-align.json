@@ -1,0 +1,14 @@
+{
+  "source": "17-code-align.s",
+  "tool": "GNU as/ld 2.40, -march=rv32ima_zicsr_zifencei -mabi=ilp32 -mno-relax, base 0x80000000",
+  "size": 48,
+  "image": [
+    "1300000013000000130000000100010013000000010201001300000001020300",
+    "67800000090001001300000013000000"
+  ],
+  "symbols": {
+    "_start": "0x80000000",
+    "aligned8": "0x80000008",
+    "aligned16": "0x80000010"
+  }
+}
