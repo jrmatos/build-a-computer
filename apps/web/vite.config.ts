@@ -87,5 +87,6 @@ export default defineConfig({
     watch:
       process.env.CHOKIDAR_USEPOLLING === 'true' ? { usePolling: true, interval: 300 } : undefined,
   },
-  test: { environment: 'node' },
+  // Kernel-booting and full-level tests run real programs; CI runners are slower than dev machines.
+  test: { environment: 'node', testTimeout: 30_000 },
 } as Parameters<typeof defineConfig>[0]);
