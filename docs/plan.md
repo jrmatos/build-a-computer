@@ -1,4 +1,4 @@
-<!-- Snapshot of the Claude Doc "Build a Computer — Platform Implementation Plan" (rev 47, 2026-10-05). The doc is the source of truth: https://claude.ai/artifact/SHKETuSK6EnuuL993dDKWi -->
+<!-- Snapshot of the Claude Doc "Build a Computer — Platform Implementation Plan" (rev 57). The doc is the source of truth: https://claude.ai/artifact/SHKETuSK6EnuuL993dDKWi -->
 
 # Build a Computer — Platform Implementation Plan
 
@@ -37,11 +37,11 @@ Each level has a short tutorial, progressive hints, and 2 to 4 verified links to
 
 ## Status
 
-Both tracks play end to end at [jrmatos.github.io/build-a-computer](https://jrmatos.github.io/build-a-computer/): Track 1 has all 88 levels from one NAND gate to an OS on the player's own CPU, and Track 2 all 31 levels from one neuron to a tiny GPT. Every level is still a draft awaiting owner review. 1,940 tests pass, the first level loads 312 KB of JavaScript (budget 400 KB), and CI enforces every performance budget.
+Both tracks play end to end at [jrmatos.github.io/build-a-computer](https://jrmatos.github.io/build-a-computer/): Track 1 has all 88 levels from one NAND gate to an OS on the player's own CPU, and Track 2 all 31 levels from one neuron to a tiny GPT. Every level is still a draft awaiting owner review. the full test suite passes, the first level loads 352 KB of JavaScript (budget 400 KB), and CI enforces every performance budget.
 
 | Milestone | Status | Notes |
 | --- | --- | --- |
-| M0 Foundations | Done | Monorepo, CI, schemas, ADRs 001–009 |
+| M0 Foundations | Done | Monorepo, CI, schemas, ADRs 001–010 |
 | M1 Logic simulation core | Done | Reference and fast engines, 1–32-bit buses, fuzzed tick for tick |
 | M2 Board editor | Done | Excalidraw-style canvas; 2,000 parts at 60 fps |
 | M3 Levels and first playable | Done | Public on GitHub Pages; offline as an installable app |
@@ -52,8 +52,8 @@ Both tracks play end to end at [jrmatos.github.io/build-a-computer](https://jrma
 | M8 Assembly and debugger | Done | Assembler byte-identical to GNU on 20/20 programs; editor and debugger |
 | M9 Devices, traps and privilege | Done | UART, CLINT, PLIC, keyboard, framebuffer, block device, Sv32 |
 | M10 C compiler and libc | Done | 74/74 programs match riscv-gcc; libc written in C |
-| M11 Operating system | Done | 10 OS levels; process and page-table visualizers (OS-05) open |
-| M12 Platform and tensor engine | Partly | Tensor engine on CPU and WebGPU, with GPU-resident training (checked on NVIDIA, Intel and SwiftShader); track and mode plugins in platform-core (PLAT-01, ADR-010) |
+| M11 Operating system | Done | 10 OS levels; a Kernel tab shows processes, page tables, physical frames and files (OS-05) |
+| M12 Platform and tensor engine | Done | Mode plugins in platform-core (PLAT-01, ADR-010); WebGPU verified on real NVIDIA and Intel GPUs; Track 2 trains on the GPU when available |
 | M13 LLM track content | Done | 31 levels in JavaScript, run in a sandbox |
 | M14 Community | Done | Share links, level editor, level packs, local best results |
 
@@ -63,18 +63,19 @@ Both tracks play end to end at [jrmatos.github.io/build-a-computer](https://jrma
 - 58 achievements, kept locally and carried in the workspace file.
 - A Show solution button (ADR-007) and hint ladders that end in exact wiring.
 
+- A test-cases view for every level: each case's setup and expectations before running, why it passed or failed, run one case, search and CSV export.
+
 ### Changes from the plan
 
 - Track 2 levels are JavaScript in a sandboxed worker (no network, time limits, seeded randomness), not a graph editor.
 - Buses carry at most 32 bits, not 64 (ADR-006).
 - The teaching kernel runs in machine mode and user programs in user mode, with no supervisor mode (`docs/os.md`).
 - Plain `char` is unsigned, matching GCC on RISC-V.
-- Plugins are per level mode (board, code, js), grouped by track, and checkers are per mode with per-kind runners (ADR-010).
 
 ### Still open
 
 - Owner review: all level text, the Toy-8 ISA, ADRs 001–010, the JavaScript sandbox's security, and new dependencies (CodeMirror, vite-plugin-pwa).
-- OS-05, and the Drive and Dropbox providers. (Real-GPU check: `pnpm --filter @build-a-computer/tensor gpu-check` against /gpu-check.html.)
+- The Drive and Dropbox providers (STO-06, STO-07).
 - WebKit's offline test is skipped: Playwright's WebKit offline mode stops the reload before the service worker answers. Cross-browser end-to-end tests (Chromium, Firefox, WebKit, touch on two phones) and axe checks run in CI.
 
 ## How AI agents use this plan
