@@ -11,7 +11,8 @@ export { PHASE3_LAST_ID } from './common';
  * Tiny GPT (4) and Beyond (4), in play order. Phase 4 starts after the last
  * Phase 3 level. 'js' mode: the player writes main.js and tests call its
  * exports (docs/js-levels.md). Phases 6 and 7 add the read-only gpt.js
- * library; text comes from the 'text-macbeth' and 'text-sonnets' datasets
+ * helpers around the 'nn' GPT (training runs on the GPU when there is one);
+ * text comes from the 'text-macbeth' and 'text-sonnets' datasets
  * (content/datasets/text, LICENSES.md). DRAFT (owner approves curriculum text).
  */
 export const TRACK2_P4_7_LEVELS: Level[] = [...PHASE4, ...PHASE5, ...PHASE6, ...PHASE7];

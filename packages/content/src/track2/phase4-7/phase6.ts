@@ -6,9 +6,11 @@ import { makeBatch, sampleNext, smoothCurve, splitData, uGrid, windowStarts, typ
 /**
  * Track 2, Phase 6 (Tiny GPT): the data pipeline, training a 1-layer GPT
  * (d_model 32, context 32, 4 heads, about 18,000 parameters) on Macbeth with
- * the read-only gpt.js library, loss curves and perplexity, and sampling.
- * Training tests are seeded and bound the loss from above with wide margins
- * (E-ML-02); each one trains for a few seconds on a CPU. DRAFT text.
+ * the 'nn' GPT (helpers in the read-only gpt.js), loss curves and perplexity,
+ * and sampling. The model trains on the GPU when there is one (E-ML-01),
+ * else on the CPU. Training tests are seeded and bound the loss from above
+ * with wide margins that hold on both devices (E-ML-02); each one trains for
+ * about 10 seconds on a CPU. DRAFT text.
  */
 
 const IDS = Array.from({ length: 20 }, (_, i) => (i * 7) % 11);
@@ -17,22 +19,25 @@ const LOGITS = [2, 1.5, 0.3, -1, 1.5, 0.9, -0.2, 3];
 const sampleCase = (name: string, opts: SampleOpts, n = 40) =>
   eq(name, 'sampleMany', [LOGITS, opts, uGrid(n)], uGrid(n).map((u) => sampleNext(LOGITS, opts, u)));
 
-/** Steps for the training tests: about 5 to 10 seconds of CPU each. */
+/** Steps for the training tests: about 10 seconds of CPU each (well under 1 on a GPU). */
 export const TRAIN_STEPS = 300;
 export const CURVE_STEPS = 200;
 
 const GPT_USAGE = code(`
-import { createGPT, gptForward, zeroGrad, backward, createAdam, adamStep, rng, randomBatch, evalLoss, charVocab, encodeChars } from './gpt.js';
+import { Adam } from 'optim';
+import { crossEntropy } from 'nn';
+import { createGPT, rng, randomBatch, evalLoss, charVocab, encodeChars } from './gpt.js';
 
-const model = createGPT({ vocabSize, blockSize: 32, dModel: 32, nHead: 4, nLayer: 1, seed: 1 });
-const opt = createAdam(model);
-const r = rng(1);                                  // seeded: the same run every time
-const { x, y } = randomBatch(trainIds, 8, 32, r);  // 8 windows of 32 tokens, y shifted by one
-const { loss } = gptForward(model, x, 8, 32, y);   // mean cross-entropy, a 1 x 1 tensor
-zeroGrad(model);
-backward(loss);
-adamStep(model, opt, 0.01);
-evalLoss(model, valIds, 32);                       // mean loss on fixed windows, no training
+const model = createGPT({ vocabSize, blockSize: 32, dModel: 32, nHead: 4, nLayer: 1, seed: 1 }); // on the GPU if there is one
+const opt = new Adam(model.parameters(), { lr: 0.01 });
+const r = rng(1);                                    // seeded: the same run every time
+const { x, y } = randomBatch(trainIds, 8, 32, r);    // x: 8 windows of 32 ids (a tensor), y: the next id at each position
+const loss = crossEntropy(model.forward(x), y);      // mean cross-entropy, a 1-element tensor
+opt.zeroGrad();
+loss.backward();
+opt.step();
+report({ loss });                                    // one point on the loss curve
+await evalLoss(model, valIds, 32);                   // mean loss on fixed windows, no training
 `);
 
 export const PHASE6: Level[] = [
@@ -61,7 +66,7 @@ makeBatch(ids, [0, 5], 3)  // { x: [ids 0-2, ids 5-7], y: [ids 1-3, ids 6-8] }
     ],
     afterword:
       'Real pipelines do the same with billions of tokens: tokenize once, store the ids in a flat file, and cut random windows from it. ' +
-      'The gpt.js library you use next has randomBatch, which is makeBatch with random starts.',
+      'The gpt.js library you use next has randomBatch, which is makeBatch with random starts and x packed into a [B, T] tensor for the model.',
     js: jsSetup({
       starter: `// The data pipeline.
 
@@ -99,31 +104,37 @@ export function windowStarts(length, T) {
     order: 2,
     title: 'Training on public-domain text',
     goal:
-      'Train a tiny GPT on Macbeth with the provided gpt.js. Export train(steps): split 90/10, run `steps` Adam steps on random batches, and return { trainLoss, valLoss } from evalLoss. ' +
+      'Train a tiny GPT on Macbeth. Export async train(steps): split 90/10, run `steps` Adam steps on random batches, and return { trainLoss, valLoss } from evalLoss. ' +
       `After ${TRAIN_STEPS} steps the validation loss must be below 2.8 (uniform guessing is ln ${MACBETH_VOCAB_SIZE} ≈ 4.22).`,
     tutorial:
-      'Time to train a real transformer. gpt.js (read only, open its tab) contains everything from Phase 5 plus a backward pass for each piece, written on flat Float64Arrays so it runs fast enough on a CPU. ' +
+      'Time to train a real transformer. The `GPT` class of the nn module is everything you built in Phase 5 (embeddings, causal multi-head attention, layer norm, MLP, residuals), with a backward pass for each piece. ' +
+      'gpt.js (read only, open its tab) adds a few helpers: createGPT builds one with seeded weights, randomBatch cuts windows, evalLoss measures. ' +
       'The model is one block with d_model 32, 4 heads and a context of 32 characters: about 18,000 parameters.\n\n' +
       'The training loop is the one you wrote in Phase 3: batch, forward, zero the gradients, backward, step.\n\n' +
       GPT_USAGE +
-      '\n\nUse a seeded generator (`rng`) for the batches: the same seed gives the same run, which is how the tests can check a training result. ' +
+      '\n\n**The GPU.** createGPT moves the model to the GPU when this computer has one (`model.to(\'auto\')`; the badge above the training panel shows which device ran). ' +
+      'Then every step runs on the GPU and nothing is copied back, so a loss is not a plain number yet: read it with `await loss.itemAsync()` (which is why evalLoss is async and train must be `async`). ' +
+      '`report({ loss })` takes the tensor as it is. Without a GPU the same code runs on the CPU.\n\n' +
+      'Use a seeded generator (`rng`) for the batches: the same seed gives the same run, which is how the tests can check a training result. ' +
       'A learning rate of 0.01 with batches of 8 windows works well. The loss starts near 4.2 and falls fast at first, then slowly.',
     hints: [
       'Load and encode: const text = await load("text-macbeth"); const vocab = charVocab(text); const ids = encodeChars(vocab, text).',
       'Split: n = Math.floor(ids.length * 0.9); train on ids.slice(0, n), validate on ids.slice(n).',
-      'Create the model with vocabSize: vocab.length and blockSize 32, then loop steps times: randomBatch(trainIds, 8, 32, r) → gptForward → zeroGrad → backward → adamStep(model, opt, 0.01).',
-      'Return { trainLoss: evalLoss(model, trainIds, 32), valLoss: evalLoss(model, valIds, 32) }. With 0 steps you get the untrained loss, close to 4.22.',
+      'Create the model with vocabSize: vocab.length and blockSize 32 and an Adam over model.parameters(), then loop steps times: randomBatch(trainIds, 8, 32, r) → crossEntropy(model.forward(x), y) → opt.zeroGrad() → loss.backward() → opt.step().',
+      'Return { trainLoss: await evalLoss(model, trainIds, 32), valLoss: await evalLoss(model, valIds, 32) }. With 0 steps you get the untrained loss, close to 4.22.',
     ],
     afterword:
-      'The same loop, with more layers, wider rows, a GPU and a few billion more tokens, trains GPT-2. The model now beats the bigram model a little; ' +
+      'The same loop, with more layers, wider rows, many GPUs and a few billion more tokens, trains GPT-2. The model now beats the bigram model a little; ' +
       'with more steps and layers it starts to spell words and form lines that look like verse.',
     js: jsSetup({
       datasets: [MACBETH],
       library: [GPT_LIBRARY],
       training: true,
-      starter: `// Train a tiny GPT on Macbeth.
+      starter: `// Train a tiny GPT on Macbeth (on the GPU when there is one).
 import { load } from 'data';
-import { adamStep, backward, charVocab, createAdam, createGPT, encodeChars, evalLoss, gptForward, randomBatch, rng, zeroGrad } from './gpt.js';
+import { crossEntropy } from 'nn';
+import { Adam } from 'optim';
+import { charVocab, createGPT, encodeChars, evalLoss, randomBatch, rng } from './gpt.js';
 
 const T = 32; // context length
 const B = 8; // windows per batch
@@ -131,8 +142,8 @@ const B = 8; // windows per batch
 export async function train(steps) {
   const text = await load('text-macbeth');
   // TODO: vocabulary, ids, 90/10 split
-  // TODO: createGPT({ vocabSize, blockSize: T, dModel: 32, nHead: 4, nLayer: 1, seed: 1 }), createAdam, rng(1)
-  // TODO: the training loop
+  // TODO: createGPT({ vocabSize, blockSize: T, dModel: 32, nHead: 4, nLayer: 1, seed: 1 }), new Adam(model.parameters(), { lr: 0.01 }), rng(1)
+  // TODO: the training loop (report({ loss }) each step draws the curve)
   return { trainLoss: NaN, valLoss: NaN };
 }
 `,
@@ -162,12 +173,18 @@ smoothed = m / (1 - beta ** (i + 1));  // bias correction for step i (0-based)
       '\n\nWithout the correction the curve would start near 0, because m starts at 0; dividing by 1 - beta^(i+1) undoes that, so the first smoothed value is the first loss. Adam uses the same correction.\n\n' +
       '**Perplexity** is e raised to the mean cross-entropy (in nats). It reads as "the model is as unsure as if it chose uniformly among this many tokens": ' +
       'an untrained model over 68 characters has perplexity 68, and a perfect one has 1.\n\n' +
-      'Watch the training panel while it runs: report the loss each step if you want to see the curve live.',
+      'Watch the training panel while it runs: report the loss each step if you want to see the curve live.\n\n' +
+      'On the GPU, reading a loss back makes the CPU wait for the GPU. Ask for every value without waiting, and wait once at the end:\n\n' +
+      code(`
+losses.push(loss.itemAsync());               // a promise: the copy back starts now
+// ... after the loop:
+const values = await Promise.all(losses);    // plain numbers
+`),
     hints: [
       'perplexity is Math.exp(meanLoss).',
       'smoothCurve: keep m outside a values.map((v, i) => ...) and return m / (1 - Math.pow(beta, i + 1)).',
-      'trainWithCurve is your train loop from the last level with losses.push(loss.item()) after each forward pass.',
-      'start = smooth[0], end = smooth[smooth.length - 1], drop = start - end; valLoss from evalLoss on the validation ids, valPerplexity = perplexity(valLoss).',
+      'trainWithCurve is your train loop from the last level with losses.push(loss.itemAsync()) after each forward pass, then const values = await Promise.all(losses).',
+      'start = smooth[0], end = smooth[smooth.length - 1], drop = start - end; valLoss = await evalLoss(model, valIds, 32), valPerplexity = perplexity(valLoss).',
     ],
     afterword:
       'Papers report perplexity because it does not depend on the log base and is easy to compare. Comparisons only make sense with the same tokenizer, though: ' +
@@ -178,7 +195,9 @@ smoothed = m / (1 - beta ** (i + 1));  // bias correction for step i (0-based)
       training: true,
       starter: `// Loss curves and perplexity.
 import { load } from 'data';
-import { adamStep, backward, charVocab, createAdam, createGPT, encodeChars, evalLoss, gptForward, randomBatch, rng, zeroGrad } from './gpt.js';
+import { crossEntropy } from 'nn';
+import { Adam } from 'optim';
+import { charVocab, createGPT, encodeChars, evalLoss, randomBatch, rng } from './gpt.js';
 
 export function perplexity(meanLoss) {
   // TODO
@@ -192,8 +211,8 @@ export function smoothCurve(values, beta) {
 
 export async function trainWithCurve(steps) {
   const losses = [];
-  // TODO: train as in the last level, pushing loss.item() every step
-  const smooth = smoothCurve(losses, 0.9);
+  // TODO: train as in the last level, pushing loss.itemAsync() every step
+  const smooth = smoothCurve(await Promise.all(losses), 0.9);
   return { start: NaN, end: NaN, drop: NaN, valLoss: NaN, valPerplexity: NaN };
 }
 `,
@@ -232,7 +251,8 @@ export async function trainWithCurve(steps) {
 5. topP: renormalize the kept probabilities; keep the shortest prefix whose sum is >= topP
 6. renormalize again; walk the kept ids adding probabilities; return the first id where the sum is > u
 `) +
-      '\n\nWith gpt.js, generation is: `const id = sampleNext(nextLogits(model, ids), { temperature: 0.8, topK: 10 }, Math.random())`, push the id, repeat.',
+      '\n\nWith gpt.js, generation is: `const id = sampleNext(await nextLogits(model, ids), { temperature: 0.8, topK: 10 }, Math.random())`, push the id, repeat. ' +
+      'The model runs on the GPU, but sampling is a few dozen numbers, so it happens on the CPU after nextLogits reads the logits back.',
     hints: [
       'Start with temperature 0: loop over the logits and keep the index of the largest (use > so the first one wins ties).',
       'Sort indices, not probabilities: probs.map((p, i) => i).sort((a, b) => probs[b] - probs[a] || a - b).',

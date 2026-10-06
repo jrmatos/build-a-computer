@@ -1,11 +1,10 @@
 import { readFileSync, statSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { runJsTest, type DatasetProvider } from '@build-a-computer/js-check';
+import { judgeJs, runJsTest, startJs, type DatasetProvider, type DeviceInfo, type GpuMode } from '@build-a-computer/js-check';
 import { Level } from '@build-a-computer/schema';
 import { DATASETS, datasetById } from '../../../datasets';
 import { TRACK2_P4_7_SOLUTIONS } from '../../../solutions/track2/phase4-7';
 import { TRACK2_P1_3_LEVELS } from '../phase1-3';
-import { GPT_JS } from './gpt-lib';
 import { MACBETH_VOCAB_SIZE, PHASE3_LAST_ID, type JsTest } from './common';
 import { TRACK2_P4_7_LEVELS } from './index';
 import { PREF_TEST, PREF_TRAIN } from './phase7';
@@ -20,9 +19,16 @@ const text = (file: string): string => readFileSync(new URL(`../../../datasets/t
 /** Runs one test of `l` on `source` through the real sandbox. */
 const run = (source: string, t: JsTest, l: Level) => runJsTest(source, t, l, { datasets });
 
-/** Imports gpt.js as a real ES module (for the gradient check). */
-type Gpt = Record<string, (...a: never[]) => unknown>;
-const gpt = (): Promise<Gpt> => import(/* @vite-ignore */ `data:text/javascript;base64,${Buffer.from(GPT_JS).toString('base64')}`) as Promise<Gpt>;
+/** Runs `entry(...args)` of `source` in the sandbox of level `l` with a GPU mode; returns the outcome and device reports. */
+async function runOn(gpu: GpuMode, source: string, l: Level, entry: string, args: unknown[], timeoutMs = 300_000) {
+  const devices: DeviceInfo[] = [];
+  const out = await startJs({ source, level: l, entry, args, gpu, seed: 1, timeoutMs }, { datasets, onDevice: (d) => devices.push(d) }).done;
+  return { out, devices, usedGpu: devices.some((d) => d.used) };
+}
+const level = (id: string): Level => levels.find((l) => l.id === id)!;
+
+/** Levels whose training runs on the tensor modules (on the GPU when there is one). */
+const GPU_LEVELS = ['train-tiny-gpt', 'loss-perplexity', 'fine-tuning', 'lora', 'scaling-experiment'];
 
 describe('Track 2, phases 4 to 7', () => {
   it('are 18 valid draft js levels in play order', () => {
@@ -124,45 +130,34 @@ describe('Track 2, phases 4 to 7', () => {
     expect(Math.exp(f.a)).toBeCloseTo(2, 10);
   });
 
-  it('E-ML-05: gpt.js gradients match float64 finite differences', async () => {
-    const G = (await gpt()) as unknown as {
-      createGPT(c: object): { params: Record<string, { data: Float64Array; grad: Float64Array | null }> };
-      gptForward(m: unknown, x: number[], B: number, T: number, y: number[]): { loss: { item(): number } };
-      backward(l: unknown): void;
-      clearTape(): void;
-      zeroGrad(m: unknown): void;
-      rng(s: number): () => number;
-    };
-    const m = G.createGPT({ vocabSize: 7, blockSize: 5, dModel: 8, nHead: 2, nLayer: 2, seed: 3 });
-    const r = G.rng(9);
-    for (const p of Object.values(m.params)) for (let i = 0; i < p.data.length; i++) p.data[i]! += (r() - 0.5) * 0.5;
-    const x = [1, 2, 3, 4, 0, 6, 5, 4, 3, 2];
-    const y = [2, 3, 4, 0, 1, 5, 4, 3, 2, 1];
-    const loss = (): number => {
-      const l = G.gptForward(m, x, 2, 5, y).loss.item();
-      G.clearTape();
-      return l;
-    };
-    G.zeroGrad(m);
-    G.backward(G.gptForward(m, x, 2, 5, y).loss);
-    let worst = 0;
-    for (const [name, p] of Object.entries(m.params)) {
-      const stride = Math.max(1, Math.floor(p.data.length / 7));
-      for (let i = 0; i < p.data.length; i += stride) {
-        const o = p.data[i]!;
-        p.data[i] = o + 1e-6;
-        const up = loss();
-        p.data[i] = o - 1e-6;
-        const down = loss();
-        p.data[i] = o;
-        const num = (up - down) / 2e-6;
-        const an = p.grad?.[i] ?? 0;
-        const err = Math.abs(num - an) / Math.max(1e-6, Math.abs(num) + Math.abs(an));
-        expect(err, `${name}[${i}]`).toBeLessThan(1e-4);
-        worst = Math.max(worst, err);
-      }
+  it('training levels unlock the tensor modules gpt.js and the reference solutions import', () => {
+    for (const id of GPU_LEVELS) {
+      const l = level(id);
+      expect(l.js?.training, id).toBe(true);
+      for (const m of ['tensor', 'autograd', 'nn', 'optim'] as const) expect(l.js?.modules, `${id}: ${m}`).toContain(m);
     }
-    expect(worst).toBeLessThan(1e-4);
+  });
+
+  it('gpt.js: batches are [B, T] tensors, evalLoss uses fixed windows, cloneModel copies exactly, nextLogits has one logit per token', async () => {
+    const src = `
+import { charVocab, cloneModel, createGPT, decodeChars, encodeChars, evalLoss, nextLogits, numParams, randomBatch, rng } from './gpt.js';
+export async function main() {
+  const vocab = charVocab('to be or not to be');
+  const ids = encodeChars(vocab, 'to be or not to be, that is the question'.replace(/[^tobe rn]/g, ''));
+  const model = createGPT({ vocabSize: vocab.length, blockSize: 8, dModel: 16, nHead: 2, nLayer: 1, seed: 3 });
+  const { x, y } = randomBatch(ids, 3, 8, rng(1));
+  const a = await evalLoss(model, ids, 8, 2, 2);
+  const copy = await cloneModel(model);
+  return {
+    shape: x.shape, ys: y.length,
+    same: a === (await evalLoss(model, ids, 8, 2, 2)), cloned: a - (await evalLoss(copy, ids, 8, 2, 2)),
+    logits: (await nextLogits(model, ids.slice(0, 20))).length, params: numParams(model), round: decodeChars(vocab, ids.slice(0, 5)),
+  };
+}`;
+    const { out } = await runOn('off', src, level('train-tiny-gpt'), 'main', []);
+    expect(out.error, JSON.stringify(out.error)).toBeUndefined();
+    expect(out.result).toMatchObject({ shape: [3, 8], ys: 24, same: true, cloned: 0, logits: 7, round: 'to be' });
+    expect((out.result as { params: number }).params).toBeGreaterThan(1000);
   });
 });
 
@@ -180,6 +175,54 @@ describe.concurrent('Track 2, phases 4 to 7: starters and reference solutions in
       const results = await Promise.all(jsTests(l).map((t) => run(TRACK2_P4_7_SOLUTIONS[l.id]!, t, l)));
       const failures = results.filter((r) => !r.pass).map((r) => `${r.message} (${r.summary ?? ''})`);
       expect(failures, l.id).toEqual([]);
+    }, 600_000);
+  }
+});
+
+/**
+ * E-ML-01/02: the training levels' code also runs on the GPU path. The
+ * emulated GPU (packages/tensor, WGSL kernels interpreted in JavaScript) is
+ * slower than the CPU here; every test of these levels still runs on it,
+ * and short runs check that both devices give the same numbers.
+ */
+describe.concurrent('Track 2, phases 4 to 7: training on the emulated GPU', () => {
+  for (const id of GPU_LEVELS) {
+    it(`${id}: the reference solution passes every test on the GPU`, async () => {
+      const l = level(id);
+      const runs = await Promise.all(jsTests(l).map((t) => runOn('emulated', TRACK2_P4_7_SOLUTIONS[id]!, l, t.entry, t.args ?? [], 900_000)));
+      jsTests(l).forEach((t, i) => {
+        const { out, usedGpu } = runs[i]!;
+        if (t.metric) expect(usedGpu, `${t.name}: trains on the GPU`).toBe(true);
+        const r = judgeJs(out, t);
+        expect(r.pass, `${t.name}: ${r.message}`).toBe(true);
+      });
+      if (id === 'train-tiny-gpt') expect((runs[0]!.out.result as { device?: string }).device).toBe('webgpu');
+    }, 900_000);
+  }
+
+  const SHORT: Record<string, { entry: string; args: unknown[]; keys: string[] }> = {
+    'train-tiny-gpt': { entry: 'train', args: [20], keys: ['trainLoss', 'valLoss'] },
+    'loss-perplexity': { entry: 'trainWithCurve', args: [15], keys: ['start', 'end', 'valLoss'] },
+    'fine-tuning': { entry: 'finetune', args: [10, 5], keys: ['before', 'after', 'macbethAfter'] },
+    lora: { entry: 'finetuneLora', args: [4, 40], keys: ['before', 'after'] },
+    'scaling-experiment': { entry: 'scalingRun', args: [[1, 4], 40], keys: [] },
+  };
+  for (const id of GPU_LEVELS) {
+    it(`${id}: GPU and CPU runs agree (same seed, E-ML-02 tolerance)`, async () => {
+      const { entry, args, keys } = SHORT[id]!;
+      const l = level(id);
+      const [gpu, cpu] = await Promise.all([
+        runOn('emulated', TRACK2_P4_7_SOLUTIONS[id]!, l, entry, args),
+        runOn('off', TRACK2_P4_7_SOLUTIONS[id]!, l, entry, args),
+      ]);
+      expect(gpu.out.error, JSON.stringify(gpu.out.error)).toBeUndefined();
+      expect(cpu.out.error, JSON.stringify(cpu.out.error)).toBeUndefined();
+      expect(gpu.usedGpu, id).toBe(true);
+      expect(cpu.usedGpu, id).toBe(false);
+      const g = gpu.out.result as Record<string, number | number[]>;
+      const c = cpu.out.result as Record<string, number | number[]>;
+      for (const k of keys) expect(Math.abs((g[k] as number) - (c[k] as number)), `${id}: ${k}`).toBeLessThan(0.02);
+      if (id === 'scaling-experiment') (g.losses as number[]).forEach((v, i) => expect(Math.abs(v - (c.losses as number[])[i]!)).toBeLessThan(0.02));
     }, 600_000);
   }
 });

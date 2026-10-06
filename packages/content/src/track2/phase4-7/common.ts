@@ -7,6 +7,8 @@ import { GPT_JS } from './gpt-lib';
  * library. Player code is an ES module (main.js) whose exports the tests
  * call (docs/js-levels.md). Training levels are seeded and sized for a CPU:
  * a 1-layer transformer with d_model 32 and context 32 trains in seconds.
+ * Their models and training loops use the tensor modules, so they run on the
+ * GPU when there is one (to('auto'), E-ML-01) with the same tests passing.
  */
 
 export type JsTest = Extract<TestSpec, { kind: 'js' }>;
@@ -32,7 +34,7 @@ export const MODULES: JsModule[] = ['tensor', 'autograd', 'nn', 'optim', 'data']
 /** A level's JS setup with the schema defaults filled in. */
 export const jsSetup = (s: Partial<JsSetup>): JsSetup => JsSetup.parse({ modules: MODULES, ...s });
 
-/** The read-only tiny GPT library, importable as './gpt.js'. */
+/** The read-only helpers around the 'nn' GPT, importable as './gpt.js'. */
 export const GPT_LIBRARY = { name: 'gpt.js', text: GPT_JS };
 
 /**

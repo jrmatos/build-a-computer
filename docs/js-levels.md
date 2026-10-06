@@ -101,6 +101,16 @@ return { valLoss: await valLoss.itemAsync() };       // await t.read() / t.itemA
   after their last use; `t.keep()` keeps one longer.
 - float64 (gradient checks, E-ML-05) and models too big for the GPU's
   buffers (E-ML-04) stay on the CPU with `to('auto')`.
+- Plain tensors move the same way: `tensor(rows, { requiresGrad: true }).to('auto')`
+  is a GPU leaf an optimizer can train (LoRA adapters, the scaling experiment).
+
+The Track 2 training levels of phases 6 and 7 (`train-tiny-gpt`,
+`loss-perplexity`, `fine-tuning`, `lora`, `scaling-experiment`) use this path:
+their read-only `gpt.js` is a thin helper over `nn.GPT` (`createGPT` calls
+`to('auto')`; `evalLoss`, `nextLogits` and `cloneModel` are async), and the
+player writes the loop with `nn`/`optim`. Their tests pass on both devices
+(content tests run them on the CPU and on the emulated GPU,
+`gpu: 'emulated'` in `startJs`).
 
 ## What is not available (ASM-05)
 

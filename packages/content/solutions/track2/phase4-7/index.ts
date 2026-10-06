@@ -2,9 +2,11 @@ import type { Level } from '@build-a-computer/schema';
 
 /**
  * Reference solutions (main.js) for the Track 2 levels of phases 4 to 7.
- * Library files (gpt.js) and datasets come from the level. Loaded by the
- * game only on "Show solution" (ADR-007); CI runs each one through
- * runJsTest (src/track2/phase4-7/phase4-7.test.ts).
+ * Library files (gpt.js) and datasets come from the level. The training
+ * solutions run on the GPU when there is one (to('auto')), else on the CPU.
+ * Loaded by the game only on "Show solution" (ADR-007); CI runs each one
+ * through runJsTest (src/track2/phase4-7/phase4-7.test.ts), on the CPU and
+ * on the emulated GPU.
  */
 export const TRACK2_P4_7_SOLUTIONS: Record<string, string> = {
   'char-tokenizer': String.raw`// Character tokenizer: every distinct character gets an id.
@@ -357,9 +359,11 @@ export function windowStarts(length, T) {
   return starts;
 }
 `,
-  'train-tiny-gpt': String.raw`// Train a tiny GPT on Macbeth, one character at a time.
+  'train-tiny-gpt': String.raw`// Train a tiny GPT on Macbeth, one character at a time (on the GPU when there is one).
 import { load } from 'data';
-import { adamStep, backward, charVocab, createAdam, createGPT, encodeChars, evalLoss, gptForward, numParams, randomBatch, rng, zeroGrad } from './gpt.js';
+import { crossEntropy } from 'nn';
+import { Adam } from 'optim';
+import { charVocab, createGPT, encodeChars, evalLoss, numParams, randomBatch, rng } from './gpt.js';
 
 const T = 32; // context length
 const B = 8; // sequences per batch
@@ -373,21 +377,29 @@ export async function train(steps) {
   const valIds = ids.slice(n);
 
   const model = createGPT({ vocabSize: vocab.length, blockSize: T, dModel: 32, nHead: 4, nLayer: 1, seed: 1 });
-  const opt = createAdam(model);
+  const opt = new Adam(model.parameters(), { lr: 0.01 });
   const r = rng(1);
   for (let step = 0; step < steps; step++) {
     const { x, y } = randomBatch(trainIds, B, T, r);
-    const { loss } = gptForward(model, x, B, T, y);
-    zeroGrad(model);
-    backward(loss);
-    adamStep(model, opt, 0.01);
+    const loss = crossEntropy(model.forward(x), y);
+    opt.zeroGrad();
+    loss.backward();
+    opt.step();
+    report({ loss });
   }
-  return { params: numParams(model), trainLoss: evalLoss(model, trainIds, T), valLoss: evalLoss(model, valIds, T) };
+  return {
+    device: model.device,
+    params: numParams(model),
+    trainLoss: await evalLoss(model, trainIds, T),
+    valLoss: await evalLoss(model, valIds, T),
+  };
 }
 `,
   'loss-perplexity': String.raw`// Loss curves and perplexity.
 import { load } from 'data';
-import { adamStep, backward, charVocab, createAdam, createGPT, encodeChars, evalLoss, gptForward, randomBatch, rng, zeroGrad } from './gpt.js';
+import { crossEntropy } from 'nn';
+import { Adam } from 'optim';
+import { charVocab, createGPT, encodeChars, evalLoss, randomBatch, rng } from './gpt.js';
 
 export function perplexity(meanLoss) {
   return Math.exp(meanLoss);
@@ -408,20 +420,22 @@ export async function trainWithCurve(steps) {
   const vocab = charVocab(text);
   const ids = encodeChars(vocab, text);
   const n = Math.floor(ids.length * 0.9);
+  const trainIds = ids.slice(0, n);
   const model = createGPT({ vocabSize: vocab.length, blockSize: T, dModel: 32, nHead: 4, nLayer: 1, seed: 1 });
-  const opt = createAdam(model);
+  const opt = new Adam(model.parameters(), { lr: 0.01 });
   const r = rng(2);
   const losses = [];
   for (let step = 0; step < steps; step++) {
-    const { x, y } = randomBatch(ids.slice(0, n), B, T, r);
-    const { loss } = gptForward(model, x, B, T, y);
-    losses.push(loss.item());
-    zeroGrad(model);
-    backward(loss);
-    adamStep(model, opt, 0.01);
+    const { x, y } = randomBatch(trainIds, B, T, r);
+    const loss = crossEntropy(model.forward(x), y);
+    losses.push(loss.itemAsync()); // read back without waiting for it
+    opt.zeroGrad();
+    loss.backward();
+    opt.step();
+    report({ loss });
   }
-  const smooth = smoothCurve(losses, 0.9);
-  const valLoss = evalLoss(model, ids.slice(n), T);
+  const smooth = smoothCurve(await Promise.all(losses), 0.9);
+  const valLoss = await evalLoss(model, ids.slice(n), T);
   return {
     start: smooth[0],
     end: smooth[smooth.length - 1],
@@ -478,19 +492,22 @@ export function sampleMany(logits, opts, us) {
 `,
   'fine-tuning': String.raw`// Fine-tuning: pretrain on Macbeth, then keep training on the Sonnets with a smaller learning rate.
 import { load } from 'data';
-import { adamStep, backward, charVocab, cloneModel, createAdam, createGPT, encodeChars, evalLoss, gptForward, randomBatch, rng, zeroGrad } from './gpt.js';
+import { crossEntropy } from 'nn';
+import { Adam } from 'optim';
+import { charVocab, cloneModel, createGPT, encodeChars, evalLoss, randomBatch, rng } from './gpt.js';
 
 const T = 32;
 const B = 8;
 
 function trainSteps(model, ids, steps, lr, r) {
-  const opt = createAdam(model);
+  const opt = new Adam(model.parameters(), { lr });
   for (let step = 0; step < steps; step++) {
     const { x, y } = randomBatch(ids, B, T, r);
-    const { loss } = gptForward(model, x, B, T, y);
-    zeroGrad(model);
-    backward(loss);
-    adamStep(model, opt, lr);
+    const loss = crossEntropy(model.forward(x), y);
+    opt.zeroGrad();
+    loss.backward();
+    opt.step();
+    report({ loss });
   }
 }
 
@@ -508,17 +525,20 @@ export async function finetune(preSteps, ftSteps) {
 
   const base = createGPT({ vocabSize: vocab.length, blockSize: T, dModel: 32, nHead: 4, nLayer: 1, seed: 1 });
   trainSteps(base, macTrain, preSteps, 0.01, r);
-  const before = evalLoss(base, sonVal, T);
-  const macbethBefore = evalLoss(base, macVal, T);
+  const before = await evalLoss(base, sonVal, T);
+  const macbethBefore = await evalLoss(base, macVal, T);
 
-  const tuned = cloneModel(base);
+  const tuned = await cloneModel(base);
   trainSteps(tuned, sonTrain, ftSteps, 0.003, r);
-  const after = evalLoss(tuned, sonVal, T);
-  return { before, after, gain: before - after, macbethBefore, macbethAfter: evalLoss(tuned, macVal, T) };
+  const after = await evalLoss(tuned, sonVal, T);
+  return { before, after, gain: before - after, macbethBefore, macbethAfter: await evalLoss(tuned, macVal, T) };
 }
 `,
   'lora': String.raw`// LoRA: freeze the pretrained table W0 and learn a low-rank change scale * A B.
 import { load } from 'data';
+import { noGrad } from 'autograd';
+import { Adam } from 'optim';
+import { tensor, zeros } from 'tensor';
 import { rng } from './gpt.js';
 
 export function loraRow(W0, A, B, scale, x) {
@@ -542,27 +562,9 @@ function counts(ids, V) {
   return C;
 }
 
-// Mean cross-entropy over all bigrams, grouped by the previous character, and its gradient per row.
-function lossAndGrads(rowOf, C, V, wantGrads) {
-  let total = 0;
-  let n = 0;
-  const grads = [];
-  for (let i = 0; i < V; i++) {
-    const ni = C[i].reduce((a, b) => a + b, 0);
-    n += ni;
-    if (ni === 0) {
-      grads.push(null);
-      continue;
-    }
-    const logits = rowOf(i);
-    const max = Math.max(...logits);
-    const e = logits.map((v) => Math.exp(v - max));
-    const sum = e.reduce((a, b) => a + b, 0);
-    const lse = max + Math.log(sum);
-    for (let j = 0; j < V; j++) total += C[i][j] * (lse - logits[j]);
-    if (wantGrads) grads.push(e.map((v, j) => (ni * v) / sum - C[i][j]));
-  }
-  return { loss: total / n, grads: grads.map((g) => g && g.map((v) => v / n)) };
+// Mean cross-entropy over all bigrams, grouped by the previous character (C: counts as a tensor, N: pairs).
+function meanLoss(logits, C, N) {
+  return logits.logSoftmax(-1).mul(C).sum().neg().div(N);
 }
 
 export async function finetuneLora(rank, steps) {
@@ -573,50 +575,37 @@ export async function finetuneLora(rank, steps) {
   const enc = (t) => Array.from(t, (c) => index.get(c));
   const sonnets = enc(await load('text-sonnets'));
   const n = Math.floor(sonnets.length * 0.9);
-  const Ctrain = counts(sonnets.slice(0, n), V);
-  const Cval = counts(sonnets.slice(n), V);
+  const Ctrain = tensor(counts(sonnets.slice(0, n), V)).to('auto');
+  const Cval = tensor(counts(sonnets.slice(n), V)).to('auto');
+  const Ntrain = n - 1;
+  const Nval = sonnets.length - n - 1;
 
   // The "pretrained" model: smoothed bigram log-probabilities of Macbeth. Frozen.
-  const W0 = counts(enc(macbeth), V).map((row) => {
-    const total = row.reduce((a, b) => a + b, 0) + V;
-    return row.map((c) => Math.log((c + 1) / total));
-  });
+  const W0 = tensor(
+    counts(enc(macbeth), V).map((row) => {
+      const total = row.reduce((a, b) => a + b, 0) + V;
+      return row.map((c) => Math.log((c + 1) / total));
+    }),
+  ).to('auto');
 
   // Adapters: A small and random, B zero, so training starts exactly at W0.
   const r = rng(7);
-  const rand = () => r() - 0.5;
-  const A = Array.from({ length: V }, () => Array.from({ length: rank }, () => rand() * 0.2));
-  const B = Array.from({ length: rank }, () => new Array(V).fill(0));
+  const A = tensor(Array.from({ length: V }, () => Array.from({ length: rank }, () => (r() - 0.5) * 0.2)), { requiresGrad: true }).to('auto');
+  const B = zeros([rank, V], { requiresGrad: true }).to('auto');
   const scale = 1;
-  const rowOf = (i) => loraRow(W0, A, B, scale, i);
-  const before = lossAndGrads(rowOf, Cval, V, false).loss;
+  const logits = () => W0.add(A.matmul(B).mul(scale)); // loraRow for every row at once
 
-  // Adam on A and B only.
-  const params = [...A, ...B];
-  const m = params.map((p) => new Array(p.length).fill(0));
-  const v = params.map((p) => new Array(p.length).fill(0));
-  const lr = 0.02;
-  for (let t = 1; t <= steps; t++) {
-    const { grads } = lossAndGrads(rowOf, Ctrain, V, true);
-    const gA = A.map(() => new Array(rank).fill(0));
-    const gB = B.map(() => new Array(V).fill(0));
-    for (let i = 0; i < V; i++) {
-      if (!grads[i]) continue;
-      const { dAx, dB } = loraBackward(A, B, scale, i, grads[i]);
-      gA[i] = dAx;
-      for (let k = 0; k < rank; k++) for (let j = 0; j < V; j++) gB[k][j] += dB[k][j];
-    }
-    const g = [...gA, ...gB];
-    params.forEach((p, pi) => {
-      for (let q = 0; q < p.length; q++) {
-        m[pi][q] = 0.9 * m[pi][q] + 0.1 * g[pi][q];
-        v[pi][q] = 0.999 * v[pi][q] + 0.001 * g[pi][q] ** 2;
-        p[q] -= (lr * m[pi][q]) / (1 - 0.9 ** t) / (Math.sqrt(v[pi][q] / (1 - 0.999 ** t)) + 1e-8);
-      }
-    });
+  const before = await noGrad(() => meanLoss(logits(), Cval, Nval)).itemAsync();
+  const opt = new Adam([A, B], { lr: 0.02 }); // only the adapters train
+  for (let step = 0; step < steps; step++) {
+    const loss = meanLoss(logits(), Ctrain, Ntrain);
+    opt.zeroGrad();
+    loss.backward(); // the gradients loraBackward computes, for every row
+    opt.step();
+    report({ loss });
   }
-  const after = lossAndGrads(rowOf, Cval, V, false).loss;
-  return { trainable: 2 * V * rank, full: V * V, before, after, gain: before - after };
+  const after = await noGrad(() => meanLoss(logits(), Cval, Nval)).itemAsync();
+  return { trainable: A.size + B.size, full: V * V, before, after, gain: before - after };
 }
 `,
   'preference-model': String.raw`// A toy reward model trained on preference pairs (Bradley-Terry loss).
@@ -662,6 +651,9 @@ export function evaluateRewardModel(trainPairs, testPairs, steps, lr) {
 `,
   'scaling-experiment': String.raw`// A scaling experiment: the same model at several sizes, loss against parameter count.
 import { load } from 'data';
+import { noGrad } from 'autograd';
+import { Adam } from 'optim';
+import { tensor, zeros } from 'tensor';
 import { rng } from './gpt.js';
 
 export function fitPowerLaw(ns, losses) {
@@ -685,59 +677,30 @@ function counts(ids, V) {
   return C;
 }
 
-// A factorized bigram model of width d: logits(prev) = E[prev] U + b.
-function trainModel(d, Ctrain, Cval, V, steps) {
+// Mean cross-entropy over all bigrams, grouped by the previous character.
+function meanLoss(logits, C, N) {
+  return logits.logSoftmax(-1).mul(C).sum().neg().div(N);
+}
+
+// A factorized bigram model of width d: logits(prev) = E[prev] U + bias. On the GPU when there is one.
+async function trainModel(d, data, V, steps) {
   const r = rng(11 + d);
-  const rand = () => r() - 0.5;
-  const E = Array.from({ length: V }, () => Array.from({ length: d }, () => rand() * 0.2));
-  const U = Array.from({ length: d }, () => Array.from({ length: V }, () => rand() * 0.2));
-  const b = new Array(V).fill(0);
-  const rowOf = (i) => {
-    const row = b.slice();
-    for (let k = 0; k < d; k++) for (let j = 0; j < V; j++) row[j] += E[i][k] * U[k][j];
-    return row;
-  };
-  const loss = (C, grads) => {
-    let total = 0;
-    let n = 0;
-    for (let i = 0; i < V; i++) n += C[i].reduce((a, c) => a + c, 0);
-    for (let i = 0; i < V; i++) {
-      const ni = C[i].reduce((a, c) => a + c, 0);
-      if (ni === 0) continue;
-      const l = rowOf(i);
-      const max = Math.max(...l);
-      const e = l.map((v) => Math.exp(v - max));
-      const sum = e.reduce((a, c) => a + c, 0);
-      const lse = max + Math.log(sum);
-      for (let j = 0; j < V; j++) total += C[i][j] * (lse - l[j]);
-      if (!grads) continue;
-      for (let j = 0; j < V; j++) {
-        const g = ((ni * e[j]) / sum - C[i][j]) / n;
-        grads.b[j] += g;
-        for (let k = 0; k < d; k++) {
-          grads.E[i][k] += g * U[k][j];
-          grads.U[k][j] += E[i][k] * g;
-        }
-      }
-    }
-    return total / n;
-  };
-  const params = [...E, ...U, b];
-  const m = params.map((p) => new Array(p.length).fill(0));
-  const v = params.map((p) => new Array(p.length).fill(0));
-  for (let t = 1; t <= steps; t++) {
-    const grads = { E: E.map(() => new Array(d).fill(0)), U: U.map(() => new Array(V).fill(0)), b: new Array(V).fill(0) };
-    loss(Ctrain, grads);
-    const g = [...grads.E, ...grads.U, grads.b];
-    params.forEach((p, pi) => {
-      for (let q = 0; q < p.length; q++) {
-        m[pi][q] = 0.9 * m[pi][q] + 0.1 * g[pi][q];
-        v[pi][q] = 0.999 * v[pi][q] + 0.001 * g[pi][q] ** 2;
-        p[q] -= (0.05 * m[pi][q]) / (1 - 0.9 ** t) / (Math.sqrt(v[pi][q] / (1 - 0.999 ** t)) + 1e-8);
-      }
-    });
+  const init = (rows, cols) =>
+    tensor(Array.from({ length: rows * cols }, () => (r() - 0.5) * 0.2), { shape: [rows, cols], requiresGrad: true }).to('auto');
+  const E = init(V, d);
+  const U = init(d, V);
+  const bias = zeros([V], { requiresGrad: true }).to('auto');
+  const logits = () => E.matmul(U).add(bias);
+  const opt = new Adam([E, U, bias], { lr: 0.05 });
+  for (let step = 0; step < steps; step++) {
+    const loss = meanLoss(logits(), data.Ctrain, data.Ntrain);
+    opt.zeroGrad();
+    loss.backward();
+    opt.step();
+    report({ loss });
   }
-  return { params: 2 * V * d + V, valLoss: loss(Cval, null) };
+  const valLoss = await noGrad(() => meanLoss(logits(), data.Cval, data.Nval)).itemAsync();
+  return { params: E.size + U.size + bias.size, valLoss };
 }
 
 export async function scalingRun(widths, steps) {
@@ -747,11 +710,19 @@ export async function scalingRun(widths, steps) {
   const ids = Array.from(text, (c) => index.get(c));
   const V = vocab.length;
   const n = Math.floor(ids.length * 0.9);
-  const Ctrain = counts(ids.slice(0, n), V);
-  const Cval = counts(ids.slice(n), V);
-  const runs = widths.map((d) => trainModel(d, Ctrain, Cval, V, steps));
-  const params = runs.map((r) => r.params);
-  const losses = runs.map((r) => r.valLoss);
+  const data = {
+    Ctrain: tensor(counts(ids.slice(0, n), V)).to('auto'),
+    Cval: tensor(counts(ids.slice(n), V)).to('auto'),
+    Ntrain: n - 1,
+    Nval: ids.length - n - 1,
+  };
+  const params = [];
+  const losses = [];
+  for (const d of widths) {
+    const run = await trainModel(d, data, V, steps);
+    params.push(run.params);
+    losses.push(run.valLoss);
+  }
   let worstIncrease = -Infinity;
   for (let i = 1; i < losses.length; i++) worstIncrease = Math.max(worstIncrease, losses[i] - losses[i - 1]);
   return { params, losses, slope: fitPowerLaw(params, losses).b, worstIncrease };

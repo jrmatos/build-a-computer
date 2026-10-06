@@ -16,8 +16,10 @@ import {
 /**
  * Track 2, Phase 7 (Beyond): fine-tuning a pretrained tiny GPT on the
  * Sonnets, LoRA adapters on a frozen bigram table, a toy reward model from
- * preference pairs, and a scaling experiment. Every run is seeded and takes
- * seconds on a CPU; tests bound losses and trends with margins (E-ML-02).
+ * preference pairs, and a scaling experiment. The training loops run on the
+ * tensor modules: on the GPU when there is one (E-ML-01), else on the CPU.
+ * Every run is seeded and takes seconds on a CPU; tests bound losses and
+ * trends with margins that hold on both devices (E-ML-02).
  * DRAFT text (owner approves).
  */
 
@@ -49,7 +51,7 @@ export const PHASE7: Level[] = [
     order: 1,
     title: 'Fine-tuning',
     goal:
-      `Pretrain the tiny GPT on Macbeth for preSteps, then fine-tune a copy on the Sonnets for ftSteps with a smaller learning rate. Export finetune(preSteps, ftSteps) returning ` +
+      `Pretrain the tiny GPT on Macbeth for preSteps, then fine-tune a copy on the Sonnets for ftSteps with a smaller learning rate. Export async finetune(preSteps, ftSteps) returning ` +
       '{ before, after, gain, macbethBefore, macbethAfter } (validation losses; gain = before - after). ' +
       `With ${PRETRAIN_STEPS} + ${FINETUNE_STEPS} steps, the Sonnets loss must improve by at least 0.1.`,
     tutorial:
@@ -57,21 +59,21 @@ export const PHASE7: Level[] = [
       'Fine-tuning is ordinary training that starts from pretrained weights instead of random ones.\n\n' +
       'Here the "broad" text is Macbeth and the narrow one is the Sonnets (both public domain, from Project Gutenberg). The recipe:\n\n' +
       code(`
-const base = createGPT({ ... });
-trainSteps(base, macbethTrain, preSteps, 0.01);   // pretraining
-const before = evalLoss(base, sonnetsVal, 32);
+const base = createGPT({ ... });                         // on the GPU if there is one
+trainSteps(base, macbethTrain, preSteps, 0.01);          // pretraining
+const before = await evalLoss(base, sonnetsVal, 32);
 
-const tuned = cloneModel(base);                    // keep the base model intact
-trainSteps(tuned, sonnetsTrain, ftSteps, 0.003);  // a smaller learning rate
-const after = evalLoss(tuned, sonnetsVal, 32);
+const tuned = await cloneModel(base);                    // keep the base model intact
+trainSteps(tuned, sonnetsTrain, ftSteps, 0.003);         // a smaller learning rate
+const after = await evalLoss(tuned, sonnetsVal, 32);
 `) +
       '\n\nThe smaller learning rate keeps the model near what it already knows. Also measure the Macbeth loss before and after: ' +
       'fine-tuning on one text slowly makes the model worse at the other, which is called catastrophic forgetting.\n\n' +
       'Both texts use the same characters (the Sonnets use a subset of the Macbeth vocabulary), so build the vocabulary from Macbeth.',
     hints: [
-      'Write trainSteps(model, ids, steps, lr, r): createAdam(model), then the usual loop with randomBatch(ids, 8, 32, r).',
+      'Write trainSteps(model, ids, steps, lr, r): new Adam(model.parameters(), { lr }), then the usual loop with randomBatch(ids, 8, 32, r), crossEntropy, zeroGrad, backward and step.',
       'Split each text 90/10 after encoding it with the Macbeth vocabulary: await load("text-sonnets") gives the second text.',
-      'Measure before (Sonnets) and macbethBefore on the base model, clone it with cloneModel, fine-tune the clone, then measure after and macbethAfter on the clone.',
+      'Measure before (Sonnets) and macbethBefore on the base model, clone it with await cloneModel(base), fine-tune the clone, then measure after and macbethAfter on the clone (evalLoss needs await).',
       'gain = before - after. With 200 + 100 steps it is typically around 0.2.',
     ],
     afterword:
@@ -81,9 +83,11 @@ const after = evalLoss(tuned, sonnetsVal, 32);
       datasets: [MACBETH, SONNETS],
       library: [GPT_LIBRARY],
       training: true,
-      starter: `// Fine-tuning a pretrained tiny GPT.
+      starter: `// Fine-tuning a pretrained tiny GPT (on the GPU when there is one).
 import { load } from 'data';
-import { adamStep, backward, charVocab, cloneModel, createAdam, createGPT, encodeChars, evalLoss, gptForward, randomBatch, rng, zeroGrad } from './gpt.js';
+import { crossEntropy } from 'nn';
+import { Adam } from 'optim';
+import { charVocab, cloneModel, createGPT, encodeChars, evalLoss, randomBatch, rng } from './gpt.js';
 
 const T = 32;
 const B = 8;
@@ -99,7 +103,7 @@ export async function finetune(preSteps, ftSteps) {
     tests: [
       metric(`fine-tuning improves the Sonnets loss by >= 0.1`, 'finetune', [PRETRAIN_STEPS, FINETUNE_STEPS], { name: 'gain', min: 0.1 }, 300_000),
       metric('fine-tuned Sonnets loss < 2.7', 'finetune', [PRETRAIN_STEPS, FINETUNE_STEPS], { name: 'after', max: 2.7 }, 300_000),
-      metric('no fine-tuning, no gain', 'finetune', [PRETRAIN_STEPS, 0], { name: 'gain', min: -1e-9, max: 1e-9 }, 300_000),
+      metric('no fine-tuning, no gain', 'finetune', [PRETRAIN_STEPS, 0], { name: 'gain', min: -1e-5, max: 1e-5 }, 300_000),
     ],
     requires: ['sampling'],
   }),
@@ -127,13 +131,22 @@ logits = W0[x] + scale * (A[x] × B)      // A[x] is row x of A: r numbers
 dA[x][k] = scale * sum over j of B[k][j] * dRow[j]   // only row x of A changes
 dB[k][j] = scale * A[x][k] * dRow[j]
 `) +
-      '\n\nTraining tip: the loss of a bigram model depends only on pair counts, so group the training text by current character. ' +
-      'For row x with nx occurrences and counts C[x][j], the gradient of the mean loss is (nx · softmax(logits)[j] - C[x][j]) / N, where N is the number of pairs. Then one step is 68 rows, not 90,000 characters.',
+      '\n\n**Training with tensors.** The loss of a bigram model depends only on pair counts, so group the training text by current character: with C[x][j] the number of times j follows x and N the number of pairs, ' +
+      'the mean loss is -(1 / N) · sum of C[x][j] · log softmax(logits[x])[j]. One step is then 68 rows, not 90,000 characters. ' +
+      'For all 68 rows at once, loraRow becomes one line of tensor code, and backward() computes exactly what your loraBackward does, for every row:\n\n' +
+      code(`
+const A = tensor(aRows, { requiresGrad: true }).to('auto');   // on the GPU if there is one
+const B = zeros([rank, V], { requiresGrad: true }).to('auto');
+const logits = W0.add(A.matmul(B).mul(scale));                 // every loraRow at once
+const loss = logits.logSoftmax(-1).mul(C).sum().neg().div(N);
+const opt = new Adam([A, B], { lr: 0.02 });                    // W0 is not in the list: frozen
+`) +
+      '\n\nW0 and C are tensors too (`tensor(rows).to(\'auto\')`). Read a loss with `await loss.itemAsync()`.',
     hints: [
       'loraRow: start from W0[x].slice() and add scale * A[x][k] * B[k][j] for every k and j.',
       'loraBackward returns dAx (r numbers, the gradient of row x of A) and dB (r x m).',
-      'finetuneLora: W0 from Macbeth counts with add-one smoothing (Math.log((c + 1) / (rowTotal + V))); counts of the Sonnets split 90/10; A random and small (rng from gpt.js), B zeros, scale 1.',
-      'Each step, for every row x with counts: logits = loraRow(...), gradient row as in the tutorial, add loraBackward into the gradients of A and B. Adam with lr 0.02 on A and B only.',
+      'finetuneLora: W0 from Macbeth counts with add-one smoothing (Math.log((c + 1) / (rowTotal + V))); counts of the Sonnets split 90/10; A random and small ((r() - 0.5) * 0.2 with rng from gpt.js), B zeros, scale 1.',
+      'Each step: loss from the training counts as in the tutorial, opt.zeroGrad(), loss.backward(), opt.step() with new Adam([A, B], { lr: 0.02 }). Measure before and after on the validation counts inside noGrad(() => ...).',
       'trainable = 2 * V * rank, full = V * V; before and after are the Sonnets validation losses.',
     ],
     afterword:
@@ -145,6 +158,9 @@ dB[k][j] = scale * A[x][k] * dRow[j]
       training: true,
       starter: `// LoRA on a frozen bigram table.
 import { load } from 'data';
+import { noGrad } from 'autograd';
+import { Adam } from 'optim';
+import { tensor, zeros } from 'tensor';
 import { rng } from './gpt.js';
 
 // W0[x] + scale * A[x] B
@@ -162,7 +178,7 @@ export function loraBackward(A, B, scale, x, dRow) {
 export async function finetuneLora(rank, steps) {
   const macbeth = await load('text-macbeth');
   const sonnets = await load('text-sonnets');
-  // TODO: W0 from Macbeth, adapters A and B, train on the Sonnets with Adam
+  // TODO: W0 from Macbeth, adapters A and B (tensors, .to('auto')), train on the Sonnets with Adam
   return { trainable: NaN, full: NaN, before: NaN, after: NaN, gain: NaN };
 }
 `,
@@ -265,12 +281,18 @@ a = mean y - b * mean x
 `) +
       '\n\nThe model to scale is a factorized bigram model of width d: logits(current) = E[current] × U + bias, with E: 68 x d and U: d x 68, ' +
       'so it has 2 · 68 · d + 68 parameters. Width 1 can only learn a crude summary of each character; width 16 can nearly match the full bigram table. ' +
-      'Train each width with Adam (full batch, grouped by pair counts as in the LoRA level) on the first 90% of Macbeth, and measure the validation loss.\n\n' +
+      'Train each width with Adam (full batch, grouped by pair counts as in the LoRA level) on the first 90% of Macbeth, and measure the validation loss. ' +
+      'With tensors on the GPU when there is one, the model and its loss are two lines:\n\n' +
+      code(`
+const logits = E.matmul(U).add(bias);                           // [68, 68]: one row per current character
+const loss = logits.logSoftmax(-1).mul(C).sum().neg().div(N);   // C: pair counts, N: number of pairs
+`) +
+      '\n\n' +
       'Return the parameter counts, the validation losses, the fitted slope b, and worstIncrease: the largest losses[i] - losses[i - 1]. A scaling trend means it is negative.',
     hints: [
       'fitPowerLaw takes logs first (ns.map(Math.log), losses.map(Math.log)) and then is ordinary least squares.',
-      'Gradient of the mean loss for row x of logits: g[j] = (nx · p[j] - C[x][j]) / N. Then dE[x][k] += g[j] · U[k][j], dU[k][j] += E[x][k] · g[j], dbias[j] += g[j].',
-      'Initialize E and U with small random numbers from rng in gpt.js (different seed per width is fine), bias with zeros; Adam with lr 0.05 and 300 steps.',
+      'E, U and bias are tensors with requiresGrad: true, moved with .to(\'auto\'); C (the counts) is a tensor too. backward() finds the gradients; new Adam([E, U, bias], { lr: 0.05 }) steps them.',
+      'Initialize E and U with small random numbers ((r() - 0.5) * 0.2 with rng from gpt.js, a different seed per width is fine), bias with zeros; 300 steps. The validation loss: noGrad, then await loss.itemAsync().',
       'worstIncrease: start at -Infinity and take the max of losses[i] - losses[i - 1] for i >= 1.',
     ],
     afterword:
@@ -282,6 +304,9 @@ a = mean y - b * mean x
       training: true,
       starter: `// Loss against model size.
 import { load } from 'data';
+import { noGrad } from 'autograd';
+import { Adam } from 'optim';
+import { tensor, zeros } from 'tensor';
 import { rng } from './gpt.js';
 
 // Least squares on log L = a + b log N.
