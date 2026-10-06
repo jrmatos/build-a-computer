@@ -144,6 +144,11 @@ export class JsHost implements JsApi {
             this.state.checkpoint = { step, state };
             this.emit(false);
           },
+          onDevice: (info) => {
+            if (!live()) return;
+            this.state.device = info;
+            this.emit(false);
+          },
         },
       );
     } catch (e) {

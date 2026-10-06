@@ -5,16 +5,15 @@ import { t } from '../i18n';
 import { DiagnosticsPanel, useDiagnostics } from './panels/DiagnosticsPanel';
 import { CallStackPanel } from './panels/CallStackPanel';
 import { ConsolePanel } from './panels/ConsolePanel';
-import { MAX_HEIGHT, MIN_HEIGHT, tabsFor, useDock, type DockTab } from './panels/dockState';
+import { BOARD_TABS, MAX_HEIGHT, MIN_HEIGHT, useDock, type DockTab } from './panels/dockState';
 import { MemoryPanel } from './panels/MemoryPanel';
 import { ProgramPanel } from './panels/ProgramPanel';
 import { RegistersPanel } from './panels/RegistersPanel';
-import { RvMemoryPanel } from './panels/RvMemoryPanel';
 import { ScreenPanel } from './panels/ScreenPanel';
 import { WaveformPanel, useWaveformShortcut } from './panels/WaveformPanel';
 import { DebugPanel } from './debug/DebugPanel';
 import { canDebug, useDebug } from './debug/store';
-import { useBoardCaseDebug } from './debug/useBoardCaseDebug';
+import { modeUi } from '../modes';
 import './panels/panels.css';
 
 const ICONS: Record<DockTab, ReactNode> = {
@@ -55,6 +54,12 @@ const ICONS: Record<DockTab, ReactNode> = {
       <path d="M4 7h16M4 12h12M4 17h8" />
     </>
   ),
+  os: (
+    <>
+      <rect x="4" y="4" width="16" height="16" rx="2" />
+      <path d="M8 8h3v3H8zM13 8h3v3h-3zM8 13h3v3H8zM13 13h3v3h-3z" />
+    </>
+  ),
   debug: (
     <>
       <rect x="7" y="7" width="10" height="13" rx="5" />
@@ -79,11 +84,11 @@ function TabIcon({ tab }: { tab: DockTab }) {
 export function BottomDock() {
   useWaveformShortcut();
   const level = useEditor((s) => s.level);
-  useBoardCaseDebug(level);
-  const code = level?.mode === 'code';
+  // The level's mode plugin picks the tabs and any panels it draws itself (code levels: the RV32 memory view).
+  const ui = modeUi(level);
   // The case debugger only shows on levels with board cases to replay.
   const debuggable = canDebug(level);
-  const tabList = tabsFor(level).filter((k) => k !== 'debug' || debuggable);
+  const tabList = (level ? ui.dockTabs(level) : BOARD_TABS).filter((k) => k !== 'debug' || debuggable);
   const open = useDock((s) => s.open);
   const stored = useDock((s) => s.tab);
   // A tab from the other kind of level falls back to this level's first tab.
@@ -101,6 +106,7 @@ export function BottomDock() {
   const diags = useDiagnostics();
   const errors = diags.filter((d) => d.severity === 'error').length;
   const hasMemory = useEditor((s) => s.board.parts.some((p) => p.type === 'ram' || p.type === 'rom' || p.type === 'register' || p.type === 'counter'));
+  const ModePanel = ui.panels[tab];
   const tabRefs = useRef<Partial<Record<DockTab, HTMLButtonElement | null>>>({});
 
   // While open, the dock covers the bottom of the board: keep zoom-to-fit (and diagnostic jumps) above it.
@@ -171,7 +177,7 @@ export function BottomDock() {
             aria-selected={selected}
             aria-controls={open ? 'dk-panel' : undefined}
             tabIndex={tab === k ? 0 : -1}
-            className={`dk-tab ${selected ? 'is-active' : ''} ${k === 'memory' && !hasMemory && !code ? 'is-dim' : ''}`}
+            className={`dk-tab ${selected ? 'is-active' : ''} ${k === 'memory' && !hasMemory && !ui.panels.memory ? 'is-dim' : ''}`}
             onClick={() => (selected ? setOpen(false) : setTab(k))}
           >
             <TabIcon tab={k} />
@@ -219,15 +225,21 @@ export function BottomDock() {
       </header>
       {open && (
         <div className="dk-body" id="dk-panel" role="tabpanel" aria-labelledby={`dk-tab-${tab}`}>
-          {tab === 'waveform' && <WaveformPanel />}
-          {tab === 'diagnostics' && <DiagnosticsPanel entries={diags} />}
-          {tab === 'memory' && (code ? <RvMemoryPanel key={level.id} /> : <MemoryPanel />)}
-          {tab === 'registers' && <RegistersPanel />}
-          {tab === 'console' && <ConsolePanel />}
-          {tab === 'screen' && <ScreenPanel />}
-          {tab === 'stack' && <CallStackPanel />}
-          {tab === 'program' && <ProgramPanel />}
-          {tab === 'debug' && <DebugPanel />}
+          {ModePanel && level ? (
+            <ModePanel key={level.id} />
+          ) : (
+            <>
+              {tab === 'waveform' && <WaveformPanel />}
+              {tab === 'diagnostics' && <DiagnosticsPanel entries={diags} />}
+              {tab === 'memory' && <MemoryPanel />}
+              {tab === 'registers' && <RegistersPanel />}
+              {tab === 'console' && <ConsolePanel />}
+              {tab === 'screen' && <ScreenPanel />}
+              {tab === 'stack' && <CallStackPanel />}
+              {tab === 'program' && <ProgramPanel />}
+              {tab === 'debug' && <DebugPanel />}
+            </>
+          )}
         </div>
       )}
     </section>

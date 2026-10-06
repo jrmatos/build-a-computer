@@ -72,6 +72,36 @@ export function train(steps = 500, lr = 0.1) {
 }
 ```
 
+### Training on the GPU (`nn` models on WebGPU)
+
+In training levels (`js.training`) the sandbox connects WebGPU before the
+code runs (it works in the sandbox's dedicated worker; E-ML-01: without a
+hardware GPU, or if the device is lost, everything stays on the CPU and the
+badge says why). `model.to('auto')` moves a model's parameters to the GPU
+when there is one; from then on every operation, the backward pass and the
+optimizer step run as WGSL kernels and nothing is copied back per step.
+
+```js
+const model = new GPT({ vocabSize, blockSize: 32, dModel: 32, nHead: 4, nLayer: 1 }).to('auto');
+const opt = new AdamW(model.parameters(), { lr: 1e-2 });
+for (let step = 0; step < steps; step++) {
+  const loss = crossEntropy(model.forward(x), y);
+  opt.zeroGrad(); loss.backward(); opt.step();
+  report({ loss });                                  // GPU tensors are read back in the background
+  if (step % 100 === 0) checkpoint({ step, params: model.parameters() });
+}
+return { valLoss: await valLoss.itemAsync() };       // await t.read() / t.itemAsync() / t.cpu() to read values
+```
+
+- `t.data`, `t.item()` and `model.stateDict()` of GPU tensors throw until the
+  values are read back (`await t.read()`, `await model.readStateDict()`).
+- `assertFinite(loss)` on the GPU checks in the background: a NaN stops
+  training a step or two later (E-ML-03).
+- Results of GPU operations are recycled at the end of the optimizer step
+  after their last use; `t.keep()` keeps one longer.
+- float64 (gradient checks, E-ML-05) and models too big for the GPU's
+  buffers (E-ML-04) stay on the CPU with `to('auto')`.
+
 ## What is not available (ASM-05)
 
 `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, `WebTransport`,

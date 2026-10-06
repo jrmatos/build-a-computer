@@ -6,6 +6,7 @@
  */
 import { create } from 'zustand';
 import type { Board, Level } from '@build-a-computer/schema';
+import { canRunTests, modeOf } from '@build-a-computer/platform-core';
 import type { DebugTrace } from '@build-a-computer/sim-logic';
 import { emitAchievement } from '../../achievements/events';
 import { useEditor } from '../../editor/store';
@@ -56,7 +57,8 @@ export function resultsByColumn(level: Level): ReturnType<typeof assignResults>[
 
 /** True when the level's cases can be replayed on its board. */
 export function canDebug(level: Level | null): boolean {
-  return !!level && (level.mode ?? 'board') === 'board' && level.track !== 'sandbox' && stripPlan(level).count > 0;
+  // Modes whose cases replay on the live board (platform-core), on levels with tests to run.
+  return !!level && modeOf(level).caseReplay && canRunTests(level, stripPlan(level).count);
 }
 
 let token = 0;

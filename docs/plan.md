@@ -53,7 +53,7 @@ Both tracks play end to end at [jrmatos.github.io/build-a-computer](https://jrma
 | M9 Devices, traps and privilege | Done | UART, CLINT, PLIC, keyboard, framebuffer, block device, Sv32 |
 | M10 C compiler and libc | Done | 74/74 programs match riscv-gcc; libc written in C |
 | M11 Operating system | Done | 10 OS levels; process and page-table visualizers (OS-05) open |
-| M12 Platform and tensor engine | Partly | Tensor engine on CPU and WebGPU; TrackPlugin refactor (PLAT-01) and GPU training open |
+| M12 Platform and tensor engine | Partly | Tensor engine on CPU and WebGPU, with GPU-resident training (checked on NVIDIA, Intel and SwiftShader); track and mode plugins in platform-core (PLAT-01, ADR-010) |
 | M13 LLM track content | Done | 31 levels in JavaScript, run in a sandbox |
 | M14 Community | Done | Share links, level editor, level packs, local best results |
 
@@ -69,11 +69,12 @@ Both tracks play end to end at [jrmatos.github.io/build-a-computer](https://jrma
 - Buses carry at most 32 bits, not 64 (ADR-006).
 - The teaching kernel runs in machine mode and user programs in user mode, with no supervisor mode (`docs/os.md`).
 - Plain `char` is unsigned, matching GCC on RISC-V.
+- Plugins are per level mode (board, code, js), grouped by track, and checkers are per mode with per-kind runners (ADR-010).
 
 ### Still open
 
-- Owner review: all level text, the Toy-8 ISA, ADRs 001–009, the JavaScript sandbox's security, and new dependencies (CodeMirror, vite-plugin-pwa).
-- PLAT-01, OS-05, a real-GPU check of the WebGPU kernels and GPU training, and the Drive and Dropbox providers.
+- Owner review: all level text, the Toy-8 ISA, ADRs 001–010, the JavaScript sandbox's security, and new dependencies (CodeMirror, vite-plugin-pwa).
+- OS-05, and the Drive and Dropbox providers. (Real-GPU check: `pnpm --filter @build-a-computer/tensor gpu-check` against /gpu-check.html.)
 - WebKit's offline test is skipped: Playwright's WebKit offline mode stops the reload before the service worker answers. Cross-browser end-to-end tests (Chromium, Firefox, WebKit, touch on two phones) and axe checks run in CI.
 
 ## How AI agents use this plan
@@ -181,7 +182,7 @@ Every simulation runs in the worker, so the UI never freezes. There is no server
 | `packages/os-kit` | Bootloader, reference kernel (hidden), disk image builder, test programs | cc, asm |
 | `packages/tensor` | Tensors, autograd, CPU and WebGPU backends | det |
 | `packages/content` | Tracks, levels, tutorials, resources and reference solutions | schema |
-| `packages/worker` | Worker entry, command protocol, time slicing, snapshot diffs | sim-logic, rv32, tensor |
+| `packages/worker` | Worker entry, command protocol, time slicing, snapshot diffs, checker adapters | platform-core, sim-logic, rv32, tensor |
 | `apps/web` | React app with board editor, assembly/C editor and JavaScript workspace, autosave and file storage | platform-core, worker, content |
 | `tools/*` | Content checker, link checker, benchmarks, ISA and compiler test runners | various |
 | `packages/rv-check` | Builds assembly and C levels, runs 'riscv' tests on the emulator, maps errors and steps to source lines | rv32, asm, cc, libc |
@@ -212,6 +213,8 @@ interface Checker {
 ```
 
 Track 1 is built against this interface from the start. M12 moves anything Track 1 hard-coded into the plugin once Track 2 needs it.
+
+As built (PLAT-01, ADR-010): a `TrackPlugin` names its level modes and whether it is free play; each mode (`board`, `code`, `js`) has a `ModePlugin` in platform-core (editor, work, machine, test kinds), a checker adapter in the worker, and a `ModeUi` in `apps/web/src/modes/` (workspace, controls, toolbar, dock tabs, panels, solution loader).
 
 ## Data formats
 

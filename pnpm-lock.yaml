@@ -56,6 +56,9 @@ importers:
       '@build-a-computer/libc':
         specifier: workspace:*
         version: link:../../packages/libc
+      '@build-a-computer/platform-core':
+        specifier: workspace:*
+        version: link:../../packages/platform-core
       '@build-a-computer/schema':
         specifier: workspace:*
         version: link:../../packages/schema
@@ -218,6 +221,12 @@ importers:
         specifier: workspace:*
         version: link:../schema
 
+  packages/platform-core:
+    dependencies:
+      '@build-a-computer/schema':
+        specifier: workspace:*
+        version: link:../schema
+
   packages/rv-check:
     dependencies:
       '@build-a-computer/asm':
@@ -288,6 +297,9 @@ importers:
       '@build-a-computer/js-check':
         specifier: workspace:*
         version: link:../js-check
+      '@build-a-computer/platform-core':
+        specifier: workspace:*
+        version: link:../platform-core
       '@build-a-computer/rv-check':
         specifier: workspace:*
         version: link:../rv-check

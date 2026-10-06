@@ -2,6 +2,11 @@
  * The 'optim' module: optimizers that update parameters from their gradients,
  * gradient clipping, learning-rate schedules, and a NaN/Inf guard.
  *
+ * Parameters on the GPU (`model.to('auto')`) are updated by GPU kernels;
+ * their optimizer state stays on the GPU too. Each step() also ends a GPU
+ * memory window (gpu-runtime.ts): intermediate GPU results not used during
+ * the step are recycled.
+ *
  * The training loop every level uses:
  *   const opt = new Adam(model.parameters(), { lr: 1e-3 });
  *   for (let step = 0; step < steps; step++) {
@@ -13,7 +18,9 @@
  *   }
  */
 import type { FloatArray } from './backend/cpu-kernels';
-import { Tensor } from './tensor';
+import { gpuAdam, gpuNonFinite, gpuSgd } from './backend/gpu-ops';
+import type { GpuRuntime, GpuStorage } from './backend/gpu-runtime';
+import { DeviceReadError, Tensor } from './tensor';
 
 /** Saved optimizer state: hyperparameters, step count and per-parameter buffers. */
 export interface OptimizerState {
@@ -47,23 +54,71 @@ export abstract class Optimizer {
   /** Applies one update to every parameter that has a gradient. */
   step(): void {
     this.stepCount++;
+    const runtimes = new Set<GpuRuntime>();
     this.params.forEach((p, i) => {
-      if (p.grad) this.update(p.data, p.grad.data, i);
+      if (!p.grad) return;
+      if (p.gpu) {
+        this.updateGpu(p.gpu, p.grad, i);
+        p.dropCpuCopy();
+        runtimes.add(p.gpu.runtime);
+      } else this.update(p.data, p.grad.data, i);
     });
+    for (const rt of runtimes) rt.endStep();
   }
 
   /** Updates one parameter's values in place from its gradient. */
   protected abstract update(value: FloatArray, grad: FloatArray, index: number): void;
+
+  /** The same update for a parameter on the GPU. */
+  protected abstract updateGpu(value: GpuStorage, grad: Tensor, index: number): void;
+
+  /** GPU copies of the per-parameter buffers, made on the first GPU step. */
+  protected gpuState = new Map<number, Record<string, GpuStorage>>();
+
+  /** The GPU buffers of parameter `index` (uploaded from the CPU buffers the first time). */
+  protected gpuBuffers(value: GpuStorage, index: number): Record<string, GpuStorage> {
+    let state = this.gpuState.get(index);
+    if (!state) {
+      state = {};
+      for (const [name, list] of Object.entries(this.buffers()))
+        state[name] = value.runtime.upload(Float32Array.from(list[index]!), true);
+      this.gpuState.set(index, state);
+    }
+    return state;
+  }
 
   /** Named per-parameter buffers (momentum etc.) to save in checkpoints. */
   protected abstract buffers(): Record<string, FloatArray[]>;
 
   /** A JSON-safe snapshot so training can resume from a checkpoint (E-ML-06). */
   stateDict(): OptimizerState {
+    if (this.gpuState.size > 0 && !this.cpuSynced) {
+      throw new Error('stateDict(): the optimizer state is on the GPU. Use await opt.readStateDict().');
+    }
     const buffers: OptimizerState['buffers'] = {};
     for (const [name, list] of Object.entries(this.buffers()))
       buffers[name] = list.map((b) => Array.from(b));
     return { kind: this.kind, lr: this.lr, stepCount: this.stepCount, buffers };
+  }
+
+  /** True right after readStateDict(): the CPU buffers match the GPU ones. */
+  private cpuSynced = false;
+
+  /** stateDict() that first copies GPU optimizer state back (works on either device). */
+  async readStateDict(): Promise<OptimizerState> {
+    const buffers = this.buffers();
+    for (const [index, state] of this.gpuState) {
+      for (const [name, storage] of Object.entries(state)) {
+        const values = await storage.runtime.read(storage);
+        buffers[name]![index]!.set(values.subarray(0, buffers[name]![index]!.length));
+      }
+    }
+    this.cpuSynced = true;
+    try {
+      return this.stateDict();
+    } finally {
+      this.cpuSynced = false;
+    }
   }
 
   /** Restores a snapshot from `stateDict()`. */
@@ -81,6 +136,8 @@ export abstract class Optimizer {
         if (saved[i]!.length !== b.length)
           throw new Error(`loadStateDict: buffer ${name}[${i}] has the wrong size.`);
         b.set(saved[i]!);
+        const gpu = this.gpuState.get(i)?.[name];
+        if (gpu) gpu.runtime.write(gpu, Float32Array.from(b));
       });
     }
   }
@@ -116,6 +173,11 @@ export class SGD extends Optimizer {
       v[i] = this.momentum * v[i]! + g;
       value[i]! -= this.lr * v[i]!;
     }
+  }
+
+  protected updateGpu(value: GpuStorage, grad: Tensor, index: number): void {
+    const { velocity } = this.gpuBuffers(value, index);
+    gpuSgd(value, grad, velocity!, this.lr, this.momentum, this.weightDecay);
   }
 
   protected buffers(): Record<string, FloatArray[]> {
@@ -174,6 +236,20 @@ export class Adam extends Optimizer {
     }
   }
 
+  protected updateGpu(value: GpuStorage, grad: Tensor, index: number): void {
+    const { m, v } = this.gpuBuffers(value, index);
+    gpuAdam(value, grad, m!, v!, {
+      lr: this.lr,
+      beta1: this.beta1,
+      beta2: this.beta2,
+      eps: this.eps,
+      weightDecay: this.weightDecay,
+      c1: 1 - this.beta1 ** this.stepCount,
+      c2: 1 - this.beta2 ** this.stepCount,
+      decoupled: this.decoupled,
+    });
+  }
+
   protected buffers(): Record<string, FloatArray[]> {
     return { m: this.m, v: this.v };
   }
@@ -190,10 +266,24 @@ export class AdamW extends Adam {
 
 /**
  * Scales all gradients down so their combined length (L2 norm) is at most
- * `maxNorm`. Returns the norm before clipping. Gradients are replaced, not
+ * `maxNorm`. Returns the norm before clipping (on the GPU, as a one-element
+ * GPU tensor, so nothing waits: report() it or await norm.itemAsync()). Gradients are replaced, not
  * edited in place, because several parameters may share one gradient tensor.
  */
-export function clipGradNorm(params: Tensor[], maxNorm: number): number {
+export function clipGradNorm(params: Tensor[], maxNorm: number): number | Tensor {
+  if (params.some((p) => p.grad?.gpu)) {
+    // Everything on the GPU, no readback: scale = maxNorm / max(norm, maxNorm).
+    let total: Tensor | null = null;
+    for (const p of params) {
+      if (!p.grad) continue;
+      const s = p.grad.square().sum();
+      total = total ? total.add(s) : s;
+    }
+    const norm = total!.sqrt();
+    const scale = norm.maximum(maxNorm).pow(-1).mul(maxNorm);
+    for (const p of params) if (p.grad) p.grad = p.grad.mul(scale);
+    return norm;
+  }
   let total = 0;
   for (const p of params) if (p.grad) for (const g of p.grad.data) total += g * g;
   const norm = Math.sqrt(total);
@@ -277,18 +367,60 @@ export class NonFiniteError extends Error {
 /** True when every value is a finite number (not NaN, not ±Infinity). */
 export function isFiniteTensor(t: Tensor | number): boolean {
   if (typeof t === 'number') return Number.isFinite(t);
+  if (!t.readable) throw new DeviceReadError('isFiniteTensor: this tensor');
   for (const v of t.data) if (!Number.isFinite(v)) return false;
   return true;
 }
 
+// GPU checks run without waiting: a flag is computed on the GPU and read
+// back in the background; a failure is thrown by the next assertFinite call
+// (or by flushFiniteChecks, which the sandbox awaits before finishing).
+const pendingChecks = new Set<Promise<void>>();
+let failedCheck: NonFiniteError | null = null;
+
+function throwFailedCheck(): void {
+  if (!failedCheck) return;
+  const err = failedCheck;
+  failedCheck = null;
+  throw err;
+}
+
+function checkOnGpu(t: Tensor, context: { step?: number; lr?: number; what?: string }): void {
+  const flag = new Tensor(gpuNonFinite(t), [1]);
+  const check = flag
+    .read()
+    .then((values) => {
+      if (values[0] !== 0 && !failedCheck)
+        failedCheck = new NonFiniteError(context.what ?? 'The loss', NaN, context.step, context.lr);
+    })
+    .catch(() => {
+      /* device lost: reported by the next GPU operation */
+    })
+    .finally(() => pendingChecks.delete(check));
+  pendingChecks.add(check);
+}
+
+/** Waits for the background GPU checks of assertFinite and throws the first failure. */
+export async function flushFiniteChecks(): Promise<void> {
+  while (pendingChecks.size > 0) await Promise.all([...pendingChecks]);
+  throwFailedCheck();
+}
+
 /**
  * Throws a NonFiniteError, with advice to lower the learning rate, if the
- * loss is NaN or infinite. Call it every step before `backward()`.
+ * loss is NaN or infinite. Call it every step before `backward()`. For a
+ * loss on the GPU the check runs in the background (no waiting): a failure
+ * is thrown by a later call, a step or two late.
  */
 export function assertFinite(
   loss: Tensor | number,
   context: { step?: number; lr?: number; what?: string } = {},
 ): void {
+  throwFailedCheck();
+  if (typeof loss !== 'number' && loss.gpu && !loss.readable) {
+    checkOnGpu(loss, context);
+    return;
+  }
   if (isFiniteTensor(loss)) return;
   const value =
     typeof loss === 'number'
@@ -303,6 +435,10 @@ export function assertFiniteGrads(
   context: { step?: number; lr?: number } = {},
 ): void {
   params.forEach((p, i) => {
+    if (p.grad?.gpu && !p.grad.readable) {
+      assertFinite(p.grad, { ...context, what: `The gradient of parameter ${p.name || i}` });
+      return;
+    }
     if (p.grad && !isFiniteTensor(p.grad)) {
       assertFinite(p.grad, { ...context, what: `The gradient of parameter ${p.name || i}` });
     }

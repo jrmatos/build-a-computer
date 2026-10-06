@@ -64,7 +64,8 @@ PKCE in the browser) and needs its own ADR plus a CSP review.
 | `packages/det`       | nothing           | use DOM, network, clock, `Math.random`                    |
 | `packages/sim-logic` | schema, det       | use DOM, network, clock, `Math.random`, `Date`            |
 | `packages/content`   | schema            | be imported by sim packages                               |
-| `packages/worker`    | schema, sim-logic | render UI                                                 |
+| `packages/platform-core` | schema       | use DOM, network or clock; import simulators or sandboxes |
+| `packages/worker`    | schema, platform-core, sim-logic | render UI                                  |
 | `apps/web`           | everything above  | simulate on the main thread (send commands to the worker) |
 
 `eslint.config.js` enforces the simulation rule for every package listed in

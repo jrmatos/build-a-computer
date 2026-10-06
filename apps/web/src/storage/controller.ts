@@ -8,6 +8,7 @@
  * device; the file is a copy the player owns. A failing file never blocks or
  * loses in-browser saves (E-PLAT-02).
  */
+import { isSourceLevel } from '@build-a-computer/platform-core';
 import { SANDBOX } from '@build-a-computer/content';
 import {
   isPackData,
@@ -137,7 +138,7 @@ function loadSave(save: Save): void {
   const { commit, level } = editor();
   commit(() => adoptBoard(save), []);
   // Code levels: the file's source replaces the editor text (undoable inside the code editor).
-  if ((level?.mode === 'code' || level?.mode === 'js') && save.levelId === level.id && save.source !== undefined) editor().set({ source: sourceFor(level, save) });
+  if (level && isSourceLevel(level) && save.levelId === level.id && save.source !== undefined) editor().set({ source: sourceFor(level, save) });
   if (level && save.levelId !== level.id) toast('storage.otherLevel', 'info', { id: save.levelId });
   else toast('storage.boardLoaded', 'success');
 }

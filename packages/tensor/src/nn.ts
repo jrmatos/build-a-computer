@@ -6,6 +6,7 @@
  * parameter inside, and `stateDict()` / `loadStateDict()` save and restore
  * them (checkpoints, E-ML-06).
  */
+import { crossEntropyRowsOp, layerNormOp } from './backend/gpu-ops';
 import { defaultRng, type Rng } from './random';
 import { formatShape, shapesEqual } from './shape';
 import {
@@ -17,6 +18,8 @@ import {
   triuMask,
   uniform,
   zeros,
+  type Device,
+  type DeviceRequest,
   type DType,
   type Indices,
 } from './tensor';
@@ -98,12 +101,60 @@ export abstract class Module {
     for (const p of this.parameters()) p.grad = null;
   }
 
-  /** A JSON-safe copy of every parameter. */
+  /** Where the parameters live ('cpu' for a model without parameters). */
+  get device(): Device {
+    return this.parameters()[0]?.device ?? 'cpu';
+  }
+
+  /**
+   * Moves every parameter to a device in place (optimizers keep working):
+   * 'webgpu' (or 'gpu'), 'cpu', or 'auto' = the GPU when one is available.
+   * With 'auto', a model the GPU cannot hold (E-ML-04) or a float64 model
+   * (E-ML-05) stays on the CPU. Moving back to the CPU needs `await model.cpu()`.
+   */
+  to(device: DeviceRequest): this {
+    const params = this.parameters();
+    const moved: Tensor[] = [];
+    try {
+      for (const p of params) {
+        const before = p.device;
+        p.moveTo(device);
+        if (p.device !== before) moved.push(p);
+      }
+    } catch (err) {
+      if (device !== 'auto') throw err;
+      for (const p of moved) p.moveTo('cpu'); // the CPU copies are still valid
+    }
+    return this;
+  }
+
+  /** Copies the parameters back from the GPU and moves the model to the CPU. */
+  async cpu(): Promise<this> {
+    for (const p of this.parameters()) {
+      await p.read();
+      p.moveTo('cpu');
+    }
+    return this;
+  }
+
+  /** A JSON-safe copy of every parameter (on the GPU, use `await model.readStateDict()`). */
   stateDict(): StateDict {
     const out: StateDict = {};
-    for (const [name, p] of this.namedParameters())
+    for (const [name, p] of this.namedParameters()) {
+      if (!p.readable) {
+        throw new Error(
+          `stateDict(): parameter ${name} is on the GPU. Use await model.readStateDict() (or pass the model to checkpoint()).`,
+        );
+      }
       out[name] = { shape: [...p.shape], data: Array.from(p.data) };
+    }
     return out;
+  }
+
+  /** stateDict() that first copies GPU parameters back (works on either device). */
+  async readStateDict(): Promise<StateDict> {
+    for (const p of this.parameters()) await p.read();
+    return this.stateDict();
   }
 
   /**
@@ -129,7 +180,7 @@ export abstract class Module {
           `loadStateDict: ${name} has shape ${formatShape(p.shape)} but the saved one is ${formatShape(saved.shape)}.`,
         );
       }
-      p.data.set(saved.data);
+      p.assign(saved.data);
     }
   }
 }
@@ -206,6 +257,8 @@ export class LayerNorm extends Module {
   }
 
   forward(x: Tensor): Tensor {
+    // On the GPU: one fused kernel forward and two backward (gpu-kernels.ts).
+    if ((x.gpu || this.gamma.gpu) && x.dtype === 'float32') return layerNormOp(x, this.gamma, this.beta, this.eps);
     const mean = x.mean(-1, true);
     const centered = x.sub(mean);
     const variance = centered.square().mean(-1, true);
@@ -379,6 +432,60 @@ export class TransformerBlock extends Module {
   }
 }
 
+/** Size of a GPT built with the `GPT` class. */
+export interface GPTConfig {
+  vocabSize: number;
+  /** Context length: the most tokens the model sees at once. */
+  blockSize: number;
+  dModel: number;
+  nHead: number;
+  nLayer: number;
+  /** Dropout everywhere (default 0). */
+  dropout?: number;
+}
+
+/**
+ * A small decoder-only transformer (GPT-2 layout): token and position
+ * embeddings, `nLayer` pre-norm transformer blocks, a final layer norm and a
+ * linear head. forward(ids [batch, time]) returns logits [batch, time, vocab].
+ * Move it to the GPU with `gpt.to('auto')`.
+ */
+export class GPT extends Module {
+  tokens: Embedding;
+  positions: Embedding;
+  blocks: TransformerBlock[];
+  lnFinal: LayerNorm;
+  head: Linear;
+  readonly config: GPTConfig;
+
+  constructor(config: GPTConfig, options: LayerOptions = {}) {
+    super();
+    this.config = { ...config };
+    const opts = { rng: options.rng ?? defaultRng(), dtype: options.dtype };
+    this.tokens = new Embedding(config.vocabSize, config.dModel, { ...opts, std: 0.02 });
+    this.positions = new Embedding(config.blockSize, config.dModel, { ...opts, std: 0.02 });
+    this.blocks = Array.from(
+      { length: config.nLayer },
+      () => new TransformerBlock(config.dModel, config.nHead, { ...opts, dropout: config.dropout ?? 0 }),
+    );
+    this.lnFinal = new LayerNorm(config.dModel, { dtype: options.dtype });
+    this.head = new Linear(config.dModel, config.vocabSize, opts);
+  }
+
+  forward(ids: Tensor | Indices): Tensor {
+    const idTensor = ids instanceof Tensor ? ids : tensor(Array.from(ids));
+    const time = idTensor.shape[idTensor.rank - 1]!;
+    if (time > this.config.blockSize)
+      throw new RangeError(`GPT: ${time} tokens is more than the context length ${this.config.blockSize}.`);
+    const positions = Array.from({ length: time }, (_v, i) => i);
+    let x = this.tokens.forward(idTensor).add(this.positions.forward(positions));
+    if (x.rank === 2) x = x.unsqueeze(0);
+    for (const block of this.blocks) x = block.forward(x);
+    const logits = this.head.forward(this.lnFinal.forward(x));
+    return idTensor.rank === 1 ? logits.squeeze(0) : logits;
+  }
+}
+
 /**
  * Sinusoidal positional encoding ("Attention Is All You Need"):
  * [time, dim] with sin on even features and cos on odd ones.
@@ -412,6 +519,11 @@ export function crossEntropy(logits: Tensor, targets: Indices): Tensor {
   const ids = targets instanceof Tensor ? targets.reshape([-1]) : tensor(Array.from(targets));
   if (ids.size !== flat.shape[0]) {
     throw new RangeError(`crossEntropy: ${ids.size} targets for ${flat.shape[0]} rows of logits.`);
+  }
+  if (flat.gpu) {
+    // Fused on the GPU: log-sum-exp per row, and (softmax - onehot) in the backward pass.
+    if (!ids.readable) throw new Error('crossEntropy: targets must be on the CPU (they are class ids).');
+    return crossEntropyRowsOp(flat, Int32Array.from(ids.data)).mean();
   }
   const picked = flat.logSoftmax(-1).gather(1, ids.reshape([-1, 1]));
   return picked.mean().neg();

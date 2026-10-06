@@ -4,6 +4,7 @@
  * (fewest parts, fewest wires, fewest cycles); a new level version starts over
  * because its tests may have changed.
  */
+import { modeOf } from '@build-a-computer/platform-core';
 import { create } from 'zustand';
 import type { CaseResult } from '@build-a-computer/sim-logic';
 import type { Board, Level } from '@build-a-computer/schema';
@@ -38,7 +39,7 @@ export interface BestUpdate {
 /** Measure one passing run. */
 export function measure(level: Level, board: Board, cases: readonly CaseResult[], now = new Date()): BestEntry {
   const entry: BestEntry = { levelId: level.id, levelVersion: level.version, at: now.toISOString() };
-  if (level.mode === 'board') {
+  if (modeOf(level).work === 'board') {
     const starter = new Set(level.starter.parts.map((p) => p.id));
     entry.parts = board.parts.filter((p) => !p.locked && !starter.has(p.id)).length;
     entry.wires = board.wires.length;
@@ -53,7 +54,7 @@ export function measure(level: Level, board: Board, cases: readonly CaseResult[]
   }
   if (perTest.size) {
     entry.cycles = [...perTest.values()].reduce((a, b) => a + b, 0);
-    entry.cycleUnit = level.mode === 'code' || kind === 'riscv' ? 'instructions' : kind === 'program' ? 'cycles' : 'ticks';
+    entry.cycleUnit = modeOf(level).machine === 'rv32' || kind === 'riscv' ? 'instructions' : kind === 'program' ? 'cycles' : 'ticks';
   }
   return entry;
 }

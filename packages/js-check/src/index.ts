@@ -8,7 +8,7 @@ import type { MlSample } from './protocol';
 export * from './compare';
 export * from './diff';
 export * from './runner';
-export type { DatasetMeta, MlSample } from './protocol';
+export type { DatasetMeta, DeviceInfo, GpuMode, MlSample } from './protocol';
 export { toSafe, isTensorLike } from './serialize';
 export { transformModule, buildBundle, mapStack, tokenize, type TransformError } from './transform';
 

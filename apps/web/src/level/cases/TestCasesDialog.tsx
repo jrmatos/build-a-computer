@@ -9,6 +9,7 @@
 import { useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { Level } from '@build-a-computer/schema';
+import { isBoardKind } from '@build-a-computer/platform-core';
 import { useEditor, type TestRun } from '../../editor/store';
 import { t } from '../../i18n';
 import { useFocusTrap } from '../../ui/Dialog';
@@ -545,7 +546,7 @@ function CaseDetailPane(props: { level: Level; table: CaseTable; row: CaseRow; r
         )}
         {st === 'fail' && row.result?.message && !reasons.some((r) => r.text === row.result?.message) && <p className="tc-muted tc-message">{row.result.message}</p>}
         {metric && <MetricRange value={metric.value} min={metric.min} max={metric.max} ok={metric.ok} />}
-        {st === 'fail' && row.result && (row.kind === 'riscv' || row.kind === 'js') && <CaseDiffSummary result={row.result} />}
+        {st === 'fail' && row.result && !isBoardKind(row.kind) && <CaseDiffSummary result={row.result} />}
         {row.result?.summary && <p className="tc-muted">{row.result.summary}</p>}
       </section>
 

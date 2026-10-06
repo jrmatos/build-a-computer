@@ -10,7 +10,7 @@ import * as tensorLib from '@build-a-computer/tensor';
 import * as tokenizer from './tokenizer';
 import * as plot from './plot';
 import { fromCheckpoint, isTensorLike, toCheckpoint, toSafe, type SavedTensor } from './serialize';
-import type { DatasetMeta, FromSandbox, MlSample, RawError, StartRequest, ToSandbox } from './protocol';
+import type { DatasetMeta, FromSandbox, GpuMode, MlSample, RawError, StartRequest, ToSandbox } from './protocol';
 
 interface Host {
   post(m: FromSandbox): void;
@@ -53,6 +53,86 @@ function seededRandom(seed: number): () => number {
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+/** The parts of the tensor package the runtime uses for GPU-resident tensors. */
+interface GpuTensor {
+  gpu: unknown;
+  readonly readable: boolean;
+  read(): Promise<unknown>;
+}
+interface TensorGpuApi {
+  Tensor: new (...a: never[]) => GpuTensor;
+  initGpu(o: { gpu?: unknown; allowFallbackAdapter?: boolean }): Promise<{ device: 'webgpu' | 'cpu'; message: string }>;
+  setGpuRuntime(rt: unknown, message?: string): void;
+  gpuRuntime(): { onFirstUse: (() => void) | null } | null;
+  GpuRuntime: new (device: unknown, limits: unknown) => unknown;
+  flushFiniteChecks(): Promise<void>;
+  backend: { readLimits(l: unknown): unknown };
+}
+
+const GPU_INIT_MS = 3000;
+
+// The test emulator ('emulated' GPU mode) is only loaded in Node, before the
+// Node runner locks module loading; browsers never fetch it.
+const nodeEmulator = (globalThis as { process?: { versions?: { node?: string } } }).process?.versions?.node
+  ? await import('@build-a-computer/tensor/emulator').catch(() => null)
+  : null;
+
+/**
+ * Connects the tensor modules to a GPU (E-ML-01: when that fails or takes
+ * too long, everything stays on the CPU and the message says why). Calls
+ * `onUse` the first time a GPU kernel runs.
+ */
+async function setupGpu(mode: GpuMode, onUse: () => void): Promise<{ device: 'webgpu' | 'cpu'; message: string }> {
+  const lib = tensorLib as unknown as TensorGpuApi;
+  if (typeof lib.initGpu !== 'function') return { device: 'cpu', message: 'No GPU support in this build.' };
+  let result: { device: 'webgpu' | 'cpu'; message: string };
+  if (mode === 'off') {
+    lib.setGpuRuntime(null);
+    return { device: 'cpu', message: 'This level trains on the CPU.' };
+  }
+  if (mode === 'emulated') {
+    if (!nodeEmulator) return { device: 'cpu', message: 'The GPU emulator is only available in Node tests.' };
+    const emu = nodeEmulator.emulatedDevice();
+    lib.setGpuRuntime(new lib.GpuRuntime(emu.device, lib.backend.readLimits(emu.device.limits)), 'Using an emulated GPU (tests).');
+    result = { device: 'webgpu', message: 'Using an emulated GPU (tests).' };
+  } else {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<{ device: 'cpu'; message: string }>((resolve) => {
+      timer = setTimeout(() => resolve({ device: 'cpu', message: 'The GPU did not answer in time; training runs on the CPU.' }), GPU_INIT_MS);
+    });
+    result = await Promise.race([lib.initGpu({}), timeout]).finally(() => clearTimeout(timer));
+    if (result.device === 'cpu') lib.setGpuRuntime(null);
+  }
+  const rt = lib.gpuRuntime();
+  if (rt) rt.onFirstUse = onUse;
+  return result;
+}
+
+/** GPU tensors (not yet read back) anywhere inside a value. */
+function gpuTensorsIn(value: unknown): GpuTensor[] {
+  const Tensor = (tensorLib as unknown as TensorGpuApi).Tensor;
+  const found: GpuTensor[] = [];
+  const seen = new Set<object>();
+  const walk = (v: unknown, depth: number): void => {
+    if (!v || typeof v !== 'object' || depth > 32 || seen.has(v) || ArrayBuffer.isView(v)) return;
+    seen.add(v);
+    if (Tensor && v instanceof Tensor) {
+      if (v.gpu && !v.readable) found.push(v);
+      return;
+    }
+    if (v instanceof Map) for (const x of v.values()) walk(x, depth + 1);
+    else if (v instanceof Set) for (const x of v) walk(x, depth + 1);
+    else for (const x of Object.values(v)) walk(x, depth + 1);
+  };
+  walk(value, 0);
+  return found;
+}
+
+/** Copies every GPU tensor inside `value` back to the CPU (results, checkpoints, report values). */
+async function readBack(value: unknown): Promise<void> {
+  await Promise.all(gpuTensorsIn(value).map((t) => t.read()));
 }
 
 /** Library namespaces for the 'tensor', 'autograd', 'nn' and 'optim' modules. */
@@ -173,10 +253,20 @@ async function run(
   };
   Object.defineProperty(g, 'console', { value: consoleObj, configurable: true, writable: true });
   let step = req.checkpoint !== undefined && req.checkpoint !== null && typeof req.checkpointStep === 'number' ? req.checkpointStep + 1 : 0;
-  g.report = (values: Record<string, unknown>): void => {
-    if (!values || typeof values !== 'object') throw new TypeError('report() takes an object, e.g. report({ loss, acc }).');
+  // Values on the GPU are read back in the background, in order; report()
+  // never waits. A NaN found that way is thrown by the next report() call
+  // (or when the code finishes): a step or two late, never lost.
+  let reportChain: Promise<void> = Promise.resolve();
+  let lateError: Error | null = null;
+  const throwLateNaN = (): void => {
+    if (!lateError) return;
+    const e = lateError;
+    lateError = null;
+    throw e;
+  };
+  const record = (values: Record<string, unknown>, s0: number): number => {
     const out: Record<string, number> = {};
-    let s = step;
+    let s = s0;
     for (const [k, raw] of Object.entries(values)) {
       let v = raw;
       if (isTensorLike(v) && v.data.length === 1) v = v.data[0];
@@ -192,12 +282,51 @@ async function run(
       out[k] = v;
     }
     samples.push({ step: s, values: out });
-    step = s + 1;
     maybeFlush();
+    return s;
+  };
+  g.report = (values: Record<string, unknown>): void => {
+    if (!values || typeof values !== 'object') throw new TypeError('report() takes an object, e.g. report({ loss, acc }).');
+    throwLateNaN();
+    const pendingGpu = gpuTensorsIn(values);
+    if (pendingGpu.length === 0) {
+      step = record(values, step) + 1;
+      return;
+    }
+    const own = values.step;
+    const s = typeof own === 'number' ? own : step;
+    step = s + 1;
+    const copy = { ...values };
+    // Start the copies now: GPU memory of this step's results is recycled a step later.
+    const reads = Promise.all(pendingGpu.map((t) => t.read()));
+    reads.catch(() => {}); // handled in the chain below
+    reportChain = reportChain.then(async () => {
+      try {
+        await reads;
+        record(copy, s);
+      } catch (e) {
+        lateError ??= e instanceof Error ? e : new Error(String(e));
+      }
+    });
   };
   g.checkpoint = (state: unknown): void => {
     const own = (state as { step?: unknown } | null)?.step;
-    host.post({ type: 'checkpoint', step: typeof own === 'number' ? own : Math.max(0, step - 1), state: toCheckpoint(state) });
+    const at = typeof own === 'number' ? own : Math.max(0, step - 1);
+    if (gpuTensorsIn(state).length === 0) {
+      host.post({ type: 'checkpoint', step: at, state: toCheckpoint(state) });
+      return;
+    }
+    // Parameters on the GPU: copy them back first (this is the only other readback).
+    const reads = readBack(state);
+    reads.catch(() => {}); // handled in the chain below
+    reportChain = reportChain.then(async () => {
+      try {
+        await reads;
+        host.post({ type: 'checkpoint', step: at, state: toCheckpoint(state) });
+      } catch (e) {
+        lateError ??= e instanceof Error ? e : new Error(String(e));
+      }
+    });
   };
   const Tensor = (tensorLib as unknown as { Tensor?: new (d: Float32Array | Float64Array, s: number[], r?: boolean) => unknown }).Tensor;
   g.restoreCheckpoint = (): unknown =>
@@ -304,6 +433,18 @@ async function run(
   };
 
   try {
+    // --- GPU for the tensor modules (training levels), before any player code ---
+    const lib = tensorLib as unknown as TensorGpuApi;
+    let deviceInfo = { available: 'cpu' as 'webgpu' | 'cpu', used: false, message: '' };
+    const gpuMode = req.gpu ?? 'off';
+    if (gpuMode !== 'off' || typeof lib.setGpuRuntime === 'function') {
+      const chosen = await setupGpu(gpuMode, () => {
+        deviceInfo = { ...deviceInfo, used: true };
+        host.post({ type: 'device', info: deviceInfo });
+      });
+      deviceInfo = { available: chosen.device, used: false, message: chosen.message };
+      if (gpuMode !== 'off') host.post({ type: 'device', info: deviceInfo });
+    }
     fns = factory(api);
     const main = evaluate('main.js');
     await main.done;
@@ -317,6 +458,10 @@ async function run(
       );
     }
     const result = await (fn as (...a: unknown[]) => unknown)(...req.args);
+    await reportChain;
+    throwLateNaN();
+    if (typeof lib.flushFiniteChecks === 'function') await lib.flushFiniteChecks();
+    await readBack(result);
     const safe = toSafe(result);
     clearInterval(ticker);
     flush();

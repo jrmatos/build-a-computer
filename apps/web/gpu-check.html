@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GPU Check</title>
+    <style>
+      :root { color-scheme: dark; }
+      body { margin: 0; padding: 16px; background: #121418; color: #e6e6e6; font: 14px/1.5 system-ui, sans-serif; }
+      table { border-collapse: collapse; margin: 8px 0 24px; }
+      td, th { padding: 2px 10px; border-bottom: 1px solid #333; text-align: left; font-variant-numeric: tabular-nums; }
+      .bad { color: #ff7b72; } .good { color: #7ee787; }
+      pre { white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <h1>WebGPU check</h1>
+    <p>Runs the tensor package's WebGPU kernels against the CPU reference (E-ML-02 tolerances) and times CPU vs GPU training of the Track 2 tiny GPT.</p>
+    <div id="out" role="status">Running…</div>
+    <script type="module" src="/src/gpu-check/main.ts"></script>
+  </body>
+</html>

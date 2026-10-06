@@ -1,6 +1,6 @@
 import { JsSetup, type Level } from '@build-a-computer/schema';
 import { NAN_MESSAGE } from './compare';
-import type { DatasetMeta, FromSandbox, MlSample, RawError, ToSandbox } from './protocol';
+import type { DatasetMeta, DeviceInfo, FromSandbox, GpuMode, MlSample, RawError, ToSandbox } from './protocol';
 import { buildBundle, isTransformError, mapBundleLine, mapStack, transformModule, type BundleMap, type TransformedModule } from './transform';
 
 /** A dataset the level can load through the 'data' module. */
@@ -75,6 +75,8 @@ export interface JsRunRequest {
   checkpoint?: unknown;
   /** Step of that checkpoint; report() steps continue after it. */
   checkpointStep?: number;
+  /** GPU for the tensor modules; default 'auto' for training levels (js.training), else 'off'. */
+  gpu?: GpuMode;
 }
 
 export interface JsRunOptions {
@@ -84,6 +86,8 @@ export interface JsRunOptions {
   onSamples?(samples: MlSample[]): void;
   /** checkpoint(state) from the player's code; the host stores it (IndexedDB in the browser). */
   onCheckpoint?(state: unknown, step: number): void;
+  /** The device the tensor modules have, then again when the code first uses the GPU (E-ML-01 badge). */
+  onDevice?(info: DeviceInfo): void;
 }
 
 export interface JsOutcome {
@@ -242,6 +246,7 @@ export function startJs(req: JsRunRequest, opts: JsRunOptions = {}): JsRun {
                 datasets,
                 ...(req.checkpoint !== undefined ? { checkpoint: req.checkpoint } : {}),
                 ...(req.checkpointStep !== undefined ? { checkpointStep: req.checkpointStep } : {}),
+                gpu: req.gpu ?? (setup.training ? 'auto' : 'off'),
               });
             });
             return;
@@ -254,6 +259,9 @@ export function startJs(req: JsRunRequest, opts: JsRunOptions = {}): JsRun {
             return;
           case 'checkpoint':
             opts.onCheckpoint?.(m.state, m.step);
+            return;
+          case 'device':
+            opts.onDevice?.(m.info);
             return;
           case 'dataset': {
             const reply = (msg: ToSandbox): void => {

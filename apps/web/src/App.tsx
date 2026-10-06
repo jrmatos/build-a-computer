@@ -1,5 +1,4 @@
-import { Canvas } from './editor/Canvas';
-import { lazy, Suspense } from 'react';
+import { Suspense } from 'react';
 
 import { useEditor } from './editor/store';
 import { ContextMenu } from './ui/ContextMenu';
@@ -17,12 +16,8 @@ import { LevelPanel } from './level/LevelPanel';
 import { LevelSelect } from './level/LevelSelect';
 import { SimControls } from './level/SimControls';
 import { StatusBanner } from './level/StatusBanner';
+import { useModeUi } from './modes';
 import './App.css';
-
-// Code levels pull in CodeMirror and the assembler: load them only when needed (first-level bundle budget).
-const CodeWorkspace = lazy(() => import('./code/CodeWorkspace').then((m) => ({ default: m.CodeWorkspace })));
-// Track 2 levels (JavaScript + tensors): their own lazy chunk too.
-const JsWorkspace = lazy(() => import('./ml/JsWorkspace').then((m) => ({ default: m.JsWorkspace })));
 
 /**
  * Layout, Excalidraw style: a full-bleed canvas with floating islands.
@@ -31,22 +26,15 @@ const JsWorkspace = lazy(() => import('./ml/JsWorkspace').then((m) => ({ default
  * Bottom left: zoom and undo.
  */
 export function App() {
-  // Code levels (Phase 6+) replace the board with the code workspace.
-  const mode = useEditor((s) => s.level?.mode ?? 'board');
-  const codeMode = mode === 'code';
+  // The level's mode plugin (modes/) picks the workspace: the board canvas, or the lazy code and JS editors.
+  const { Workspace, Effects } = useModeUi();
+  const level = useEditor((s) => s.level);
   return (
     <div className="app">
-      {codeMode ? (
-        <Suspense fallback={null}>
-          <CodeWorkspace />
-        </Suspense>
-      ) : mode === 'js' ? (
-        <Suspense fallback={null}>
-          <JsWorkspace />
-        </Suspense>
-      ) : (
-        <Canvas />
-      )}
+      <Suspense fallback={null}>
+        <Workspace />
+      </Suspense>
+      {Effects && level && <Effects key={level.mode} level={level} />}
       <div className="layer">
         <div className="top-left">
           <MainMenu />

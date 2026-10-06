@@ -105,17 +105,29 @@ export function TrainingPanel({ level }: { level: Level }) {
   };
 
   const showCharts = samples.length > 0;
+  // The badge shows what the last run actually computed on (the sandbox reports it), else what the browser offers.
+  const ran = state?.device;
+  const shown: Backend | null = ran ? (ran.used ? 'webgpu' : 'cpu') : gpu;
+  const badgeTitle = ran
+    ? ran.used
+      ? t('ml.train.backend.usedGpuTitle')
+      : ran.available === 'webgpu'
+        ? t('ml.train.backend.gpuUnusedTitle')
+        : t('ml.train.backend.usedCpuTitle', { message: ran.message })
+    : gpu
+      ? t(gpu === 'webgpu' ? 'ml.train.backend.webgpuTitle' : 'ml.train.backend.cpuTitle')
+      : undefined;
 
   return (
     <section className="island ml-panel ml-train" aria-label={t('ml.train.label')}>
       <header className="ml-panel__head">
         <h2 className="ml-panel__title">{t('ml.train.title')}</h2>
         <span
-          className={`ml-badge ${gpu === 'webgpu' ? 'ml-badge--gpu' : ''}`}
-          title={gpu ? t(gpu === 'webgpu' ? 'ml.train.backend.webgpuTitle' : 'ml.train.backend.cpuTitle') : undefined}
-          data-backend={gpu ?? 'checking'}
+          className={`ml-badge ${shown === 'webgpu' ? 'ml-badge--gpu' : ''}`}
+          title={badgeTitle}
+          data-backend={shown ?? 'checking'}
         >
-          {gpu ? t(`ml.train.backend.${gpu}`) : t('ml.train.backend.checking')}
+          {shown ? t(`ml.train.backend.${shown}`) : t('ml.train.backend.checking')}
         </span>
         <span className="ml-panel__spacer" />
         {running ? (

@@ -21,6 +21,7 @@ import {
   DEFAULT_GPU_LIMITS,
   dispatch1D,
   dispatchMatmul,
+  GpuKernelError,
   GpuLimitError,
   layerNormShader,
   matmulPlan,
@@ -78,13 +79,19 @@ export interface GpuDeviceLike {
   }): GpuPipelineLike;
   createBindGroup(desc: {
     layout: unknown;
-    entries: { binding: number; resource: { buffer: GpuBufferLike } }[];
+    entries: { binding: number; resource: { buffer: GpuBufferLike; offset?: number; size?: number } }[];
   }): unknown;
   createCommandEncoder(): GpuEncoderLike;
   destroy(): void;
+  /** Error scopes (real devices have them): used to turn shader and validation errors into exceptions. */
+  pushErrorScope?(filter: 'validation' | 'out-of-memory' | 'internal'): void;
+  popErrorScope?(): Promise<{ message: string } | null>;
 }
 export interface GpuAdapterLike {
   readonly limits: Partial<GpuLimits>;
+  /** Software adapters (SwiftShader) set this (older browsers on the adapter, newer on info). */
+  readonly isFallbackAdapter?: boolean;
+  readonly info?: { isFallbackAdapter?: boolean; vendor?: string; architecture?: string };
   requestDevice(desc?: { requiredLimits?: Record<string, number> }): Promise<GpuDeviceLike>;
 }
 export interface GpuLike {
@@ -129,12 +136,19 @@ export function readLimits(source: Partial<GpuLimits>): GpuLimits {
  */
 export async function requestGpuDevice(
   gpu: GpuLike | null,
+  options: { allowFallbackAdapter?: boolean; powerPreference?: 'high-performance' | 'low-power' } = {},
 ): Promise<{ device: GpuDeviceLike; limits: GpuLimits } | { device: null; reason: string }> {
   if (!gpu) return { device: null, reason: 'This browser has no WebGPU support.' };
   try {
-    const adapter = await gpu.requestAdapter({ powerPreference: 'high-performance' });
+    const adapter = await gpu.requestAdapter({ powerPreference: options.powerPreference ?? 'high-performance' });
     if (!adapter)
       return { device: null, reason: 'WebGPU is present but no GPU adapter is available.' };
+    const software = adapter.isFallbackAdapter ?? adapter.info?.isFallbackAdapter ?? false;
+    if (software && options.allowFallbackAdapter === false)
+      return {
+        device: null,
+        reason: 'WebGPU only offers a software adapter here (no hardware GPU), which is slower than the CPU path.',
+      };
     const limits = readLimits(adapter.limits);
     const device = await adapter.requestDevice({
       requiredLimits: {
@@ -315,6 +329,8 @@ export class WebGpuBackend implements ComputeBackend {
       created.push(buffer);
       return buffer;
     };
+    device.pushErrorScope?.('validation');
+    let scoped = !!device.pushErrorScope;
     try {
       const inputBuffers = inputs.map((data) => {
         const buffer = make(bufferBytes(data.length), USAGE.STORAGE | USAGE.COPY_DST);
@@ -350,11 +366,18 @@ export class WebGpuBackend implements ComputeBackend {
       pass.end();
       encoder.copyBufferToBuffer(output, 0, staging, 0, outBytes);
       device.queue.submit([encoder.finish()]);
+      if (scoped) {
+        scoped = false;
+        const error = await device.popErrorScope!();
+        // A kernel the driver rejects (e.g. a WGSL compile error) would read back zeros: refuse instead.
+        if (error) throw new GpuKernelError(`The GPU rejected a kernel: ${error.message}`);
+      }
       await staging.mapAsync(MAP_READ);
       const result = new Float32Array(staging.getMappedRange().slice(0, outCount * 4));
       staging.unmap();
       return new Tensor(result, outShape);
     } finally {
+      if (scoped) void device.popErrorScope!();
       for (const b of created) b.destroy();
     }
   }

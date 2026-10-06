@@ -4,6 +4,7 @@
  * pack never disturbs the player's board. The rules are written against the
  * small `CheckHost` surface so tests drive SimHost directly.
  */
+import { initialSource, isSourceLevel } from '@build-a-computer/platform-core';
 import type { Board, ChipMap, Level, TruthRow } from '@build-a-computer/schema';
 import type { CaseResult } from '@build-a-computer/sim-logic';
 
@@ -23,11 +24,11 @@ export type Wrap = (cb: (r: CaseResult) => void) => (r: CaseResult) => void;
 
 const BUDGET_MS = 10_000;
 
-/** Run every test of `level` on `board` (board levels) or `source` (code levels). */
+/** Run every test of `level` on `board` (board levels) or `source` (source-based levels: code). */
 export async function runOn(host: CheckHost, level: Level, solution: { board?: Board; source?: string }, chips: ChipMap, wrap: Wrap = (cb) => cb): Promise<RunResult> {
   const cases: CaseResult[] = [];
   const onCase = wrap((c) => void cases.push(c));
-  if (level.mode === 'code') {
+  if (isSourceLevel(level)) {
     const r = await host.runTests(level, onCase, undefined, BUDGET_MS, solution.source ?? '');
     return { ...r, cases };
   }
@@ -54,7 +55,7 @@ const allPass = (r: RunResult) => r.total > 0 && r.passed === r.total;
 /** The COM-02 publishing rule: the reference must pass and an empty solution must fail. */
 export async function checkLevel(host: CheckHost, level: Level, solution: { board?: Board; source?: string }, chips: ChipMap, wrap?: Wrap): Promise<LevelCheck> {
   const reference = await runOn(host, level, solution, chips, wrap);
-  const emptySolution = level.mode === 'code' ? { source: level.code?.starter ?? '' } : { board: level.starter };
+  const emptySolution = isSourceLevel(level) ? { source: initialSource(level) } : { board: level.starter };
   const empty = await runOn(host, level, emptySolution, chips, wrap);
   const referencePasses = allPass(reference);
   const emptyFails = !allPass(empty);

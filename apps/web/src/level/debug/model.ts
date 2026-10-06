@@ -4,6 +4,7 @@
  * and failures, and moving through a case's timeline. No DOM, no worker.
  */
 import type { CaseResult, DebugCheck, DebugFrame, DebugTrace } from '@build-a-computer/sim-logic';
+import { boardKinds } from '@build-a-computer/platform-core';
 import { t } from '../../i18n';
 import { formatNum, type Port, type StripPlan, type TestKind } from '../testStripModel';
 
@@ -23,7 +24,7 @@ export interface CaseTarget {
 }
 
 /** Board kinds the debugger can replay. */
-export const DEBUGGABLE: ReadonlySet<TestKind> = new Set<TestKind>(['truth-table', 'exhaustive', 'random', 'sequence', 'program']);
+export const DEBUGGABLE: ReadonlySet<TestKind> = new Set<TestKind>(boardKinds());
 
 /** The case behind strip column `column`, or null when it cannot be debugged on a board. */
 export function caseTarget(plan: StripPlan, column: number, result?: CaseResult): CaseTarget | null {

@@ -254,6 +254,21 @@ memory (a token passed between spinning processes) or use sleeps far apart;
 page counts are reported as differences. The game is turn-based (one step per
 key), so its final picture depends only on the keys.
 
+## The Kernel panel (debugger)
+
+On levels whose kernel has a process table, the debugger's dock has a
+**Kernel** tab (`apps/web/src/level/panels/os/`), refreshed at every stop and
+up to 10 times a second while running: the process table with each trap
+frame, every address space's Sv32 mappings (merged ranges, the two-level
+tree, the last page fault, a translate box backed by the worker's
+side-effect-free MMU probe), physical memory frame by frame (kernel, free
+list, page tables and pages by owner) and the file system on the disk.
+Layouts come from the level's own `kernel.h`, parsed at run time, so the
+panel follows the stage's features. Kernel levels take symbol addresses from
+the player's build; program levels run the disk kernel, whose addresses
+(`KERNEL_INSPECT_SYMBOLS` in `levels.ts`) are recorded as facts
+`kernel.<name>` in the generated data.
+
 ## Tests
 
 - `packages/os-kit/src/os-kit.test.ts`: the specializer, the disk builder

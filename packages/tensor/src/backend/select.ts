@@ -5,13 +5,14 @@
  *   const { backend, message } = await createBackend();
  *   const y = await backend.matmul(a, b);   // GPU if possible, else CPU
  *
- * Checking the GPU kernels in a real browser: open the app (pnpm dev) in a
- * WebGPU browser, and in the dev-tools console of a page that bundles this
- * package run
- *   const { backend } = await createBackend();
- *   console.table(await selfTest(backend));
+ * Checking the GPU kernels in a real browser: open /gpu-check.html under
+ * `pnpm dev` (it runs selfTest below, trainingSelfTest from gpu-selftest.ts
+ * and the CPU/GPU training benchmark), or run it headlessly with
+ * `pnpm --filter @build-a-computer/tensor gpu-check` (scripts/gpu-check.mjs).
  * Every row should say ok: true; maxError is the largest difference from the
  * CPU result (E-ML-02: compared with a tolerance, never exactly).
+ *
+ * GPU-resident training (tensors that stay on the GPU) is gpu-runtime.ts.
  */
 import { Rng } from '../random';
 import { allClose, randn, type Tensor } from '../tensor';

@@ -3,6 +3,7 @@
  * current level (nothing is saved while viewing); "Fork" copies it into the
  * current level's save or the sandbox, asking before replacing work.
  */
+import { modeOf } from '@build-a-computer/platform-core';
 import { levelById } from '@build-a-computer/content';
 import type { Board, SharedBoard } from '@build-a-computer/schema';
 import { zoomToFit } from '../editor/camera';
@@ -69,8 +70,8 @@ export function forkTargets(): { level: { id: string; title: string } | null; sa
   const s = ui().shared;
   const cur = editor().level;
   const wanted = s?.payload.levelId ? (levelById(s.payload.levelId) ?? communityLevelById(s.payload.levelId)) : undefined;
-  const target = wanted && wanted.mode === 'board' && isUnlocked(wanted, editor().completed) ? wanted : cur;
-  const level = target && target.track !== 'sandbox' && target.mode === 'board' ? { id: target.id, title: target.title } : null;
+  const target = wanted && modeOf(wanted).work === 'board' && isUnlocked(wanted, editor().completed) ? wanted : cur;
+  const level = target && target.track !== 'sandbox' && modeOf(target).work === 'board' ? { id: target.id, title: target.title } : null;
   return { level, sandbox: true };
 }
 

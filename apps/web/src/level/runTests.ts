@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { caseIndexOf, type CaseResult } from '@build-a-computer/sim-logic';
 import type { Level, TestSpec } from '@build-a-computer/schema';
+import { allTestKinds, canRunTests as coreCanRunTests } from '@build-a-computer/platform-core';
 import { useEditor, type TestRun } from '../editor/store';
 import { sim } from '../sim/client';
 import { t } from '../i18n';
@@ -16,7 +17,8 @@ import { registerCaseRun, type CaseRunTarget } from './panels/caseRun';
 /** Cases the level's tests will run (truth rows, vectors, sequence checks, programs). */
 export const totalCases = (level: Level | null): number => plannedTotal(level);
 
-export const canRunTests = (level: Level | null): boolean => !!level && level.track !== 'sandbox' && totalCases(level) > 0;
+/** Free-play levels (the sandbox) and levels without planned cases have nothing to run (platform-core policy). */
+export const canRunTests = (level: Level | null): boolean => !!level && coreCanRunTests(level, totalCases(level));
 
 let running = false;
 
@@ -132,7 +134,8 @@ export async function runSingleCase(test: number, index: number): Promise<CaseRe
   }
 }
 
-const RUNNABLE: readonly TestSpec['kind'][] = ['truth-table', 'exhaustive', 'random', 'sequence', 'program', 'riscv', 'js'];
+/** Every registered test kind can run one case at a time (the worker's checkers dispatch by mode). */
+const RUNNABLE: readonly TestSpec['kind'][] = allTestKinds();
 
 /** While a level with tests is open, the per-case Run action (strip, cases view) runs that one case. */
 export function useCaseRunner(level: Level | null): void {

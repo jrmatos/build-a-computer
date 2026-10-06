@@ -1,4 +1,4 @@
-import type { Board, ChipMap, Level, TestSpec } from '@build-a-computer/schema';
+import type { Board, ChipMap, Level } from '@build-a-computer/schema';
 import {
   ChipCycleError,
   CompileError,
@@ -7,21 +7,20 @@ import {
   compile,
   flattenBoard,
   loadProgram,
-  runTest,
-  runTestCase,
   Rig,
   debugPlan,
   stepCase,
   type CaseResult,
   type DebugPlan,
   type DebugTrace,
-  type CheckOptions,
   type EngineOptions,
   type Netlist,
   type SettleResult,
 } from '@build-a-computer/sim-logic';
-import type { BusValue, JsApi, JsCallOptions, JsDebugResult, JsRunState, LoadOptions, LoadResult, RvApi, RvLoadOptions, RvLoadResult, RvSnapshot, SimApi, Snapshot } from './protocol';
+import type { BusValue, JsApi, JsCallOptions, JsDebugResult, JsRunState, LoadOptions, LoadResult, RvApi, RvLoadOptions, RvLoadResult, RvSnapshot, RvTranslation, SimApi, Snapshot } from './protocol';
 import type { RvHost } from './rv-host';
+import { levelCheckers } from './checkers';
+import { runLevel, runLevelCase } from '@build-a-computer/platform-core/checker';
 import type { JsHost, JsHostOptions } from './js-host';
 
 /**
@@ -102,18 +101,6 @@ function makeView(nl: Netlist): View {
   };
 }
 
-/** A case that failed because the simulator threw. */
-const simFailed = (kind: TestSpec['kind'], test: number, e: unknown): CaseResult => ({
-  index: 0,
-  pass: false,
-  inputs: {},
-  expected: {},
-  actual: {},
-  kind,
-  test,
-  message: `The simulator failed while testing: ${e instanceof Error ? e.message : String(e)}`,
-});
-
 /** What debugStart returns: the recorded case and the frame the live board was left at. */
 export type CaseDebugStart = { ok: true; trace: DebugTrace; frame: number; tick: number } | { ok: false; error: string };
 
@@ -161,6 +148,13 @@ export class SimHost implements SimApi, RvApi, JsApi {
   /** Case debugger: the case being replayed on the live engine, and the frame shown. */
   private dbg: { plan: DebugPlan; nl: Netlist; opts: EngineOptions; frame: number } | null = null;
   private dbgBusy = false;
+  /** Test checkers by level mode (ADR-010). */
+  private readonly checkers = levelCheckers(
+    { nl: () => this.nl, flatBoard: () => this.flatBoard, chips: () => this.chips, now: () => this.now() },
+    loadRvModule,
+    loadJsModule,
+    () => this.js?.options ?? this.jsOptions,
+  );
 
   constructor(
     private readonly now: () => number = () => performance.now(),
@@ -247,6 +241,15 @@ export class SimHost implements SimApi, RvApi, JsApi {
   rvMemory(addr: number, length: number): Uint8Array {
     // Before the first rvLoad there is no machine: zeros, as RvHost returns without one.
     return this.rv?.rvMemory(addr, length) ?? new Uint8Array(Math.max(0, Math.min(Math.floor(length), 1 << 20)));
+  }
+  rvReadWords(addr: number, count: number, stride?: number): Uint32Array {
+    return this.rv?.rvReadWords(addr, count, stride) ?? new Uint32Array(0);
+  }
+  rvTranslate(va: number, satp?: number, access?: 'fetch' | 'load' | 'store'): RvTranslation | null {
+    return this.rv?.rvTranslate(va, satp, access) ?? null;
+  }
+  rvDisk(sector: number, count: number): Uint8Array {
+    return this.rv?.rvDisk(sector, count) ?? new Uint8Array(0);
   }
   rvFramebuffer(): { pixels: Uint8Array; palette: Uint32Array } | null {
     return this.rv?.rvFramebuffer() ?? null;
@@ -486,11 +489,12 @@ export class SimHost implements SimApi, RvApi, JsApi {
 
   /**
    * Run every test of `level`, streaming each case (awaited, so proxied
-   * callbacks land in order). 'program' tests compile a copy of `board` with
-   * the program loaded into its ROM; without `board` they fail with a message.
-   * Each test gets `budgetMs` of wall-clock time (default 10 s) and runs with
-   * the level's power-on mode. Code levels (`mode: 'code'`) run each 'riscv'
-   * test on the RV32 machine through rv-check with the player's `source`.
+   * callbacks land in order). Dispatches through the level mode's checker
+   * (checkers.ts, ADR-010): board levels test `board` (else the last loaded
+   * one) on sim-logic, 'program' tests with the program in its ROM; code
+   * levels run each 'riscv' test on the RV32 machine with the player's
+   * `source`; js levels run each 'js' test in a fresh sandbox. Each test gets
+   * `budgetMs` of wall-clock time and runs with the level's power-on mode.
    */
   async runTests(
     level: Level,
@@ -499,36 +503,7 @@ export class SimHost implements SimApi, RvApi, JsApi {
     budgetMs = DEFAULT_TEST_BUDGET_MS,
     source?: string,
   ): Promise<{ passed: number; total: number }> {
-    if (level.mode === 'code') return this.runCodeTests(level, onCase, source ?? '', budgetMs);
-    if (level.mode === 'js') return this.runJsTests(level, onCase, source ?? '');
-    const prep = this.boardForTests(board);
-    if ('error' in prep) {
-      await onCase(prep.error);
-      return { passed: 0, total: 1 };
-    }
-    board = prep.board;
-    if (!this.nl && !board) return { passed: 0, total: 0 };
-    let passed = 0;
-    let total = 0;
-    const emit = async (r: CaseResult): Promise<void> => {
-      total++;
-      if (r.pass) passed++;
-      await onCase(r);
-    };
-    const opts = this.checkOptions(level, budgetMs);
-    for (const [ti, t] of level.tests.entries()) {
-      const nl = this.testNetlist(t, ti, board);
-      if (!('nl' in nl)) {
-        await emit(nl);
-        continue;
-      }
-      try {
-        for (const r of runTest(nl.nl, t, opts)) await emit({ ...r, test: ti });
-      } catch (e) {
-        await emit(simFailed(t.kind, ti, e));
-      }
-    }
-    return { passed, total };
+    return runLevel(this.checkers.for(level), level, { board, source: source ?? '', budgetMs }, onCase);
   }
 
   /**
@@ -540,123 +515,7 @@ export class SimHost implements SimApi, RvApi, JsApi {
    * Same `board`, `budgetMs` and `source` rules as runTests.
    */
   async runCase(level: Level, testIndex: number, caseIndex: number, board?: Board, budgetMs = DEFAULT_TEST_BUDGET_MS, source?: string): Promise<CaseResult> {
-    const t = level.tests[testIndex];
-    if (!t) return { index: caseIndex, pass: false, inputs: {}, expected: {}, actual: {}, test: testIndex, message: 'This test does not exist.' };
-    if (level.mode === 'code' || level.mode === 'js') {
-      if (caseIndex !== 0) return { index: caseIndex, pass: false, inputs: {}, expected: {}, actual: {}, kind: t.kind, test: testIndex, message: `There is no case ${caseIndex + 1} in this test.` };
-      const r = level.mode === 'code' ? (await this.codeTestResults(level, t, source ?? '', budgetMs))[0]! : await this.jsTestResult(level, t, source ?? '');
-      return { ...r, test: testIndex };
-    }
-    const prep = this.boardForTests(board);
-    if ('error' in prep) return { ...prep.error, index: caseIndex, kind: t.kind, test: testIndex };
-    if (!this.nl && !prep.board) return { index: caseIndex, pass: false, inputs: {}, expected: {}, actual: {}, kind: t.kind, test: testIndex, message: 'There is no board loaded.' };
-    const nl = this.testNetlist(t, testIndex, prep.board);
-    if (!('nl' in nl)) return { ...nl, index: caseIndex, ...(t.kind === 'sequence' ? { step: caseIndex } : {}) };
-    try {
-      return { ...runTestCase(nl.nl, t, caseIndex, this.checkOptions(level, budgetMs)), test: testIndex };
-    } catch (e) {
-      return { ...simFailed(t.kind, testIndex, e), index: caseIndex };
-    }
-  }
-
-  /** The flattened board tests run on: `board`, else the last loaded one. A chip cycle is a failed case. */
-  private boardForTests(board?: Board): { board: Board | undefined } | { error: CaseResult } {
-    // Without a board, fall back to the last loaded one (already flattened).
-    if (!board) return { board: this.flatBoard ?? undefined };
-    try {
-      return { board: flattenBoard(board, this.chips).board };
-    } catch (e) {
-      if (!(e instanceof ChipCycleError)) throw e;
-      return { error: { index: 0, pass: false, inputs: {}, expected: {}, actual: {}, message: e.message } };
-    }
-  }
-
-  /** Checker options for a level: its power-on mode, the fixed seed, FastEngine and the wall-clock budget. */
-  private checkOptions(level: Level, budgetMs: number): CheckOptions {
-    return {
-      powerOnState: level.power,
-      seed: 1,
-      createEngine: (nl, o) => new FastEngine(nl, o),
-      now: this.now,
-      budgetMs,
-    };
-  }
-
-  /** The netlist test `t` runs on ('program': the board with the program in its ROM), or the failed case. */
-  private testNetlist(t: TestSpec, ti: number, board: Board | undefined): { nl: Netlist } | CaseResult {
-    try {
-      if (t.kind === 'program') {
-        if (!board) return { index: 0, pass: false, inputs: {}, expected: t.expect, actual: {}, kind: t.kind, test: ti, message: 'Could not load the program: the board was not sent with the test run.' };
-        return { nl: compile(loadProgram(board, t)) };
-      }
-      return { nl: this.nl ?? compile(board!) };
-    } catch (e) {
-      if (!(e instanceof CompileError)) throw e;
-      return { index: 0, pass: false, inputs: {}, expected: {}, actual: {}, kind: t.kind, test: ti, message: e.message };
-    }
-  }
-
-  private async runCodeTests(
-    level: Level,
-    onCase: (r: CaseResult) => void | Promise<void>,
-    source: string,
-    budgetMs: number,
-  ): Promise<{ passed: number; total: number }> {
-    let passed = 0;
-    let total = 0;
-    for (const [ti, t] of level.tests.entries()) {
-      for (const r of await this.codeTestResults(level, t, source, budgetMs)) {
-        total++;
-        if (r.pass) passed++;
-        await onCase({ ...r, test: ti });
-      }
-    }
-    return { passed, total };
-  }
-
-  /** The results of one test on a code level (a 'riscv' test is one case). */
-  private async codeTestResults(level: Level, t: TestSpec, source: string, budgetMs: number): Promise<CaseResult[]> {
-    const results: CaseResult[] = [];
-    if (t.kind !== 'riscv') {
-      results.push({ index: 0, pass: false, inputs: {}, expected: {}, actual: {}, kind: t.kind, message: `A code level cannot run a '${t.kind}' test.` });
-    } else {
-      try {
-        const { runRiscvTest } = await loadRvModule();
-        for (const r of runRiscvTest(source, t, level, { now: this.now, budgetMs })) results.push(r);
-      } catch (e) {
-        results.push({ index: 0, pass: false, inputs: {}, expected: {}, actual: {}, kind: t.kind, message: `The emulator failed while testing: ${e instanceof Error ? e.message : String(e)}` });
-      }
-    }
-    return results;
-  }
-
-  /** Track 2: each 'js' test runs the player's main.js in a fresh sandbox (its own timeoutMs). */
-  private async runJsTests(
-    level: Level,
-    onCase: (r: CaseResult) => void | Promise<void>,
-    source: string,
-  ): Promise<{ passed: number; total: number }> {
-    let passed = 0;
-    let total = 0;
-    for (const [ti, t] of level.tests.entries()) {
-      const r = await this.jsTestResult(level, t, source);
-      total++;
-      if (r.pass) passed++;
-      await onCase({ ...r, test: ti });
-    }
-    return { passed, total };
-  }
-
-  /** The result of one test on a Track 2 level (a 'js' test is one case, in a fresh sandbox). */
-  private async jsTestResult(level: Level, t: TestSpec, source: string): Promise<CaseResult> {
-    if (t.kind !== 'js') return { index: 0, pass: false, inputs: {}, expected: {}, actual: {}, kind: t.kind, message: `A JavaScript level cannot run a '${t.kind}' test.` };
-    const { runner, datasets } = this.js?.options ?? this.jsOptions;
-    try {
-      const { runJsTest } = await loadJsModule();
-      return await runJsTest(source, t, level, { ...(runner ? { runner } : {}), ...(datasets ? { datasets } : {}) });
-    } catch (e) {
-      return { index: 0, pass: false, inputs: {}, expected: {}, actual: {}, kind: t.kind, message: `The JavaScript checker failed: ${e instanceof Error ? e.message : String(e)}` };
-    }
+    return runLevelCase(this.checkers.for(level), level, testIndex, caseIndex, { board, source: source ?? '', budgetMs });
   }
 
   /** Run ticks for at most one slice, then yield so pause always works (E-SIM-10). */

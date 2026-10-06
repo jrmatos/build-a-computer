@@ -1,0 +1,354 @@
+/* OS-05 kernel panel. Tokens from styles/tokens.css; frame colors per theme below. */
+
+:root,
+:root[data-theme='light'] {
+  --os-kernel: #6965db;
+  --os-loaded: #a5a3ee;
+  --os-kstack: #0c8599;
+  --os-free: #e6e8ee;
+  --os-table: #d97706;
+  --os-user: #2f9e44;
+  --os-used: #c92a2a;
+  --os-unused: #f2f3f6;
+  --os-fault-bg: rgba(201, 42, 42, 0.1);
+  --os-current-bg: rgba(105, 101, 219, 0.1);
+}
+:root[data-theme='dark'] {
+  --os-kernel: #8b88f0;
+  --os-loaded: #4d4b8a;
+  --os-kstack: #3bc9db;
+  --os-free: #343842;
+  --os-table: #f59e0b;
+  --os-user: #40c463;
+  --os-used: #ff6b6b;
+  --os-unused: #282b33;
+  --os-fault-bg: rgba(255, 107, 107, 0.14);
+  --os-current-bg: rgba(168, 165, 255, 0.12);
+}
+
+.os {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.os-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.os-body > * {
+  flex: 1;
+  min-height: 0;
+}
+.os-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(240px, 1fr);
+  gap: 12px;
+  min-height: 0;
+}
+.os-scroll,
+.os-detail {
+  min-height: 0;
+  overflow: auto;
+}
+.os-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 12px;
+  border-left: 1px solid var(--island-border);
+}
+.os-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.os-select {
+  width: auto;
+  font-family: var(--font-ui);
+}
+.os-va {
+  width: 130px;
+}
+.os-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.os-note.is-error {
+  color: var(--danger);
+}
+/* tables */
+.os-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.os-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--island);
+  color: var(--text-muted);
+  font-weight: 500;
+  text-align: left;
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--island-border);
+  white-space: nowrap;
+}
+.os-table td {
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--island-border);
+  white-space: nowrap;
+}
+.os-table code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.os-row {
+  cursor: default;
+}
+.os-row[tabindex] {
+  cursor: pointer;
+}
+.os-row[tabindex]:hover {
+  background: var(--hover);
+}
+.os-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.os-row.is-current {
+  background: var(--os-current-bg);
+}
+.os-row.is-selected td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.os-row.is-fault {
+  background: var(--os-fault-bg);
+}
+.os-row.is-guard td {
+  color: var(--text-muted);
+}
+.os-cur {
+  display: inline-block;
+  width: 14px;
+  color: var(--accent-strong);
+  font-size: 10px;
+}
+.os-name {
+  font-weight: 500;
+}
+.os-state,
+.os-kind {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--hover);
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.os-state.is-running {
+  background: var(--active);
+  color: var(--accent-strong);
+}
+.os-state.is-runnable {
+  color: var(--text);
+}
+.os-state.is-zombie,
+.os-kind.is-guard {
+  color: var(--danger);
+}
+.os-kind.is-code {
+  color: var(--accent-strong);
+}
+.os-kind.is-stack,
+.os-kind.is-data {
+  color: var(--success);
+}
+.os-fault {
+  margin: 0 0 6px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--os-fault-bg);
+  color: var(--danger);
+  font-size: 12.5px;
+}
+.os-satp {
+  margin-left: 6px;
+}
+
+/* key/value lists */
+.os-kv {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px 10px;
+  margin: 0;
+  font-size: 12px;
+}
+.os-kv > div {
+  display: contents;
+}
+.os-kv dt {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+.os-kv dd {
+  margin: 0;
+  font-family: var(--font-mono);
+}
+.os-regs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 1px 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+.os-regs li {
+  display: flex;
+  gap: 6px;
+  white-space: nowrap;
+}
+.os-regs .dk-rv-abi {
+  min-width: 28px;
+}
+
+/* flags */
+.os-flags {
+  display: inline-flex;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+}
+.os-flags .is-off {
+  color: var(--text-faint);
+  opacity: 0.6;
+}
+.os-flags .is-on {
+  font-weight: 600;
+}
+.os-flags .is-U {
+  color: var(--success);
+}
+.os-flags .is-X {
+  color: var(--accent-strong);
+}
+.os-flags .is-W {
+  color: var(--warning);
+}
+
+/* translate + tree */
+.os-tr p {
+  margin: 0;
+  white-space: normal;
+}
+.os-steps,
+.os-tree,
+.os-tree ul,
+.os-owners,
+.os-legend {
+  margin: 4px 0 0;
+  padding-left: 14px;
+  list-style: none;
+}
+.os-tree,
+.os-owners,
+.os-legend {
+  padding-left: 0;
+}
+.os-tree li,
+.os-steps li,
+.os-tree summary {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.os-tree summary {
+  cursor: pointer;
+}
+
+/* physical memory strip */
+.os-strip {
+  display: grid;
+  gap: 1px;
+  max-width: 760px;
+}
+.os-cell {
+  display: inline-block;
+  aspect-ratio: 1;
+  min-width: 6px;
+  border-radius: 1px;
+  background: var(--os-unused);
+}
+.os-cell.is-kernel {
+  background: var(--os-kernel);
+}
+.os-cell.is-loaded {
+  background: var(--os-loaded);
+}
+.os-cell.is-kstack {
+  background: var(--os-kstack);
+}
+.os-cell.is-free {
+  background: var(--os-free);
+}
+.os-cell.is-table {
+  background: var(--os-table);
+}
+.os-cell.is-user {
+  background: var(--os-user);
+}
+.os-cell.is-used {
+  background: var(--os-used);
+}
+.os-cell.is-shared {
+  box-shadow: inset 0 0 0 1px var(--text);
+}
+.os-cell.is-picked {
+  outline: 2px solid var(--text);
+  outline-offset: -1px;
+}
+.os-cell.is-dim {
+  opacity: 0.3;
+}
+.os-strip-axis {
+  display: flex;
+  justify-content: space-between;
+  max-width: 760px;
+  margin-top: 2px;
+}
+.os-hover {
+  margin: 4px 0 0;
+  white-space: normal;
+}
+.os-legend li,
+.os-owners li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  margin-bottom: 3px;
+}
+.os-legend .os-cell {
+  width: 12px;
+  min-width: 12px;
+}
+
+@media (max-width: 720px) {
+  .os-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .os-detail {
+    padding-left: 0;
+    border-left: 0;
+    border-top: 1px solid var(--island-border);
+    padding-top: 6px;
+  }
+}

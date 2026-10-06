@@ -11,8 +11,8 @@ import { TestStripSection } from './TestStrip';
 import { useLevelUi } from './ui';
 import './level.css';
 import { Markdown, inline } from './Markdown';
-import { loadSolution, loadSourceSolution } from './solution';
-import { zoomToFit } from '../editor/camera';
+import { canShowSolution, hintState } from '@build-a-computer/platform-core';
+import { modeUi } from '../modes';
 import { DebugButton } from './debug/DebugButton';
 import { BestLine } from '../community/BestBadge';
 import { nextPackLevel, packOfLevel } from '../community/registry';
@@ -112,7 +112,8 @@ function LevelBody({ level }: { level: Level }) {
   const testRun = useEditor((s) => s.testRun);
   const completed = useEditor((s) => s.completed.includes(level.id));
   const justCompleted = useLevelUi((s) => s.justCompleted === level.id);
-  const [hints, setHints] = useState(0);
+  const [opened, setOpened] = useState(0);
+  const hints = hintState(level, opened);
   const inChip = useEditor((s) => s.editStack.length > 0);
   const runnable = canRunTests(level) && !inChip;
   const running = !!testRun?.running;
@@ -131,30 +132,30 @@ function LevelBody({ level }: { level: Level }) {
       <p className="lp-goal">{level.goal}</p>
       {level.tutorial && <Markdown className="lp-tutorial" text={level.tutorial} />}
 
-      {level.hints.length > 0 && (
+      {hints.total > 0 && (
         <div className="lp-hints">
-          {level.hints.slice(0, hints).map((h, i) => (
+          {hints.shown.map((h, i) => (
             <p key={i} className="lp-hint">
               <BulbIcon />
               <span>{inline(h)}</span>
             </p>
           ))}
-          {hints < level.hints.length && (
+          {hints.next !== null && (
             <button
               type="button"
               className="lv-btn ghost"
               onClick={() => {
-                setHints(hints + 1);
+                setOpened(opened + 1);
                 emitAchievement({ type: 'hint-shown', levelId: level.id });
               }}
             >
               <BulbIcon />
-              {t('level.hint.show', { n: hints + 1, total: level.hints.length })}
+              {t('level.hint.show', { n: hints.next, total: hints.total })}
             </button>
           )}
         </div>
       )}
-      {level.tests.length > 0 && !inChip && <ShowSolution level={level} />}
+      {canShowSolution(level, { inChip }) && <ShowSolution level={level} />}
 
       <div className="lp-tests">
         <div className="dbg-run-row">
@@ -239,29 +240,16 @@ function ShowSolution({ level }: { level: Level }) {
     );
   const reveal = async () => {
     setState('loading');
-    const { commit, toast } = useEditor.getState();
+    const { toast } = useEditor.getState();
     try {
-      // Code and Track 2 levels: the solution is source text for the editor.
-      if (level.mode === 'code' || level.mode === 'js') {
-        const source = await loadSourceSolution(level);
-        if (source === undefined) {
-          toast(t('level.solution.none'), 'info');
-          return;
-        }
-        useEditor.getState().set({ source });
-        emitAchievement({ type: 'solution-revealed', levelId: level.id });
-        toast(t('level.solution.loadedCode'), 'success');
-        return;
-      }
-      const board = await loadSolution(level);
-      if (!board) {
+      // The mode plugin loads it: a board (one undo step) or source text for the editor.
+      const loaded = await modeUi(level).showSolution(level);
+      if (!loaded) {
         toast(t('level.solution.none'), 'info');
         return;
       }
-      commit(() => board, []);
       emitAchievement({ type: 'solution-revealed', levelId: level.id });
-      requestAnimationFrame(() => requestAnimationFrame(() => zoomToFit()));
-      toast(t('level.solution.loaded'), 'success');
+      toast(t(loaded), 'success');
     } finally {
       setState('idle');
     }

@@ -7,7 +7,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
  * the server verifier, so they never touch DOM, network or clock APIs
  * (AGENTS.md, docs/plan.md "Working agreement"). Add new sim packages here.
  */
-const SIM_PACKAGES = 'packages/{sim-logic,det,rv32,asm,cc,tensor,rv-check}/src/**/*.ts';
+const SIM_PACKAGES = 'packages/{sim-logic,det,rv32,asm,cc,tensor,rv-check,platform-core}/src/**/*.ts';
 
 const banned = (names, message) => names.map((name) => ({ name, message }));
 

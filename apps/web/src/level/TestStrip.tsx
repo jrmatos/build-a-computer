@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { Level } from '@build-a-computer/schema';
+import { isBoardKind } from '@build-a-computer/platform-core';
 import type { TestRun } from '../editor/store';
 import { t } from '../i18n';
 import { loadCaseInputs } from './runTests';
@@ -289,7 +290,7 @@ export function TestStrip({ level, run, floating = false, onDebugCase }: { level
       scrollTo(k);
       const c = column(k);
       // Code and JS tests have no board inputs: their Debug action loads the test instead.
-      if (c.plan?.kind === 'riscv' || c.plan?.kind === 'js') {
+      if (c.plan && !isBoardKind(c.plan.kind)) {
         setNote('');
         return;
       }

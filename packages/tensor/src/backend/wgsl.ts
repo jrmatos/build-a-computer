@@ -45,29 +45,30 @@ const ENTRY_1D = `@compute @workgroup_size(${WORKGROUP})
 fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) nwg: vec3<u32>)`;
 
 /**
- * Elementwise binary op with broadcasting. `meta` holds
+ * Elementwise binary op with broadcasting. The `dims` buffer (named so
+ * because `meta` is a reserved word in WGSL) holds
  * [n, rank, outShape[rank], aStrides[rank], bStrides[rank]] (see binaryMeta).
  */
 export function binaryShader(op: GpuBinaryOp): string {
   return `@group(0) @binding(0) var<storage, read> A: array<f32>;
 @group(0) @binding(1) var<storage, read> B: array<f32>;
 @group(0) @binding(2) var<storage, read_write> Y: array<f32>;
-@group(0) @binding(3) var<storage, read> meta: array<u32>;
+@group(0) @binding(3) var<storage, read> dims: array<u32>;
 
 ${ENTRY_1D} {
   ${FLAT_INDEX}
-  if (i >= meta[0]) { return; }
-  let rank = meta[1];
+  if (i >= dims[0]) { return; }
+  let rank = dims[1];
   var rest = i;
   var ia = 0u;
   var ib = 0u;
   for (var d = 0u; d < rank; d = d + 1u) {
     let ax = rank - 1u - d;
-    let size = meta[2u + ax];
+    let size = dims[2u + ax];
     let coord = rest % size;
     rest = rest / size;
-    ia = ia + coord * meta[2u + rank + ax];
-    ib = ib + coord * meta[2u + 2u * rank + ax];
+    ia = ia + coord * dims[2u + rank + ax];
+    ib = ib + coord * dims[2u + 2u * rank + ax];
   }
   let a = A[ia];
   let b = B[ib];
@@ -259,6 +260,17 @@ export class GpuLimitError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'GpuLimitError';
+  }
+}
+
+/**
+ * Thrown when the device rejects a kernel (shader compile or validation
+ * error). A GpuLimitError, so callers fall back to the CPU the same way.
+ */
+export class GpuKernelError extends GpuLimitError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'GpuKernelError';
   }
 }
 

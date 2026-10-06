@@ -32,9 +32,16 @@ export {
   createBackend,
   CpuBackend,
   fitConfig,
+  initGpu,
+  setGpuRuntime,
+  gpuRuntime,
+  deviceMessage,
+  GpuRuntime,
   type ComputeBackend,
   type ModelConfig,
 } from './backend/index';
+export { type Device, type DeviceRequest, DeviceReadError } from './tensor';
+export { flushFiniteChecks } from './optim';
 
 /** Bumped when the public API changes incompatibly. */
 export const TENSOR_VERSION = 1;

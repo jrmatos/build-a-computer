@@ -39,8 +39,10 @@ import type {
   RvState,
   RvStopReason,
   RvTestView,
+  RvTranslation,
   SourceDiagnostic,
 } from './protocol';
+import { sv32Translate } from './sv32';
 
 const SLICE_MS = 8;
 const SNAPSHOT_MS = 1000 / 60;
@@ -54,6 +56,10 @@ const MAX_SYNC_STEPS = 1_000_000;
 const UART_TAIL = 64 * 1024;
 /** Most bytes one rvMemory call returns. */
 const MAX_MEMORY_READ = 1024 * 1024;
+/** Most words one rvReadWords call returns. */
+const MAX_WORDS_READ = 256 * 1024;
+/** Most sectors one rvDisk call returns. */
+const MAX_DISK_SECTORS = 2048;
 /** Most instructions run from `_start` to `main` (C levels, stopAtMain). */
 const MAX_TO_MAIN = 5_000_000;
 
@@ -251,6 +257,51 @@ export class RvHost implements RvApi {
       if (lo < hi) out.set(dev.bytes.subarray(lo - map.base, hi - map.base), lo - (addr >>> 0));
     }
     return out;
+  }
+
+  rvReadWords(addr: number, count: number, stride = 4): Uint32Array {
+    const out = new Uint32Array(Math.max(0, Math.min(Math.floor(count), MAX_WORDS_READ)));
+    const m = this.m;
+    if (!m) return out;
+    const step = Math.max(4, Math.floor(stride) & ~3);
+    for (let i = 0; i < out.length; i++) out[i] = this.word((addr >>> 0) + i * step) ?? 0;
+    return out;
+  }
+
+  rvTranslate(va: number, satp?: number, access: 'fetch' | 'load' | 'store' = 'load'): RvTranslation | null {
+    const m = this.m;
+    if (!m) return null;
+    const h = m.hart;
+    const MXR = 1 << 19;
+    const SUM = 1 << 18;
+    return sv32Translate((pa) => this.word(pa), satp ?? h.satp >>> 0, va, access, 'U', {
+      mxr: (h.mstatus & MXR) !== 0,
+      sum: (h.mstatus & SUM) !== 0,
+    });
+  }
+
+  rvDisk(sector: number, count: number): Uint8Array {
+    const storage = this.m?.block.storage;
+    if (!storage) return new Uint8Array(0);
+    const from = Math.max(0, Math.floor(sector)) * 512;
+    const n = Math.max(0, Math.min(Math.floor(count), MAX_DISK_SECTORS)) * 512;
+    return storage.slice(Math.min(from, storage.length), Math.min(from + n, storage.length));
+  }
+
+  /** A little-endian word of plain memory (RAM, ROM, framebuffer); undefined elsewhere. */
+  private word(pa: number): number | undefined {
+    const m = this.m;
+    if (!m) return undefined;
+    pa >>>= 0;
+    for (const map of m.bus.mappings) {
+      const dev = map.device as { bytes?: Uint8Array };
+      if (!(dev.bytes instanceof Uint8Array)) continue;
+      const off = pa - map.base;
+      if (off < 0 || off + 4 > map.size || off + 4 > dev.bytes.length) continue;
+      const b = dev.bytes;
+      return (b[off]! | (b[off + 1]! << 8) | (b[off + 2]! << 16) | (b[off + 3]! << 24)) >>> 0;
+    }
+    return undefined;
   }
 
   /**

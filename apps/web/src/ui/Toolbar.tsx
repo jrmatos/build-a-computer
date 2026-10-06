@@ -2,7 +2,7 @@ import type { DragEvent, ReactNode } from 'react';
 import type { PartType } from '@build-a-computer/schema';
 import { useEditor, type Tool } from '../editor/store';
 import { t } from '../i18n';
-import { CodeLevelChip } from '../code/CodeLevelChip';
+import { useModeUi } from '../modes';
 import { IconHand, IconLibrary, IconLock, IconMore, IconPointer, IconUnlock, IconWire, PartSymbol } from './icons';
 import { PART_DRAG_MIME, paletteKeys, paletteParts } from './shortcuts';
 import './ui.css';
@@ -25,14 +25,15 @@ export function Toolbar() {
   const readOnly = useEditor((s) => s.readOnly);
   const setTool = useEditor((s) => s.setTool);
   const set = useEditor((s) => s.set);
+  const ModeToolbar = useModeUi().Toolbar;
 
   const parts = paletteParts(level);
   const keys = paletteKeys(level);
   const inline = parts.slice(0, MAX_INLINE);
   const overflow = parts.length > MAX_INLINE;
 
-  // Code levels (Phase 6+) have no board tools.
-  if (level?.mode === 'code') return <CodeLevelChip />;
+  // Modes without board tools (code levels) show their own top bar.
+  if (ModeToolbar) return <ModeToolbar />;
 
   return (
     <div className="island gu-toolbar" role="toolbar" aria-label={t('toolbar.label')}>

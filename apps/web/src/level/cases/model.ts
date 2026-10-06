@@ -10,6 +10,7 @@ import { disassembleAll } from '@build-a-computer/content';
 import { disassemble } from '@build-a-computer/asm';
 import type { CaseResult } from '@build-a-computer/sim-logic';
 import type { Level, TestSpec } from '@build-a-computer/schema';
+import { isBoardKind } from '@build-a-computer/platform-core';
 import type { RvCheck } from '@build-a-computer/worker';
 import { t } from '../../i18n';
 import { caseChecks, caseDetail, checkLabel, checkLine, hex32, showReg } from '../panels/testDiff';
@@ -87,8 +88,6 @@ export interface SpecItem {
   block?: boolean;
 }
 
-const BOARD_KINDS: readonly TestKind[] = ['truth-table', 'exhaustive', 'random', 'sequence', 'program'];
-
 export function testTitle(level: Pick<Level, 'tests'>, i: number): string {
   const test = level.tests[i];
   const name = test && (test.kind === 'riscv' || test.kind === 'js') ? test.name : undefined;
@@ -131,7 +130,7 @@ export function buildCaseTable(level: TestLevel): CaseTable {
     start: plan.segments[i]?.start ?? 0,
     count: plan.segments[i]?.count ?? 0,
   }));
-  const text = level.tests.length > 0 && level.tests.every((x) => !BOARD_KINDS.includes(x.kind));
+  const text = level.tests.length > 0 && level.tests.every((x) => !isBoardKind(x.kind));
   const hasSteps = level.tests.some((x) => x.kind === 'sequence' || x.kind === 'program');
   let columns: TableCol[];
   if (text) {

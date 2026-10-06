@@ -171,6 +171,26 @@ export interface RvSnapshot {
   test?: RvTestView;
 }
 
+/** OS-05: how the MMU would translate one virtual address (RvApi.rvTranslate). */
+export interface RvTranslation {
+  va: number;
+  satp: number;
+  access: 'fetch' | 'load' | 'store';
+  ok: boolean;
+  /** The physical address (ok). */
+  pa?: number;
+  /** satp's MODE is Bare (or machine mode): no translation. */
+  bare?: boolean;
+  /** Level of the leaf (1 = 4 MiB superpage) and its PTE (ok). */
+  level?: 0 | 1;
+  pte?: number;
+  /** The fault the access would raise (not ok): mcause, and why. */
+  cause?: number;
+  why?: 'access' | 'invalid' | 'reserved' | 'noLeaf' | 'notUser' | 'userPage' | 'noExec' | 'noRead' | 'noWrite' | 'misaligned';
+  /** Each page-table entry read, root first. */
+  steps: { level: 0 | 1; pteAddr: number; pte: number }[];
+}
+
 /**
  * Debugger commands for code levels. The same worker serves boards (SimApi)
  * and the RV32 machine (RvApi); they never run at the same time.
@@ -195,6 +215,19 @@ export interface RvApi {
   /** Send text to the UART receiver (console input) and keyboard device. */
   rvInput(text: string): void;
   rvMemory(addr: number, length: number): Uint8Array;
+  /**
+   * OS-05: `count` little-endian words of plain memory from `addr`, `stride`
+   * bytes apart (default 4; 4096 reads the first word of each page). Zeros
+   * outside memory.
+   */
+  rvReadWords(addr: number, count: number, stride?: number): Uint32Array;
+  /**
+   * OS-05: how the MMU would translate `va` through `satp` (default: the
+   * current satp) for a user-mode access, without touching A/D bits or the TLB.
+   */
+  rvTranslate(va: number, satp?: number, access?: 'fetch' | 'load' | 'store'): RvTranslation | null;
+  /** OS-05: `count` sectors (512 bytes) of the block device from `sector`; empty past its end. */
+  rvDisk(sector: number, count: number): Uint8Array;
   /** 320x200 8-bit pixels + 256-entry RGBA palette, or null without a framebuffer. */
   rvFramebuffer(): { pixels: Uint8Array; palette: Uint32Array } | null;
   rvSubscribe(onSnapshot: (s: RvSnapshot) => void): void;
@@ -220,6 +253,8 @@ export interface JsRunState {
   checkpoint?: { step: number; state: unknown };
   /** "Debug this test" (jsDebugCall): the test's index, and its verdict once the call ends. */
   test?: { index: number; verdict?: JsCaseResult };
+  /** The device the tensor modules got, and whether this run used the GPU (E-ML-01 badge). */
+  device?: { available: 'webgpu' | 'cpu'; used: boolean; message: string };
 }
 
 /** What jsDebugCall resolves to. */

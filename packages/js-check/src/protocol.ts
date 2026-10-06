@@ -35,6 +35,24 @@ export interface StartRequest {
   checkpoint?: unknown;
   /** Step the checkpoint was taken at: report() steps continue after it. */
   checkpointStep?: number;
+  /**
+   * GPU for the tensor modules: 'auto' connects WebGPU when the browser has
+   * it (so `model.to('auto')` uses it), 'off' keeps everything on the CPU,
+   * 'emulated' uses the test emulator. Default 'off'.
+   */
+  gpu?: GpuMode;
+}
+
+/** How the sandbox sets up the GPU for the tensor modules. */
+export type GpuMode = 'auto' | 'off' | 'emulated';
+
+/** Which device the tensor modules have, and whether the code used the GPU. */
+export interface DeviceInfo {
+  available: 'webgpu' | 'cpu';
+  /** True once a GPU kernel ran in this run. */
+  used: boolean;
+  /** Why (e.g. why WebGPU is not available). */
+  message: string;
 }
 
 export type ToSandbox =
@@ -57,6 +75,7 @@ export type FromSandbox =
   | { type: 'log'; text: string }
   | { type: 'samples'; samples: MlSample[] }
   | { type: 'checkpoint'; step: number; state: unknown }
+  | { type: 'device'; info: DeviceInfo }
   | { type: 'dataset'; req: number; id: string }
   | { type: 'done'; ok: true; result: unknown }
   | { type: 'done'; ok: false; error: RawError }

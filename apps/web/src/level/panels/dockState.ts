@@ -1,21 +1,25 @@
 import { create } from 'zustand';
 import type { Level } from '@build-a-computer/schema';
+import { isOsLevel } from './os/osLevel';
 
-/** Bottom dock tabs, Turing Complete style. Board levels and code levels show different sets. */
-export const DOCK_TABS = ['waveform', 'diagnostics', 'memory', 'program', 'registers', 'console', 'screen', 'stack', 'debug'] as const;
+/** Bottom dock tabs, Turing Complete style. Each level mode picks its set (modes/). */
+export const DOCK_TABS = ['waveform', 'diagnostics', 'memory', 'program', 'registers', 'console', 'screen', 'stack', 'debug', 'os'] as const;
 export type DockTab = (typeof DOCK_TABS)[number];
 
 /** 'debug' is the case debugger (level/debug): one test case replayed on the board. */
 export const BOARD_TABS: readonly DockTab[] = ['waveform', 'diagnostics', 'memory', 'program', 'debug'];
 
-/** Tabs for the level: registers, memory and call stack always; console and screen by device. */
-export function tabsFor(level: Level | null): readonly DockTab[] {
-  if (level?.mode !== 'code') return BOARD_TABS;
+/**
+ * Code-level tabs (the code mode's dock, modes/code.tsx): registers, memory
+ * and call stack always; console and screen by device.
+ */
+export function codeTabs(level: Level): readonly DockTab[] {
   const devices = level.code?.devices ?? [];
   const tabs: DockTab[] = ['registers', 'memory'];
   if (devices.includes('uart') || devices.includes('keyboard')) tabs.push('console');
   if (devices.includes('framebuffer')) tabs.push('screen');
   tabs.push('stack');
+  if (isOsLevel(level)) tabs.push('os'); // OS-05: the Phase 9 kernel panel
   return tabs;
 }
 

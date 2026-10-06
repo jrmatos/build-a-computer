@@ -61,6 +61,10 @@ export const ml: Record<string, string> = {
   'ml.train.backend.checking': 'Checking GPU…',
   'ml.train.backend.webgpuTitle': 'Your browser has a WebGPU adapter: large models train on the GPU.',
   'ml.train.backend.cpuTitle': 'No WebGPU adapter found: training runs on the CPU with a smaller configuration (E-ML-01).',
+  'ml.train.backend.usedGpuTitle': 'This run computed on the GPU (WebGPU).',
+  'ml.train.backend.gpuUnusedTitle':
+    "A GPU is available, but this run computed on the CPU. Models from the nn module train on the GPU after model.to('auto').",
+  'ml.train.backend.usedCpuTitle': 'This run computed on the CPU: {message}',
   'ml.train.nanTitle': 'Loss became {value}',
   'ml.train.nanBody':
     'The numbers grew until they overflowed. This is usually exploding gradients: each step overshoots, so the next gradient is larger still. Lower the learning rate (try dividing it by 10), check for a division by zero or log(0), and train again.',

@@ -2,6 +2,7 @@
  * Pure save handling: validate what storage returns, migrate old formats and
  * refuse newer ones (E-DATA-04, E-DATA-05).
  */
+import { initialSource } from '@build-a-computer/platform-core';
 import { migrateSave, NewerVersionError, Progress, SAVE_VERSION, type Board, type ChipMap, type Level, type Save } from '@build-a-computer/schema';
 import { closure, findChipCycle } from '@build-a-computer/sim-logic';
 import { mergeChips, remapBoardChips } from '../ui/chips/logic';
@@ -49,17 +50,13 @@ export function makeSave(level: Level, board: Board, chips: ChipMap = {}, now = 
   };
 }
 
-/** The source a code level opens with: the save's, else the level's starter. Empty for board levels. */
+/** The source a level opens with: the save's, else the mode's starter (platform-core). Empty for board levels. */
 export function sourceFor(level: Level, save?: Pick<Save, 'source'> | null): string {
-  if (level.mode === 'js') return save?.source ?? level.js?.starter ?? '';
-  if (level.mode !== 'code') return save?.source ?? '';
-  return save?.source ?? level.code?.starter ?? '';
+  return initialSource(level, save?.source);
 }
 
-/** Source to store in a save: code and js levels only, so board saves stay unchanged. */
-export function sourceToSave(level: Level, source: string): string | undefined {
-  return level.mode === 'code' || level.mode === 'js' ? source : undefined;
-}
+/** Source to store in a save: source-based modes (code, js) only, so board saves stay unchanged. */
+export { sourceToSave } from '@build-a-computer/platform-core';
 
 /** Progress from storage, or null if it is unreadable or from a newer version. */
 export function decodeProgress(raw: unknown): { kind: 'ok'; progress: Progress } | { kind: 'newer' } | { kind: 'invalid' } {

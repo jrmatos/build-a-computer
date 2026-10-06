@@ -1,6 +1,7 @@
 import * as Comlink from 'comlink';
 import { create } from 'zustand';
 import type { Board, ChipMap, Level } from '@build-a-computer/schema';
+import { isSourceLevel, modeOf } from '@build-a-computer/platform-core';
 import { closure, type CaseResult } from '@build-a-computer/sim-logic';
 import type { JsApi, JsDebugResult, JsRunState, RvApi, RvLoadOptions, RvLoadResult, RvSnapshot, SimApi, Snapshot } from '@build-a-computer/worker';
 import type { CaseDebugApi, CaseDebugStart } from '@build-a-computer/worker';
@@ -49,6 +50,11 @@ function restart(): void {
 }
 
 const remote = (): Comlink.Remote<Api> => api ?? start();
+
+/** The level runs live on the RV32 machine (code levels), by its mode plugin (platform-core). */
+const onRv = (level: Level | null | undefined): level is Level => !!level && modeOf(level).machine === 'rv32';
+/** The level runs live in the JavaScript sandbox (Track 2 levels). */
+const onJs = (level: Level | null | undefined): level is Level => !!level && modeOf(level).machine === 'js-sandbox';
 
 /** Run a call and restart the worker if it throws (out of memory, crash). */
 async function call<T>(fn: (r: Comlink.Remote<Api>) => Promise<T>): Promise<T | undefined> {
@@ -105,14 +111,14 @@ export const sim = {
     const { board, source } = useEditor.getState();
     // Tests run on the level's own board (chips are flattened in the worker); code levels send the source.
     type RunTests = (l: typeof level, cb: typeof onCase, b?: Board, budgetMs?: number, src?: string) => Promise<{ passed: number; total: number }>;
-    const src = level.mode === 'code' || level.mode === 'js' ? source : undefined;
+    const src = isSourceLevel(level) ? source : undefined;
     return call((r) => (r.runTests as unknown as RunTests)(level, Comlink.proxy(onCase), board, undefined, src));
   },
   /** "Run this case": only that case of `level.tests[test]`, on the level's board (code levels: the source). */
   runCase: async (test: number, index: number) => {
     const { level, editStack, board, source } = useEditor.getState();
     if (!level || editStack.length) return undefined;
-    const src = level.mode === 'code' || level.mode === 'js' ? source : undefined;
+    const src = isSourceLevel(level) ? source : undefined;
     return call((r) => r.runCase(level, test, index, board, undefined, src));
   },
   /** Case debugger (level/debug): replay one test case on the live board, then show any frame of it. */
@@ -175,7 +181,7 @@ function stale(): boolean {
 
 async function rvLoad(quiet = false): Promise<RvLoadResult | undefined> {
   const { source, level, breakpoints } = useEditor.getState();
-  if (!level || level.mode !== 'code') return undefined;
+  if (!onRv(level)) return undefined;
   if (quiet && !source.trim()) return undefined;
   const opts = debugOptions(level);
   const res = await call((r) => r.rvLoad(source, level, opts));
@@ -227,6 +233,10 @@ export const rv = {
   input: (text: string) => call((r) => r.rvInput(text)),
   memory: (addr: number, length: number) => call((r) => r.rvMemory(addr >>> 0, length)),
   framebuffer: () => call((r) => r.rvFramebuffer()),
+  /** OS-05 panels: words of physical memory (`stride` bytes apart), an MMU translation, disk sectors. */
+  readWords: (addr: number, count: number, stride?: number) => call((r) => r.rvReadWords(addr >>> 0, count, stride)),
+  translate: (va: number, satp?: number, access?: 'fetch' | 'load' | 'store') => call((r) => r.rvTranslate(va >>> 0, satp, access)),
+  disk: (sector: number, count: number) => call((r) => r.rvDisk(sector, count)),
   /**
    * "Debug this test": reload the machine with `level.tests[index]`'s setup,
    * input and disk (stopped at the entry, or at main in C). Snapshots then
@@ -234,7 +244,7 @@ export const rv = {
    */
   debugTest: async (index: number) => {
     const level = useEditor.getState().level;
-    if (!level || level.mode !== 'code' || level.tests[index]?.kind !== 'riscv') return undefined;
+    if (!onRv(level) || level.tests[index]?.kind !== 'riscv') return undefined;
     if (useEditor.getState().rv?.state.running) await call((r) => r.rvPause());
     useRvDebug.setState({ test: index });
     return rvLoad();
@@ -257,9 +267,9 @@ function startRvSync(): void {
     lastStopRegs = null;
     useRvDebug.setState({ symbols: [], entry: 0, prevRegs: null, loaded: null, test: null });
     useEditor.getState().set({ rv: null });
-    if (level?.mode === 'code') void rvLoad(true);
+    if (onRv(level)) void rvLoad(true);
   };
-  if (level?.mode === 'code') void rvLoad(true);
+  if (onRv(level)) void rvLoad(true);
   useEditor.subscribe((s) => {
     if (s.level !== level) {
       level = s.level;
@@ -268,7 +278,7 @@ function startRvSync(): void {
     }
     if (s.breakpoints !== bps) {
       bps = s.breakpoints;
-      if (s.level?.mode === 'code') void call((r) => r.rvSetBreakpoints(bps));
+      if (onRv(s.level)) void call((r) => r.rvSetBreakpoints(bps));
     }
   });
 }
@@ -299,7 +309,7 @@ export interface JsDebugState {
 export const useJsDebug = create<JsDebugState>()(() => ({ test: null, running: false, result: null }));
 
 function onJsState(s: JsRunState): void {
-  if (useEditor.getState().level?.mode !== 'js') return;
+  if (!onJs(useEditor.getState().level)) return;
   useEditor.getState().set({ js: s });
 }
 
@@ -313,7 +323,7 @@ export const js = {
    */
   call: async (entry: string, args: unknown[], opts?: JsCallOptions): Promise<JsCallResult | undefined> => {
     const { source, level } = useEditor.getState();
-    if (!level || level.mode !== 'js') return undefined;
+    if (!onJs(level)) return undefined;
     const run = ++jsRun;
     useEditor.getState().set({ js: { ...emptyJs(), running: true } });
     type Call = (src: string, l: Level, e: string, a: unknown[], o?: JsCallOptions) => Promise<JsCallResult>;
@@ -343,7 +353,7 @@ export const js = {
    */
   debug: async (index: number): Promise<JsDebugResult | null | undefined> => {
     const { source, level } = useEditor.getState();
-    if (!level || level.mode !== 'js' || level.tests[index]?.kind !== 'js') return undefined;
+    if (!onJs(level) || level.tests[index]?.kind !== 'js') return undefined;
     const run = ++jsRun;
     useJsDebug.setState({ test: index, running: true, result: null });
     useEditor.getState().set({ js: { ...emptyJs(), running: true } });
@@ -393,7 +403,7 @@ function startJsSync(): void {
     if (s.level === level) return;
     const was = level;
     level = s.level;
-    if (was?.mode === 'js' && was.id !== s.level?.id) {
+    if (onJs(was) && was.id !== s.level?.id) {
       if (s.js?.running) void js.stop();
       useEditor.getState().set({ js: null });
       useJsDebug.setState({ test: null, running: false, result: null });
@@ -435,7 +445,7 @@ export function startSimSync(): void {
   let pausedByHide = false;
   document.addEventListener('visibilitychange', () => {
     const { snapshot, rv: rvSnap, level } = useEditor.getState();
-    const code = level?.mode === 'code';
+    const code = onRv(level);
     const running = code ? rvSnap?.state.running : snapshot?.running;
     if (document.hidden && running) {
       pausedByHide = true;

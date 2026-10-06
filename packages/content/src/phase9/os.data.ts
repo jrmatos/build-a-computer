@@ -266,7 +266,7 @@ export const OS_DATA: Record<string, OsKitData> = {
       ],
     },
     sizes: {"ls":4143,"cat":4164,"echo":4143,"hello":4179,"readme.txt":67,"kernel":15076},
-    facts: {},
+    facts: {"kernel._start":2149580800,"kernel.procs":2149594036,"kernel.current":2149595764,"kernel.freelist":2149595776,"kernel.nfree":2149595780,"kernel.mem_start":2149595784,"kernel.mem_end":2149595788,"kernel.kernel_end":2149595876,"kernel.sb":2149595856,"kernel.ticks":2149595772},
   },
   "os-final-game": {
     language: "c",
@@ -291,7 +291,7 @@ export const OS_DATA: Record<string, OsKitData> = {
       ],
     },
     sizes: {"readme.txt":67,"kernel":15076},
-    facts: {},
+    facts: {"kernel._start":2149580800,"kernel.procs":2149594036,"kernel.current":2149595764,"kernel.freelist":2149595776,"kernel.nfree":2149595780,"kernel.mem_start":2149595784,"kernel.mem_end":2149595788,"kernel.kernel_end":2149595876,"kernel.sb":2149595856,"kernel.ticks":2149595772},
   },
 };
 

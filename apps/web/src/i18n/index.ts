@@ -17,8 +17,9 @@ import { ml } from './en/ml';
 import { debug } from './en/debug';
 import { achievements } from './en/achievements';
 import { cases } from './en/cases';
+import { os } from './en/os';
 
-const en: Record<string, string> = { ...app, ...editor, ...ui, ...level, ...chips, ...panels, ...storage, ...code, ...ml, ...pwa, ...community, ...achievements, ...debug, ...cases };
+const en: Record<string, string> = { ...app, ...editor, ...ui, ...level, ...chips, ...panels, ...storage, ...code, ...ml, ...pwa, ...community, ...achievements, ...debug, ...cases, ...os };
 
 /** Locales load from here once translations exist. */
 const locales: Record<string, Record<string, string>> = { en };

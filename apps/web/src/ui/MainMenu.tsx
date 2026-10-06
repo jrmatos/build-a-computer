@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { modeOf } from '@build-a-computer/platform-core';
 import type { Board } from '@build-a-computer/schema';
 import { useEditor } from '../editor/store';
 import {
@@ -175,7 +176,7 @@ export function MainMenu() {
           <MenuItem
             icon={<IconShare />}
             label={t('community.menu.share')}
-            disabled={level?.mode !== 'board' && level !== null}
+            disabled={level !== null && modeOf(level).work !== 'board'}
             onSelect={() => run(() => useCommunityUi.getState().set({ shareOpen: true }))}
           />
           <MenuItem

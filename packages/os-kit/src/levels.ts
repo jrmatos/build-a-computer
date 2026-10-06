@@ -132,18 +132,35 @@ export function buildProgramFile(paths: readonly string[], opts: KitOptions = {}
   );
 }
 
+/**
+ * Kernel data symbols the debugger's OS panels read (process table, free
+ * list, superblock): program levels' kits record their addresses in the disk
+ * kernel as facts `kernel.<name>`, since that kernel's symbols never reach the
+ * player's build.
+ */
+export const KERNEL_INSPECT_SYMBOLS = [
+  '_start', 'procs', 'current', 'freelist', 'nfree', 'mem_start', 'mem_end', 'kernel_end', 'sb', 'ticks',
+] as const; // prettier-ignore
+
 /** The full reference kernel linked at KERNEL_LOAD, for program levels' disks. */
 export function buildDiskKernel(opts: KitOptions = {}): {
   image: Uint8Array;
   load: number;
   entry: number;
+  /** Addresses of KERNEL_INSPECT_SYMBOLS (those present). */
+  symbols: Record<string, number>;
 } {
   const build = opts.build ?? buildImage;
   const linked = build([...kernelFiles(FULL), END()], KERNEL_LOAD);
   // The loader zeroes nothing: carry the bss as zero bytes in the image.
   const image = new Uint8Array(linked.end - linked.base);
   image.set(linked.image);
-  return { image, load: KERNEL_LOAD, entry: symbol(linked, '_start') };
+  const symbols: Record<string, number> = {};
+  for (const name of KERNEL_INSPECT_SYMBOLS) {
+    const s = linked.symbols.find((x) => x.name === name);
+    if (s) symbols[name] = s.address >>> 0;
+  }
+  return { image, load: KERNEL_LOAD, entry: symbol(linked, '_start'), symbols };
 }
 
 /** Programs built into the kernel (no file system yet), as programs.s. */
@@ -347,6 +364,7 @@ export function buildKit(key: LevelKey, opts: KitOptions = {}): LevelKit {
       disks['os'] = buildDisk({ boot: kernel, files: f });
       for (const x of f) sizes[x.name] = x.data.length;
       sizes['kernel'] = kernel.image.length;
+      for (const [name, addr] of Object.entries(kernel.symbols)) facts[`kernel.${name}`] = addr;
       break;
     }
   }

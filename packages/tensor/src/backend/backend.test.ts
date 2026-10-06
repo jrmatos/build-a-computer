@@ -124,7 +124,7 @@ describe('WGSL generation', () => {
     for (const op of Object.keys(BINARY_EXPR) as GpuBinaryOp[]) {
       const code = binaryShader(op);
       expect(code).toContain(`Y[i] = ${BINARY_EXPR[op]};`);
-      expect(code).toContain('@binding(3) var<storage, read> meta');
+      expect(code).toContain('@binding(3) var<storage, read> dims');
       expect(code).toContain(`@workgroup_size(${WORKGROUP})`);
     }
     for (const op of Object.keys(UNARY_EXPR) as GpuUnaryOp[]) {
@@ -155,6 +155,11 @@ describe('WGSL generation', () => {
       expect(code).toMatch(/@compute @workgroup_size/);
       expect(code).not.toMatch(/undefined|NaN/);
     }
+  });
+
+  it('no shader names anything `meta` (a WGSL reserved word: the real GPU rejected the binary shader)', () => {
+    const all = [binaryShader('add'), unaryShader('gelu'), reduceShader('sum'), softmaxShader(), layerNormShader(), matmulShader(16)];
+    for (const code of all) expect(code).not.toMatch(/\bmeta\b/);
   });
 
   it('matmul shader uses the requested tile and barriers', () => {

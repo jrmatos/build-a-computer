@@ -4,12 +4,14 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./emulator": "./src/backend/gpu-emulator.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "build": "tsc -p tsconfig.json",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "gpu-check": "node scripts/gpu-check.mjs"
   },
   "dependencies": {
     "@build-a-computer/det": "workspace:*"

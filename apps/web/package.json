@@ -17,6 +17,7 @@
     "@build-a-computer/det": "workspace:*",
     "@build-a-computer/js-check": "workspace:*",
     "@build-a-computer/libc": "workspace:*",
+    "@build-a-computer/platform-core": "workspace:*",
     "@build-a-computer/schema": "workspace:*",
     "@build-a-computer/sim-logic": "workspace:*",
     "@build-a-computer/worker": "workspace:*",
