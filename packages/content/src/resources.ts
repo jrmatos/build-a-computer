@@ -959,10 +959,10 @@ const D2L_LINREG = link({
 
 const B_XENT = link({
   url: 'https://www.youtube.com/watch?v=GlYgs6v2YfU',
-  title: 'But what is cross-entropy? (3Blue1Brown)',
+  title: 'What is cross-entropy? (3Blue1Brown)',
   kind: 'video',
-  verifiedTitle: 'But what is cross-entropy? | Compression is Intelligence Part 2',
-  verifiedAt: '2026-10-05T16:26:12Z',
+  verifiedTitle: 'What is cross-entropy, and why is it used in ML? | Information theory, part 2',
+  verifiedAt: '2026-11-23T19:34:43Z',
 });
 
 const WP_LOSS = link({
